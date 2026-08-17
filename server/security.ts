@@ -2,10 +2,80 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { JwtPayload, SafeUserSession, UserRecord } from "./types";
 
-// Cryptographic Secret for JWTs
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SECRET_KEY || "basegrid-production-secure-jwt-key-2026-auth-authoritative";
+const MIN_SECRET_LENGTH = 32;
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = "7d";
+
+// Known insecure placeholder patterns that must never be allowed as production secrets
+const INSECURE_PLACEHOLDERS = new Set([
+  "secret",
+  "changeme",
+  "password",
+  "jwt_secret",
+  "secret_key",
+  "default_secret",
+  "your-secret-key-here",
+  "12345678901234567890123456789012",
+  "basegrid-production-secure-jwt-key-2026-auth-authoritative",
+]);
+
+/**
+ * Retrieves the cryptographic JWT secret.
+ * - In production (NODE_ENV === "production"): strictly requires a valid, high-entropy
+ *   JWT_SECRET or SECRET_KEY environment variable (>= 32 chars, not a placeholder) and fails fast.
+ * - In development / testing: if not provided via env, uses a stable local dev fallback
+ *   so the local development server starts reliably without manual env injection.
+ * - Never leaks or prints secret values in error messages or logs.
+ */
+export function getJwtSecret(customEnv?: NodeJS.ProcessEnv): string {
+  const env = customEnv || process.env;
+  const isProduction = env.NODE_ENV === "production";
+  const rawSecret = env.JWT_SECRET || env.SECRET_KEY;
+
+  if (!rawSecret || typeof rawSecret !== "string") {
+    if (isProduction) {
+      throw new Error(
+        "CRITICAL SECURITY ERROR: JWT secret is missing. Set the JWT_SECRET or SECRET_KEY environment variable."
+      );
+    }
+    // In local development / preview environment, fallback to a stable local secret
+    return "dev-local-basegrid-auth-secret-key-do-not-use-in-prod-2026";
+  }
+
+  const trimmed = rawSecret.trim();
+  if (trimmed.length === 0) {
+    if (isProduction) {
+      throw new Error(
+        "CRITICAL SECURITY ERROR: JWT secret is empty. Set a valid JWT_SECRET or SECRET_KEY environment variable."
+      );
+    }
+    return "dev-local-basegrid-auth-secret-key-do-not-use-in-prod-2026";
+  }
+
+  if (trimmed.length < MIN_SECRET_LENGTH) {
+    if (isProduction) {
+      throw new Error(
+        `CRITICAL SECURITY ERROR: JWT secret is too short (${trimmed.length} chars). It must be at least ${MIN_SECRET_LENGTH} characters long.`
+      );
+    }
+  }
+
+  if (isProduction && INSECURE_PLACEHOLDERS.has(trimmed.toLowerCase())) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: JWT secret is set to a known insecure placeholder. Provide a cryptographically strong random secret."
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validates JWT configuration at server startup.
+ * Throws immediately if secret is not properly configured in the environment.
+ */
+export function assertValidJwtSecret(customEnv?: NodeJS.ProcessEnv): void {
+  getJwtSecret(customEnv);
+}
 
 // Cookie durations
 export const ACCESS_COOKIE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
@@ -58,7 +128,11 @@ export function verifyPassword(password: string, storedHash: string, storedSalt:
 /**
  * Generates signed Access and Refresh JWTs
  */
-export function generateTokens(user: UserRecord): { accessToken: string; refreshToken: string } {
+export function generateTokens(
+  user: UserRecord,
+  secretOverride?: string,
+): { accessToken: string; refreshToken: string } {
+  const secret = secretOverride || getJwtSecret();
   const accessPayload: JwtPayload = {
     sub: user.id,
     email: user.email,
@@ -75,8 +149,8 @@ export function generateTokens(user: UserRecord): { accessToken: string; refresh
     tokenType: "refresh",
   };
 
-  const accessToken = jwt.sign(accessPayload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-  const refreshToken = jwt.sign(refreshPayload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+  const accessToken = jwt.sign(accessPayload, secret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  const refreshToken = jwt.sign(refreshPayload, secret, { expiresIn: REFRESH_TOKEN_EXPIRY });
 
   return { accessToken, refreshToken };
 }
@@ -84,9 +158,10 @@ export function generateTokens(user: UserRecord): { accessToken: string; refresh
 /**
  * Verifies an Access Token
  */
-export function verifyAccessToken(token: string): JwtPayload | null {
+export function verifyAccessToken(token: string, secretOverride?: string): JwtPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const secret = secretOverride || getJwtSecret();
+    const decoded = jwt.verify(token, secret) as JwtPayload;
     if (decoded.tokenType !== "access") {
       return null;
     }
@@ -99,9 +174,10 @@ export function verifyAccessToken(token: string): JwtPayload | null {
 /**
  * Verifies a Refresh Token
  */
-export function verifyRefreshToken(token: string): JwtPayload | null {
+export function verifyRefreshToken(token: string, secretOverride?: string): JwtPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const secret = secretOverride || getJwtSecret();
+    const decoded = jwt.verify(token, secret) as JwtPayload;
     if (decoded.tokenType !== "refresh") {
       return null;
     }

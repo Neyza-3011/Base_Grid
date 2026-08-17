@@ -2,12 +2,20 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "http";
 import { createApp } from "./app";
 import { db } from "./db";
-import { generateTokens } from "./security";
+import {
+  assertValidJwtSecret,
+  generateTokens,
+  getJwtSecret,
+  verifyAccessToken,
+} from "./security";
 
 let server: http.Server;
 let baseUrl: string;
 
+const TEST_JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long-secure!";
+
 beforeEach(async () => {
+  process.env.JWT_SECRET = TEST_JWT_SECRET;
   db.seedInitialData();
   const app = createApp();
   await new Promise<void>((resolve) => {
@@ -413,6 +421,87 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       });
 
       expect(deleteRes.status).toBe(404);
+    });
+  });
+
+  describe("8. JWT Secret Security & Strict Environment Enforcement", () => {
+    it("fails startup in production when JWT_SECRET and SECRET_KEY are missing", () => {
+      expect(() =>
+        assertValidJwtSecret({
+          NODE_ENV: "production",
+        }),
+      ).toThrow(/CRITICAL SECURITY ERROR.*JWT secret is missing/i);
+    });
+
+    it("fails startup in production when JWT secret is empty or whitespace-only", () => {
+      expect(() => getJwtSecret({ NODE_ENV: "production", JWT_SECRET: "   " })).toThrow(/JWT secret is empty/i);
+      expect(() => assertValidJwtSecret({ NODE_ENV: "production", JWT_SECRET: "" })).toThrow(/JWT secret is missing/i);
+    });
+
+    it("fails startup in production when JWT secret is too short (< 32 characters)", () => {
+      const shortSecret = "short-secret-12345";
+      expect(() => getJwtSecret({ NODE_ENV: "production", JWT_SECRET: shortSecret })).toThrow(
+        /JWT secret is too short \(18 chars\)\. It must be at least 32 characters long/i,
+      );
+    });
+
+    it("fails startup in production when JWT secret is a known insecure placeholder", () => {
+      const bannedPlaceholders = [
+        "secret",
+        "changeme",
+        "password",
+        "jwt_secret",
+        "secret_key",
+        "default_secret",
+        "your-secret-key-here",
+        "12345678901234567890123456789012",
+        "basegrid-production-secure-jwt-key-2026-auth-authoritative",
+      ];
+
+      for (const placeholder of bannedPlaceholders) {
+        expect(() => getJwtSecret({ NODE_ENV: "production", JWT_SECRET: placeholder })).toThrow(
+          /JWT secret is (too short|set to a known insecure placeholder)/i,
+        );
+      }
+    });
+
+    it("succeeds startup when a valid, cryptographically strong secret is provided via JWT_SECRET or SECRET_KEY", () => {
+      const validSecret = "a_super_strong_cryptographic_secret_key_with_at_least_32_characters!";
+      expect(getJwtSecret({ NODE_ENV: "production", JWT_SECRET: validSecret })).toBe(validSecret);
+      expect(getJwtSecret({ NODE_ENV: "production", SECRET_KEY: validSecret })).toBe(validSecret);
+      expect(() => assertValidJwtSecret({ NODE_ENV: "production", JWT_SECRET: validSecret })).not.toThrow();
+    });
+
+    it("allows dev startup fallback in development environment", () => {
+      expect(() => assertValidJwtSecret({ NODE_ENV: "development" })).not.toThrow();
+    });
+
+    it("rejects JWT signature verification when token generated with Secret A is verified with Secret B", () => {
+      const secretA = "cryptographically_secure_test_secret_alpha_key_32_chars!";
+      const secretB = "cryptographically_secure_test_secret_bravo_key_32_chars!";
+
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const { accessToken } = generateTokens(user, secretA);
+
+      // Verified with correct Secret A -> succeeds
+      const validPayload = verifyAccessToken(accessToken, secretA);
+      expect(validPayload).not.toBeNull();
+      expect(validPayload?.email).toBe("admin@rossi.it");
+
+      // Verified with different Secret B -> rejected (returns null)
+      const invalidPayload = verifyAccessToken(accessToken, secretB);
+      expect(invalidPayload).toBeNull();
+    });
+
+    it("never leaks secret values in thrown error messages", () => {
+      const shortSecret = "my-secret-123456789";
+      try {
+        getJwtSecret({ NODE_ENV: "production", JWT_SECRET: shortSecret });
+        expect.unreachable("Should have thrown error");
+      } catch (err: any) {
+        expect(err.message).not.toContain(shortSecret);
+        expect(err.message).toContain("JWT secret is too short");
+      }
     });
   });
 });

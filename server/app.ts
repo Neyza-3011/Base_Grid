@@ -7,8 +7,12 @@ import { companyRouter } from "./routes/company";
 import { adminRouter } from "./routes/admin";
 import { reportsRouter } from "./routes/reports";
 import { verifyCsrf } from "./middleware/auth";
+import { assertValidJwtSecret } from "./security";
 
 export function createApp(): Express {
+  // Validate JWT Secret configuration on application initialization / startup
+  assertValidJwtSecret();
+
   const app = express();
 
   // Basic security and parsing middlewares
