@@ -1,0 +1,5 @@
+*.ts linguist-detectable=true
+*.tsx linguist-detectable=true
+*.py linguist-detectable=true
+bun.lock linguist-generated=true
+package-lock.json linguist-generated=true
