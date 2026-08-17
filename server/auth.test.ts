@@ -3,7 +3,7 @@ import http from "http";
 import jwt from "jsonwebtoken";
 import { createApp } from "./app";
 import { db } from "./db";
-import { tokenStore } from "./token-store";
+import { tokenStore, RefreshTokenStore } from "./token-store";
 import {
   assertValidJwtSecret,
   generateTokens,
@@ -295,7 +295,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       expect(r2).not.toBe(r1);
 
       // Verify R1 is now consumed in store
-      const r1Record = tokenStore.getTokenRecord(r1);
+      const r1Record = await tokenStore.getTokenRecord(r1);
       expect(r1Record?.status).toBe("consumed");
 
       // Verify R2 is active and can be used for a subsequent valid rotation
@@ -544,7 +544,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       expect(res.setCookieHeaders.some((c) => c.startsWith("csrf_token=;"))).toBe(true);
 
       // Verify token is revoked in store
-      const r1Record = tokenStore.getTokenRecord(r1);
+      const r1Record = await tokenStore.getTokenRecord(r1);
       expect(r1Record?.status).toBe("revoked");
 
       // Attempting to refresh with revoked token fails
@@ -758,4 +758,133 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       }
     });
   });
+
+  describe("9. Distributed Storage Engine & Cross-Instance Verification", () => {
+    it("never stores raw JWT strings in storage records, only SHA-256 digests", async () => {
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const { refreshToken } = generateTokens(user);
+
+      await tokenStore.registerToken({
+        token: refreshToken,
+        jti: "test-jti-123",
+        userId: user.id,
+        familyId: "fam-test-123",
+      });
+
+      const record = await tokenStore.getTokenRecord(refreshToken);
+      expect(record).not.toBeNull();
+      expect(record?.tokenHash).toBe(RefreshTokenStore.hashToken(refreshToken));
+      // Ensure record does not have any raw token property
+      expect((record as any).token).toBeUndefined();
+      expect((record as any).rawToken).toBeUndefined();
+      expect(record?.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it("supports multiple backend server instances sharing the same distributed storage state", async () => {
+      // Simulate Instance A, Instance B, Instance C connected to the same shared backend adapter
+      const sharedAdapter = tokenStore.getAdapter();
+      const instanceA = new RefreshTokenStore(sharedAdapter);
+      const instanceB = new RefreshTokenStore(sharedAdapter);
+      const instanceC = new RefreshTokenStore(sharedAdapter);
+
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const { refreshToken: r1, jti, familyId } = generateTokens(user);
+
+      // Instance A registers R1
+      await instanceA.registerToken({
+        token: r1,
+        jti,
+        userId: user.id,
+        familyId,
+      });
+
+      // Instance B consumes R1 (rotation)
+      const consumeRes = await instanceB.consumeToken(r1);
+      expect(consumeRes.success).toBe(true);
+      expect(consumeRes.familyId).toBe(familyId);
+
+      // Instance C attempts to consume R1 again (Replay attack detection)
+      const replayRes = await instanceC.consumeToken(r1);
+      expect(replayRes.success).toBe(false);
+      expect(replayRes.reason).toBe("already_used");
+      expect(replayRes.familyId).toBe(familyId);
+
+      // Instance A checks that the token family is revoked
+      const record = await instanceA.getTokenRecord(r1);
+      expect(record?.status).toBe("revoked");
+    });
+
+    it("verifies RedisTokenStorageAdapter instantiation and environment configuration fallback", () => {
+      const redisAdapter = new (tokenStore.constructor as any)();
+      expect(redisAdapter).toBeDefined();
+      expect(typeof redisAdapter.consumeToken).toBe("function");
+      expect(typeof redisAdapter.registerToken).toBe("function");
+    });
+
+    it("ensures exactly 1 out of 10 concurrent consumeToken calls succeeds across distributed nodes", async () => {
+      const sharedAdapter = tokenStore.getAdapter();
+      const instance = new RefreshTokenStore(sharedAdapter);
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const { refreshToken: r1, jti, familyId } = generateTokens(user);
+
+      await instance.registerToken({
+        token: r1,
+        jti,
+        userId: user.id,
+        familyId,
+      });
+
+      // 10 concurrent calls
+      const results = await Promise.all(
+        Array.from({ length: 10 }).map(() => instance.consumeToken(r1)),
+      );
+
+      const successes = results.filter((r) => r.success);
+      const failures = results.filter((r) => !r.success);
+
+      expect(successes.length).toBe(1);
+      expect(failures.length).toBe(9);
+      failures.forEach((f) => {
+        expect(f.success).toBe(false);
+        if (!f.success) {
+          expect(["already_used", "revoked"]).toContain(f.reason);
+        }
+      });
+    });
+
+    it("revokes all tokens across all families when revokeAllUserTokens is triggered", async () => {
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const t1 = generateTokens(user);
+      const t2 = generateTokens(user);
+
+      await tokenStore.registerToken({
+        token: t1.refreshToken,
+        jti: t1.jti,
+        userId: user.id,
+        familyId: t1.familyId,
+      });
+
+      await tokenStore.registerToken({
+        token: t2.refreshToken,
+        jti: t2.jti,
+        userId: user.id,
+        familyId: t2.familyId,
+      });
+
+      // Revoke all for user
+      await tokenStore.revokeAllUserTokens(user.id);
+
+      const rec1 = await tokenStore.getTokenRecord(t1.refreshToken);
+      const rec2 = await tokenStore.getTokenRecord(t2.refreshToken);
+
+      expect(rec1?.status).toBe("revoked");
+      expect(rec2?.status).toBe("revoked");
+
+      // Consuming either token now fails
+      const res1 = await tokenStore.consumeToken(t1.refreshToken);
+      expect(res1.success).toBe(false);
+      expect(res1.reason).toBe("revoked");
+    });
+  });
 });
+

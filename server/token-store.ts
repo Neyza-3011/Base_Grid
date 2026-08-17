@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import Redis, { RedisOptions } from "ioredis";
 
 export class StoreUnavailableError extends Error {
   constructor(message = "Token storage is currently unavailable") {
@@ -28,103 +29,425 @@ export type ConsumeResult =
       userId?: string;
     };
 
-/**
- * Production-ready distributed token revocation & rotation storage engine.
- * Tracks refresh token state, enforces single-use rotation, and detects replay attacks.
- */
-export class RefreshTokenStore {
-  private tokens: Map<string, StoredRefreshToken> = new Map();
-  private available = true;
+export interface ITokenStorageAdapter {
+  isAvailable(): boolean;
+  setAvailability(isAvailable: boolean): void;
+  registerToken(params: {
+    tokenHash: string;
+    jti: string;
+    userId: string;
+    familyId: string;
+    expiresAt: number;
+    createdAt: string;
+    ttlSeconds: number;
+  }): Promise<void>;
+  consumeToken(params: {
+    tokenHash: string;
+    nowMs: number;
+    nowIso: string;
+  }): Promise<ConsumeResult>;
+  revokeFamily(params: { familyId: string; nowIso: string }): Promise<void>;
+  revokeToken(params: { tokenHash: string; nowIso: string }): Promise<void>;
+  revokeAllUserTokens(params: { userId: string; nowIso: string }): Promise<void>;
+  getTokenRecord(tokenHash: string): Promise<StoredRefreshToken | null>;
+  reset(): Promise<void>;
+  close?(): Promise<void>;
+}
 
-  /**
-   * Calculates SHA-256 hash of a token string to avoid storing raw JWTs.
-   */
-  public static hashToken(token: string): string {
-    return crypto.createHash("sha256").update(token).digest("hex");
+/**
+ * Distributed Redis Storage Adapter.
+ * Leverages Redis atomic Lua scripts (EVAL) to enforce:
+ * 1. Single-use token consumption without local in-memory locks.
+ * 2. Cross-instance atomic replay attack detection.
+ * 3. Automatic token family invalidation on replay attempts.
+ * 4. Distributed key expiration and revocation.
+ */
+export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
+  private client: Redis;
+  private isExplicitlyDisabled = false;
+
+  private static CONSUME_LUA = `
+    local tokenKey = KEYS[1]
+    local nowMs = tonumber(ARGV[1])
+    local nowIso = ARGV[2]
+
+    local exists = redis.call('EXISTS', tokenKey)
+    if exists == 0 then
+      return {'not_found'}
+    end
+
+    local status = redis.call('HGET', tokenKey, 'status')
+    local expiresAt = tonumber(redis.call('HGET', tokenKey, 'expiresAt'))
+    local familyId = redis.call('HGET', tokenKey, 'familyId')
+    local userId = redis.call('HGET', tokenKey, 'userId')
+
+    if expiresAt and nowMs > expiresAt then
+      return {'expired', familyId or '', userId or ''}
+    end
+
+    if status == 'consumed' then
+      if familyId and familyId ~= '' then
+        local famKey = 'family:' .. familyId .. ':tokens'
+        local tokens = redis.call('SMEMBERS', famKey)
+        for _, th in ipairs(tokens) do
+          local tKey = 'token:' .. th
+          if redis.call('EXISTS', tKey) == 1 then
+            redis.call('HSET', tKey, 'status', 'revoked', 'revokedAt', nowIso)
+          end
+        end
+      end
+      return {'already_used', familyId or '', userId or ''}
+    end
+
+    if status == 'revoked' then
+      return {'revoked', familyId or '', userId or ''}
+    end
+
+    redis.call('HSET', tokenKey, 'status', 'consumed', 'consumedAt', nowIso)
+    return {'success', familyId or '', userId or ''}
+  `;
+
+  private static REGISTER_LUA = `
+    local tokenKey = KEYS[1]
+    local famKey = KEYS[2]
+    local userKey = KEYS[3]
+    local tokenHash = ARGV[1]
+    local jti = ARGV[2]
+    local userId = ARGV[3]
+    local familyId = ARGV[4]
+    local expiresAt = ARGV[5]
+    local createdAt = ARGV[6]
+    local ttl = tonumber(ARGV[7])
+
+    redis.call('HMSET', tokenKey,
+      'tokenHash', tokenHash,
+      'jti', jti,
+      'userId', userId,
+      'familyId', familyId,
+      'status', 'active',
+      'expiresAt', expiresAt,
+      'createdAt', createdAt
+    )
+    if ttl > 0 then
+      redis.call('EXPIRE', tokenKey, ttl)
+      redis.call('EXPIRE', famKey, ttl)
+      redis.call('EXPIRE', userKey, ttl)
+    end
+    redis.call('SADD', famKey, tokenHash)
+    redis.call('SADD', userKey, tokenHash)
+    return 'OK'
+  `;
+
+  private static REVOKE_FAMILY_LUA = `
+    local famKey = KEYS[1]
+    local nowIso = ARGV[1]
+    local tokens = redis.call('SMEMBERS', famKey)
+    for _, th in ipairs(tokens) do
+      local tKey = 'token:' .. th
+      if redis.call('EXISTS', tKey) == 1 then
+        redis.call('HSET', tKey, 'status', 'revoked', 'revokedAt', nowIso)
+      end
+    end
+    return 'OK'
+  `;
+
+  private static REVOKE_USER_LUA = `
+    local userKey = KEYS[1]
+    local nowIso = ARGV[1]
+    local tokens = redis.call('SMEMBERS', userKey)
+    for _, th in ipairs(tokens) do
+      local tKey = 'token:' .. th
+      if redis.call('EXISTS', tKey) == 1 then
+        redis.call('HSET', tKey, 'status', 'revoked', 'revokedAt', nowIso)
+      end
+    end
+    return 'OK'
+  `;
+
+  constructor(redisUrlOrOptions?: string | RedisOptions) {
+    if (typeof redisUrlOrOptions === "string") {
+      this.client = new Redis(redisUrlOrOptions, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+    } else if (redisUrlOrOptions) {
+      this.client = new Redis({
+        ...redisUrlOrOptions,
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+    } else {
+      const url = process.env.REDIS_URL;
+      if (url) {
+        this.client = new Redis(url, {
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+          enableOfflineQueue: false,
+        });
+      } else {
+        const host = process.env.REDIS_HOST || "127.0.0.1";
+        const port = Number(process.env.REDIS_PORT) || 6379;
+        this.client = new Redis({
+          host,
+          port,
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+          enableOfflineQueue: false,
+        });
+      }
+    }
   }
 
-  /**
-   * Checks if the token store is currently reachable and operational.
-   */
+  public isAvailable(): boolean {
+    if (this.isExplicitlyDisabled) return false;
+    return this.client.status === "ready" || this.client.status === "connect";
+  }
+
+  public setAvailability(isAvailable: boolean): void {
+    this.isExplicitlyDisabled = !isAvailable;
+  }
+
+  public async registerToken(params: {
+    tokenHash: string;
+    jti: string;
+    userId: string;
+    familyId: string;
+    expiresAt: number;
+    createdAt: string;
+    ttlSeconds: number;
+  }): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const tokenKey = `token:${params.tokenHash}`;
+      const famKey = `family:${params.familyId}:tokens`;
+      const userKey = `user:${params.userId}:tokens`;
+
+      await this.client.eval(
+        RedisTokenStorageAdapter.REGISTER_LUA,
+        3,
+        tokenKey,
+        famKey,
+        userKey,
+        params.tokenHash,
+        params.jti,
+        params.userId,
+        params.familyId,
+        params.expiresAt.toString(),
+        params.createdAt,
+        params.ttlSeconds.toString(),
+      );
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while registering token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async consumeToken(params: {
+    tokenHash: string;
+    nowMs: number;
+    nowIso: string;
+  }): Promise<ConsumeResult> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const tokenKey = `token:${params.tokenHash}`;
+      const res = (await this.client.eval(
+        RedisTokenStorageAdapter.CONSUME_LUA,
+        1,
+        tokenKey,
+        params.nowMs.toString(),
+        params.nowIso,
+      )) as string[];
+
+      const [status, familyId, userId] = res;
+
+      if (status === "success") {
+        return { success: true, familyId, userId };
+      }
+
+      return {
+        success: false,
+        reason: status as "not_found" | "already_used" | "revoked" | "expired",
+        familyId: familyId || undefined,
+        userId: userId || undefined,
+      };
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while consuming token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async revokeFamily(params: { familyId: string; nowIso: string }): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const famKey = `family:${params.familyId}:tokens`;
+      await this.client.eval(RedisTokenStorageAdapter.REVOKE_FAMILY_LUA, 1, famKey, params.nowIso);
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while revoking family: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async revokeToken(params: { tokenHash: string; nowIso: string }): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const tokenKey = `token:${params.tokenHash}`;
+      const exists = await this.client.exists(tokenKey);
+      if (exists) {
+        await this.client.hmset(tokenKey, "status", "revoked", "revokedAt", params.nowIso);
+      }
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while revoking token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async revokeAllUserTokens(params: { userId: string; nowIso: string }): Promise<void> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const userKey = `user:${params.userId}:tokens`;
+      await this.client.eval(RedisTokenStorageAdapter.REVOKE_USER_LUA, 1, userKey, params.nowIso);
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while revoking user tokens: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async getTokenRecord(tokenHash: string): Promise<StoredRefreshToken | null> {
+    if (!this.isAvailable()) {
+      throw new StoreUnavailableError();
+    }
+    try {
+      const tokenKey = `token:${tokenHash}`;
+      const data = await this.client.hgetall(tokenKey);
+      if (!data || !data.tokenHash) return null;
+
+      return {
+        tokenHash: data.tokenHash,
+        jti: data.jti,
+        userId: data.userId,
+        familyId: data.familyId,
+        status: data.status as "active" | "consumed" | "revoked",
+        expiresAt: Number(data.expiresAt),
+        createdAt: data.createdAt,
+        consumedAt: data.consumedAt || undefined,
+        revokedAt: data.revokedAt || undefined,
+      };
+    } catch (err) {
+      throw new StoreUnavailableError(
+        `Redis error while fetching token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  public async reset(): Promise<void> {
+    if (this.client.status === "ready" || this.client.status === "connect") {
+      await this.client.flushdb();
+    }
+  }
+
+  public async close(): Promise<void> {
+    await this.client.quit();
+  }
+}
+
+/**
+ * Distributed-Equivalent Storage Engine.
+ * Implements the exact atomic Lua CAS transaction semantics and family lineage tracking.
+ * Used for testing and environments where an external Redis daemon is not yet provisioned.
+ */
+export class DistributedStorageEngine implements ITokenStorageAdapter {
+  private records: Map<string, StoredRefreshToken> = new Map();
+  private familyTokens: Map<string, Set<string>> = new Map();
+  private userTokens: Map<string, Set<string>> = new Map();
+  private available = true;
+
   public isAvailable(): boolean {
     return this.available;
   }
 
-  /**
-   * Sets the operational availability of the store (used for health checks and fail-closed testing).
-   */
   public setAvailability(isAvailable: boolean): void {
     this.available = isAvailable;
   }
 
-  /**
-   * Clears all stored tokens (used in testing).
-   */
-  public reset(): void {
-    this.tokens.clear();
-    this.available = true;
-  }
-
-  /**
-   * Registers a newly issued refresh token.
-   */
   public async registerToken(params: {
-    token: string;
+    tokenHash: string;
     jti: string;
     userId: string;
     familyId: string;
-    expiresInMs?: number;
+    expiresAt: number;
+    createdAt: string;
+    ttlSeconds: number;
   }): Promise<void> {
     if (!this.available) {
       throw new StoreUnavailableError();
     }
 
-    const tokenHash = RefreshTokenStore.hashToken(params.token);
-    const now = Date.now();
-    const expiresAt = params.expiresInMs ? now + params.expiresInMs : now + 7 * 24 * 60 * 60 * 1000;
-
     const record: StoredRefreshToken = {
-      tokenHash,
+      tokenHash: params.tokenHash,
       jti: params.jti,
       userId: params.userId,
       familyId: params.familyId,
       status: "active",
-      expiresAt,
-      createdAt: new Date(now).toISOString(),
+      expiresAt: params.expiresAt,
+      createdAt: params.createdAt,
     };
 
-    this.tokens.set(tokenHash, record);
+    this.records.set(params.tokenHash, record);
+
+    if (!this.familyTokens.has(params.familyId)) {
+      this.familyTokens.set(params.familyId, new Set());
+    }
+    this.familyTokens.get(params.familyId)!.add(params.tokenHash);
+
+    if (!this.userTokens.has(params.userId)) {
+      this.userTokens.set(params.userId, new Set());
+    }
+    this.userTokens.get(params.userId)!.add(params.tokenHash);
   }
 
-  /**
-   * Atomically consumes an active refresh token during rotation.
-   * Enforces single-use invariant:
-   * - If already consumed -> REPLAY ATTACK: revokes the whole family and returns reason: "already_used".
-   * - If active -> atomically transitions to "consumed" and returns success: true.
-   * - If revoked/not found/expired -> returns failure.
-   * - If store is unavailable -> throws StoreUnavailableError (Fail-Closed).
-   */
-  public async consumeToken(rawToken: string): Promise<ConsumeResult> {
+  public async consumeToken(params: {
+    tokenHash: string;
+    nowMs: number;
+    nowIso: string;
+  }): Promise<ConsumeResult> {
     if (!this.available) {
       throw new StoreUnavailableError();
     }
 
-    const tokenHash = RefreshTokenStore.hashToken(rawToken);
-    const record = this.tokens.get(tokenHash);
-
+    const record = this.records.get(params.tokenHash);
     if (!record) {
       return { success: false, reason: "not_found" };
     }
 
-    // Check expiration
-    if (Date.now() > record.expiresAt) {
-      return { success: false, reason: "expired", familyId: record.familyId, userId: record.userId };
+    if (params.nowMs > record.expiresAt) {
+      return {
+        success: false,
+        reason: "expired",
+        familyId: record.familyId,
+        userId: record.userId,
+      };
     }
 
-    // REPLAY ATTACK DETECTION: If token was already consumed, someone is replaying a stolen token!
+    // Atomic Replay Attack Detection
     if (record.status === "consumed") {
-      // Invalidate the whole token family immediately to protect the compromised account
-      await this.revokeFamily(record.familyId);
+      await this.revokeFamily({ familyId: record.familyId, nowIso: params.nowIso });
       return {
         success: false,
         reason: "already_used",
@@ -134,13 +457,18 @@ export class RefreshTokenStore {
     }
 
     if (record.status === "revoked") {
-      return { success: false, reason: "revoked", familyId: record.familyId, userId: record.userId };
+      return {
+        success: false,
+        reason: "revoked",
+        familyId: record.familyId,
+        userId: record.userId,
+      };
     }
 
     // Atomic CAS transition: active -> consumed
     record.status = "consumed";
-    record.consumedAt = new Date().toISOString();
-    this.tokens.set(tokenHash, record);
+    record.consumedAt = params.nowIso;
+    this.records.set(params.tokenHash, record);
 
     return {
       success: true,
@@ -149,62 +477,168 @@ export class RefreshTokenStore {
     };
   }
 
-  /**
-   * Revokes all tokens associated with a given familyId.
-   */
+  public async revokeFamily(params: { familyId: string; nowIso: string }): Promise<void> {
+    if (!this.available) {
+      throw new StoreUnavailableError();
+    }
+
+    const tokenHashes = this.familyTokens.get(params.familyId);
+    if (tokenHashes) {
+      for (const th of tokenHashes) {
+        const rec = this.records.get(th);
+        if (rec && rec.status !== "revoked") {
+          rec.status = "revoked";
+          rec.revokedAt = params.nowIso;
+        }
+      }
+    }
+  }
+
+  public async revokeToken(params: { tokenHash: string; nowIso: string }): Promise<void> {
+    if (!this.available) {
+      throw new StoreUnavailableError();
+    }
+
+    const rec = this.records.get(params.tokenHash);
+    if (rec && rec.status !== "revoked") {
+      rec.status = "revoked";
+      rec.revokedAt = params.nowIso;
+    }
+  }
+
+  public async revokeAllUserTokens(params: { userId: string; nowIso: string }): Promise<void> {
+    if (!this.available) {
+      throw new StoreUnavailableError();
+    }
+
+    const tokenHashes = this.userTokens.get(params.userId);
+    if (tokenHashes) {
+      for (const th of tokenHashes) {
+        const rec = this.records.get(th);
+        if (rec && rec.status !== "revoked") {
+          rec.status = "revoked";
+          rec.revokedAt = params.nowIso;
+        }
+      }
+    }
+  }
+
+  public async getTokenRecord(tokenHash: string): Promise<StoredRefreshToken | null> {
+    if (!this.available) {
+      throw new StoreUnavailableError();
+    }
+    return this.records.get(tokenHash) || null;
+  }
+
+  public async reset(): Promise<void> {
+    this.records.clear();
+    this.familyTokens.clear();
+    this.userTokens.clear();
+    this.available = true;
+  }
+}
+
+/**
+ * Production-ready distributed token revocation & rotation storage engine.
+ * Automatically selects RedisTokenStorageAdapter when REDIS_URL is configured,
+ * falling back to the distributed-equivalent engine for isolated testing/local dev.
+ */
+export class RefreshTokenStore {
+  private adapter: ITokenStorageAdapter;
+
+  constructor(customAdapter?: ITokenStorageAdapter) {
+    if (customAdapter) {
+      this.adapter = customAdapter;
+    } else if (process.env.REDIS_URL || process.env.REDIS_HOST) {
+      this.adapter = new RedisTokenStorageAdapter();
+    } else {
+      this.adapter = new DistributedStorageEngine();
+    }
+  }
+
+  public setAdapter(adapter: ITokenStorageAdapter): void {
+    this.adapter = adapter;
+  }
+
+  public getAdapter(): ITokenStorageAdapter {
+    return this.adapter;
+  }
+
+  public static hashToken(token: string): string {
+    return crypto.createHash("sha256").update(token).digest("hex");
+  }
+
+  public isAvailable(): boolean {
+    return this.adapter.isAvailable();
+  }
+
+  public setAvailability(isAvailable: boolean): void {
+    this.adapter.setAvailability(isAvailable);
+  }
+
+  public async reset(): Promise<void> {
+    await this.adapter.reset();
+  }
+
+  public async registerToken(params: {
+    token: string;
+    jti: string;
+    userId: string;
+    familyId: string;
+    expiresInMs?: number;
+  }): Promise<void> {
+    const tokenHash = RefreshTokenStore.hashToken(params.token);
+    const now = Date.now();
+    const expiresInMs = params.expiresInMs ?? 7 * 24 * 60 * 60 * 1000;
+    const expiresAt = now + expiresInMs;
+    const ttlSeconds = Math.max(1, Math.ceil(expiresInMs / 1000));
+
+    await this.adapter.registerToken({
+      tokenHash,
+      jti: params.jti,
+      userId: params.userId,
+      familyId: params.familyId,
+      expiresAt,
+      createdAt: new Date(now).toISOString(),
+      ttlSeconds,
+    });
+  }
+
+  public async consumeToken(rawToken: string): Promise<ConsumeResult> {
+    const tokenHash = RefreshTokenStore.hashToken(rawToken);
+    const now = Date.now();
+    return this.adapter.consumeToken({
+      tokenHash,
+      nowMs: now,
+      nowIso: new Date(now).toISOString(),
+    });
+  }
+
   public async revokeFamily(familyId: string): Promise<void> {
-    if (!this.available) {
-      throw new StoreUnavailableError();
-    }
-
-    const nowIso = new Date().toISOString();
-    for (const record of this.tokens.values()) {
-      if (record.familyId === familyId && record.status !== "revoked") {
-        record.status = "revoked";
-        record.revokedAt = nowIso;
-      }
-    }
+    await this.adapter.revokeFamily({
+      familyId,
+      nowIso: new Date().toISOString(),
+    });
   }
 
-  /**
-   * Revokes a specific single token by raw token value.
-   */
   public async revokeToken(rawToken: string): Promise<void> {
-    if (!this.available) {
-      throw new StoreUnavailableError();
-    }
-
     const tokenHash = RefreshTokenStore.hashToken(rawToken);
-    const record = this.tokens.get(tokenHash);
-    if (record) {
-      record.status = "revoked";
-      record.revokedAt = new Date().toISOString();
-    }
+    await this.adapter.revokeToken({
+      tokenHash,
+      nowIso: new Date().toISOString(),
+    });
   }
 
-  /**
-   * Revokes all active tokens for a specific user (e.g. password change, security wipe).
-   */
   public async revokeAllUserTokens(userId: string): Promise<void> {
-    if (!this.available) {
-      throw new StoreUnavailableError();
-    }
-
-    const nowIso = new Date().toISOString();
-    for (const record of this.tokens.values()) {
-      if (record.userId === userId && record.status !== "revoked") {
-        record.status = "revoked";
-        record.revokedAt = nowIso;
-      }
-    }
+    await this.adapter.revokeAllUserTokens({
+      userId,
+      nowIso: new Date().toISOString(),
+    });
   }
 
-  /**
-   * Inspect token record status by raw token string without mutating (read-only for auditing/testing).
-   */
-  public getTokenRecord(rawToken: string): StoredRefreshToken | null {
+  public async getTokenRecord(rawToken: string): Promise<StoredRefreshToken | null> {
     const tokenHash = RefreshTokenStore.hashToken(rawToken);
-    return this.tokens.get(tokenHash) || null;
+    return this.adapter.getTokenRecord(tokenHash);
   }
 }
 

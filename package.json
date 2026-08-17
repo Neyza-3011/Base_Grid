@@ -11,14 +11,21 @@
     "lint": "npm run lint --workspace=frontend"
   },
   "dependencies": {
+    "@types/ioredis": "^5.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
-    "http-proxy": "^1.18.1"
+    "http-proxy": "^1.18.1",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
-    "esbuild": "^0.23.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17"
+    "@types/jsonwebtoken": "^9.0.10",
+    "cookie-parser": "^1.4.7",
+    "esbuild": "^0.23.1",
+    "jsonwebtoken": "^9.0.3",
+    "tsx": "^4.19.0",
+    "vitest": "^4.1.10"
   }
 }
