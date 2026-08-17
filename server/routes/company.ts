@@ -1,0 +1,85 @@
+import { Router, Request, Response } from "express";
+import { authenticate, requireRole } from "../middleware/auth";
+import { db } from "../db";
+
+export const companyRouter = Router();
+
+/**
+ * GET /api/v1/company/settings
+ * Multi-tenant company settings read
+ */
+companyRouter.get("/settings", authenticate, (req: Request, res: Response): void => {
+  if (!req.user) {
+    res.status(401).json({ detail: "Non autenticato." });
+    return;
+  }
+
+  const company = db.findCompanyById(req.user.companyId);
+  if (!company) {
+    res.status(404).json({ detail: "Azienda non trovata." });
+    return;
+  }
+
+  res.status(200).json({
+    id: company.id,
+    name: company.name,
+    vat_number: company.vatNumber,
+    address: company.address,
+    default_hourly_rate: company.defaultHourlyRate,
+    report_footer_notes: company.reportFooterNotes,
+    stripe_subscription_status: company.stripeSubscriptionStatus,
+    max_users: company.maxUsers,
+    feature_pdf_export: company.featurePdfExport,
+  });
+});
+
+/**
+ * PUT /api/v1/company/settings
+ * Multi-tenant company settings update (restricted to admin & superadmin)
+ */
+companyRouter.put(
+  "/settings",
+  authenticate,
+  requireRole(["admin", "superadmin"]),
+  (req: Request, res: Response): void => {
+    if (!req.user) {
+      res.status(401).json({ detail: "Non autenticato." });
+      return;
+    }
+
+    const {
+      name,
+      vat_number,
+      address,
+      default_hourly_rate,
+      report_footer_notes,
+      stripe_subscription_status,
+    } = req.body;
+
+    const updates: any = {};
+    if (name !== undefined) updates.name = String(name).trim();
+    if (vat_number !== undefined) updates.vatNumber = String(vat_number).trim();
+    if (address !== undefined) updates.address = String(address).trim();
+    if (default_hourly_rate !== undefined) updates.defaultHourlyRate = Number(default_hourly_rate) || 0;
+    if (report_footer_notes !== undefined) updates.reportFooterNotes = String(report_footer_notes);
+    if (stripe_subscription_status !== undefined && req.user.role === "superadmin") {
+      updates.stripeSubscriptionStatus = String(stripe_subscription_status);
+    }
+
+    const updated = db.updateCompany(req.user.companyId, updates);
+    if (!updated) {
+      res.status(500).json({ detail: "Impossibile aggiornare i dati aziendali." });
+      return;
+    }
+
+    res.status(200).json({
+      id: updated.id,
+      name: updated.name,
+      vat_number: updated.vatNumber,
+      address: updated.address,
+      default_hourly_rate: updated.defaultHourlyRate,
+      report_footer_notes: updated.reportFooterNotes,
+      stripe_subscription_status: updated.stripeSubscriptionStatus,
+    });
+  },
+);

@@ -83,30 +83,33 @@ export function ProfileSettings({
 
     setLoading(true);
     try {
-      try {
-        await fetch("/api/v1/users/me", {
-          credentials: "include",
-          method: "PUT",
-          headers: appendCsrfHeaders({
-            "Content-Type": "application/json",
-          }),
-          body: JSON.stringify({
-            full_name: formData.fullName,
-            email: formData.email,
-            ...(formData.newPassword ? { password: formData.newPassword } : {}),
-          }),
-        });
-      } catch {
-        // Ignore network errors for seamless offline/demo resilience
+      const res = await fetch("/api/v1/users/me", {
+        credentials: "include",
+        method: "PUT",
+        headers: appendCsrfHeaders({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          full_name: formData.fullName,
+          email: formData.email,
+          ...(formData.newPassword ? { password: formData.newPassword } : {}),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res
+          .json()
+          .catch(() => ({ detail: "Errore durante il salvataggio." }));
+        toast.error(errData.detail || "Impossibile aggiornare il profilo.");
+        return;
       }
 
+      const savedUser = await res.json();
       const updatedSession: UserSession = {
         ...currentUser,
-        fullName: formData.fullName,
-        email: formData.email,
+        fullName: savedUser.fullName || formData.fullName,
+        email: savedUser.email || formData.email,
       };
-
-      // no local storage
 
       onUpdate(updatedSession);
       toast.success("Modifiche salvate con successo!");
@@ -117,12 +120,7 @@ export function ProfileSettings({
         navigate({ to: "/dashboard" });
       }
     } catch {
-      toast.success("Modifiche salvate con successo!");
-      if (onClose) {
-        onClose();
-      } else {
-        navigate({ to: "/dashboard" });
-      }
+      toast.error("Errore di connessione con il server.");
     } finally {
       setLoading(false);
     }
