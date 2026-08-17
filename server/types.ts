@@ -59,6 +59,8 @@ export interface JwtPayload {
   role: UserRole;
   companyId: string;
   tokenType: "access" | "refresh";
+  jti?: string; // unique JWT ID
+  familyId?: string; // token rotation lineage family ID
   iat?: number;
   exp?: number;
 }

@@ -1,11 +1,13 @@
 import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
+import { tokenStore } from "./token-store";
 
 // In-memory persistent database store with multi-tenancy guarantees
 class DatabaseStore {
   private users: Map<string, UserRecord> = new Map();
   private companies: Map<string, CompanyRecord> = new Map();
   private reports: Map<string, ReportRecord> = new Map();
+  public tokenStore = tokenStore;
 
   constructor() {
     this.seedInitialData();
@@ -15,6 +17,7 @@ class DatabaseStore {
     this.users.clear();
     this.companies.clear();
     this.reports.clear();
+    this.tokenStore.reset();
 
     const now = new Date().toISOString();
 

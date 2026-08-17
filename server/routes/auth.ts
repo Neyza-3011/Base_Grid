@@ -10,6 +10,7 @@ import {
   verifyRefreshToken,
 } from "../security";
 import { db } from "../db";
+import { tokenStore, StoreUnavailableError } from "../token-store";
 import { authenticate } from "../middleware/auth";
 
 export const authRouter = Router();
@@ -19,7 +20,7 @@ const cookieSettings = getCookieSettings(isProduction);
 
 /**
  * POST /api/v1/auth/register
- * Creates a new user & company. Issues HttpOnly session & refresh cookies.
+ * Creates a new user & company. Issues HttpOnly session & refresh cookies with rotation registration.
  */
 authRouter.post("/register", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -58,7 +59,14 @@ authRouter.post("/register", async (req: Request, res: Response): Promise<void> 
       phoneNumber: phone_number,
     });
 
-    const { accessToken, refreshToken } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
     const csrfToken = generateCsrfToken();
 
     // Set secure HttpOnly cookies
@@ -69,13 +77,17 @@ authRouter.post("/register", async (req: Request, res: Response): Promise<void> 
     // Return safe user session (NO tokens in response body)
     res.status(201).json(toSafeUserSession(user));
   } catch (error: any) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
     res.status(500).json({ detail: "Errore interno durante la registrazione." });
   }
 });
 
 /**
  * POST /api/v1/auth/login
- * Validates credentials, issues HttpOnly cookies, returns safe user session.
+ * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
  */
 authRouter.post("/login", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -106,7 +118,14 @@ authRouter.post("/login", async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const { accessToken, refreshToken } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
     const csrfToken = generateCsrfToken();
 
     res.cookie("access_token", accessToken, cookieSettings.accessCookie);
@@ -114,7 +133,11 @@ authRouter.post("/login", async (req: Request, res: Response): Promise<void> => 
     res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
 
     res.status(200).json(toSafeUserSession(user));
-  } catch {
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
     res.status(500).json({ detail: "Errore interno del server durante il login." });
   }
 });
@@ -140,7 +163,7 @@ authRouter.get("/session", authenticate, (req: Request, res: Response): void => 
 
 /**
  * POST /api/v1/auth/refresh
- * Refresh Token rotation: exchanges a valid refresh_token for a fresh access_token & new refresh_token.
+ * Single-Use Refresh Token rotation with atomic consumption, replay attack detection, and fail-closed storage handling.
  */
 authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -150,20 +173,54 @@ authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    // Fail-Closed check: if token storage is unavailable, refuse token issuance and return 503
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+
+    // Verify JWT cryptographic signature, expiry, and tokenType
     const payload = verifyRefreshToken(refreshToken);
-    if (!payload || !payload.sub) {
+    if (!payload || !payload.sub || payload.tokenType !== "refresh") {
       res.status(401).json({ detail: "Refresh token non valido o scaduto." });
       return;
     }
 
+    // Verify user exists and is active
     const user = db.findUserById(payload.sub);
     if (!user || !user.isActive) {
-      res.status(401).json({ detail: "Utente non trovato o disattivato." });
+      res.status(401).json({ detail: "Utente non trovato o account disattivato." });
       return;
     }
 
-    // Token rotation
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+    // Atomic single-use consumption: detects reuse and invalidates compromised families
+    const consumeResult = await tokenStore.consumeToken(refreshToken);
+    if (!consumeResult.success) {
+      if (consumeResult.reason === "already_used") {
+        res.status(401).json({
+          detail: "Refresh token già utilizzato. Rilevato potenziale tentativo di replay.",
+        });
+        return;
+      }
+      res.status(401).json({ detail: "Refresh token non valido, scaduto o revocato." });
+      return;
+    }
+
+    // Issue new access token + new rotated refresh token belonging to the same lineage family
+    const { accessToken, refreshToken: newRefreshToken, jti: newJti } = generateTokens(user, {
+      familyId: consumeResult.familyId,
+    });
+
+    // Register new refresh token in store
+    await tokenStore.registerToken({
+      token: newRefreshToken,
+      jti: newJti,
+      userId: user.id,
+      familyId: consumeResult.familyId,
+    });
+
     const csrfToken = generateCsrfToken();
 
     res.cookie("access_token", accessToken, cookieSettings.accessCookie);
@@ -171,16 +228,31 @@ authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> =
     res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
 
     res.status(200).json(toSafeUserSession(user));
-  } catch {
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
     res.status(500).json({ detail: "Errore durante il rinnovo della sessione." });
   }
 });
 
 /**
  * POST /api/v1/auth/logout
- * Clears HttpOnly cookies with identical security options.
+ * Atomically revokes refresh token in persistent store and clears HttpOnly cookies.
  */
-authRouter.post("/logout", (req: Request, res: Response): void => {
+authRouter.post("/logout", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const refreshToken = req.cookies?.refresh_token;
+    if (refreshToken && tokenStore.isAvailable()) {
+      await tokenStore.revokeToken(refreshToken);
+    }
+  } catch {
+    // Fail-safe: cookie clearance must proceed regardless
+  }
+
   res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/" });
   res.clearCookie("csrf_token", { path: "/" });
@@ -190,7 +262,7 @@ authRouter.post("/logout", (req: Request, res: Response): void => {
 
 /**
  * POST /api/v1/auth/google
- * Server-authoritative Google OAuth authentication.
+ * Server-authoritative Google OAuth authentication with token store registration.
  */
 authRouter.post("/google", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -213,7 +285,14 @@ authRouter.post("/google", async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const { accessToken, refreshToken } = generateTokens(user);
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
     const csrfToken = generateCsrfToken();
 
     res.cookie("access_token", accessToken, cookieSettings.accessCookie);
@@ -221,7 +300,11 @@ authRouter.post("/google", async (req: Request, res: Response): Promise<void> =>
     res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
 
     res.status(200).json(toSafeUserSession(user));
-  } catch {
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
     res.status(500).json({ detail: "Errore durante l'autenticazione Google." });
   }
 });
@@ -238,3 +321,4 @@ authRouter.get("/csrf-token", (req: Request, res: Response): void => {
   }
   res.status(200).json({ csrfToken: token });
 });
+

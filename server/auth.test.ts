@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "http";
+import jwt from "jsonwebtoken";
 import { createApp } from "./app";
 import { db } from "./db";
+import { tokenStore } from "./token-store";
 import {
   assertValidJwtSecret,
   generateTokens,
@@ -258,49 +260,301 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("4. Refresh Token Rotation (/api/v1/auth/refresh)", () => {
-    it("rotates access and refresh tokens when valid refresh_token cookie is sent", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
-      const { refreshToken } = generateTokens(user);
-
-      const res = await apiRequest("/api/v1/auth/refresh", {
+  describe("4. Refresh Token Rotation & Replay Protection (/api/v1/auth/refresh)", () => {
+    it("successfully rotates R1 -> fresh access_token + R2 on valid refresh request", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
         method: "POST",
-        cookies: {
-          refresh_token: refreshToken,
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
         },
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.email).toBe("admin@rossi.it");
+      expect(loginRes.status).toBe(200);
+      const r1Cookie = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
+      expect(r1Cookie).toBeDefined();
+      const r1 = r1Cookie!.split(";")[0].split("=")[1];
 
-      const newAccessCookie = res.setCookieHeaders.find((c) => c.startsWith("access_token="));
-      const newRefreshCookie = res.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
-      expect(newAccessCookie).toContain("HttpOnly");
-      expect(newRefreshCookie).toContain("HttpOnly");
-    });
-
-    it("rejects forged or missing refresh token with 401", async () => {
-      const res = await apiRequest("/api/v1/auth/refresh", {
+      // Refresh using R1
+      const refreshRes = await apiRequest("/api/v1/auth/refresh", {
         method: "POST",
         cookies: {
-          refresh_token: "invalid.refresh.token",
+          refresh_token: r1,
         },
+      });
+
+      expect(refreshRes.status).toBe(200);
+      expect(refreshRes.body.email).toBe("admin@rossi.it");
+
+      const a2Cookie = refreshRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const r2Cookie = refreshRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
+      expect(a2Cookie).toContain("HttpOnly");
+      expect(r2Cookie).toContain("HttpOnly");
+
+      const r2 = r2Cookie!.split(";")[0].split("=")[1];
+      expect(r2).not.toBe(r1);
+
+      // Verify R1 is now consumed in store
+      const r1Record = tokenStore.getTokenRecord(r1);
+      expect(r1Record?.status).toBe("consumed");
+
+      // Verify R2 is active and can be used for a subsequent valid rotation
+      const secondRefreshRes = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: {
+          refresh_token: r2,
+        },
+      });
+      expect(secondRefreshRes.status).toBe(200);
+    });
+
+    it("rejects reuse of an already consumed refresh token (Replay Attack) with 401 and invalidates family", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      // Legitimate user rotates R1 -> R2
+      const firstRefresh = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: r1 },
+      });
+      expect(firstRefresh.status).toBe(200);
+      const r2 = firstRefresh.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      // Attacker attempts to replay already used R1
+      const replayAttempt = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: r1 },
+      });
+      expect(replayAttempt.status).toBe(401);
+      expect(replayAttempt.body.detail).toMatch(/già utilizzato|replay/i);
+
+      // Because a replay attack was detected, the entire token family was revoked.
+      // Subsequent use of R2 is also blocked!
+      const subsequentR2Attempt = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: r2 },
+      });
+      expect(subsequentR2Attempt.status).toBe(401);
+    });
+
+    it("handles two concurrent refresh requests with R1: exactly ONE succeeds (200) and ONE fails (401)", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      // Fire two concurrent requests with identical R1
+      const [resA, resB] = await Promise.all([
+        apiRequest("/api/v1/auth/refresh", {
+          method: "POST",
+          cookies: { refresh_token: r1 },
+        }),
+        apiRequest("/api/v1/auth/refresh", {
+          method: "POST",
+          cookies: { refresh_token: r1 },
+        }),
+      ]);
+
+      const statuses = [resA.status, resB.status].sort();
+      expect(statuses).toEqual([200, 401]);
+    });
+
+    it("rejects an expired refresh token with 401", async () => {
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const secret = getJwtSecret();
+      const expiredToken = jwt.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          companyId: user.companyId,
+          tokenType: "refresh",
+          jti: "expired-jti-123",
+          familyId: "fam-expired-123",
+        },
+        secret,
+        { expiresIn: "-10s" },
+      );
+
+      await tokenStore.registerToken({
+        token: expiredToken,
+        jti: "expired-jti-123",
+        userId: user.id,
+        familyId: "fam-expired-123",
+        expiresInMs: -10000,
+      });
+
+      const res = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: expiredToken },
       });
 
       expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/non valido o scaduto/i);
+    });
+
+    it("rejects invalid tokens, forged signatures, and wrong tokenTypes with 401", async () => {
+      // 1. Forged signature
+      const user = db.findUserByEmail("admin@rossi.it")!;
+      const forgedSecret = "wrong-forged-secret-key-32-chars-long!!";
+      const forgedToken = jwt.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          companyId: user.companyId,
+          tokenType: "refresh",
+        },
+        forgedSecret,
+      );
+
+      const resForged = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: forgedToken },
+      });
+      expect(resForged.status).toBe(401);
+
+      // 2. Access token passed instead of refresh token
+      const { accessToken } = generateTokens(user);
+      const resWrongType = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: accessToken },
+      });
+      expect(resWrongType.status).toBe(401);
+
+      // 3. Corrupted string
+      const resCorrupted = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: "not-a-valid-jwt" },
+      });
+      expect(resCorrupted.status).toBe(401);
+    });
+
+    it("rejects non-existent or inactive users with 401", async () => {
+      const secret = getJwtSecret();
+
+      // 1. Non-existent user
+      const nonExistentToken = jwt.sign(
+        {
+          sub: "usr-non-existent-999",
+          email: "ghost@example.com",
+          role: "admin",
+          companyId: "comp-999",
+          tokenType: "refresh",
+          jti: "jti-ghost-1",
+          familyId: "fam-ghost-1",
+        },
+        secret,
+        { expiresIn: "7d" },
+      );
+      await tokenStore.registerToken({
+        token: nonExistentToken,
+        jti: "jti-ghost-1",
+        userId: "usr-non-existent-999",
+        familyId: "fam-ghost-1",
+      });
+
+      const resGhost = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: nonExistentToken },
+      });
+      expect(resGhost.status).toBe(401);
+
+      // 2. Inactive user
+      const user = db.findUserByEmail("tech@rossi.it")!;
+      const { refreshToken } = generateTokens(user);
+      await tokenStore.registerToken({
+        token: refreshToken,
+        jti: "jti-tech-inactive",
+        userId: user.id,
+        familyId: "fam-tech-inactive",
+      });
+
+      // Deactivate user
+      db.updateUser(user.id, { isActive: false });
+
+      const resInactive = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: refreshToken },
+      });
+      expect(resInactive.status).toBe(401);
+      expect(resInactive.body.detail).toMatch(/disattivato/i);
+    });
+
+    it("fails closed with 503 (Service Unavailable) when revocation/token storage is unavailable", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      // Simulate token storage / Redis / DB outage
+      tokenStore.setAvailability(false);
+
+      try {
+        const refreshRes = await apiRequest("/api/v1/auth/refresh", {
+          method: "POST",
+          cookies: { refresh_token: r1 },
+        });
+
+        expect(refreshRes.status).toBe(503);
+        expect(refreshRes.body.detail).toMatch(/temporaneamente non disponibile/i);
+        // No new cookies issued
+        expect(refreshRes.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      } finally {
+        tokenStore.setAvailability(true);
+      }
     });
   });
 
   describe("5. Logout (/api/v1/auth/logout)", () => {
-    it("clears access_token, refresh_token, and csrf_token cookies", async () => {
+    it("clears access_token, refresh_token, and csrf_token cookies and revokes refresh token in store", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
       const res = await apiRequest("/api/v1/auth/logout", {
         method: "POST",
+        cookies: {
+          refresh_token: r1,
+        },
       });
 
       expect(res.status).toBe(200);
       expect(res.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
       expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token=;"))).toBe(true);
       expect(res.setCookieHeaders.some((c) => c.startsWith("csrf_token=;"))).toBe(true);
+
+      // Verify token is revoked in store
+      const r1Record = tokenStore.getTokenRecord(r1);
+      expect(r1Record?.status).toBe("revoked");
+
+      // Attempting to refresh with revoked token fails
+      const refreshRes = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: {
+          refresh_token: r1,
+        },
+      });
+      expect(refreshRes.status).toBe(401);
     });
   });
 

@@ -126,19 +126,35 @@ export function verifyPassword(password: string, storedHash: string, storedSalt:
 }
 
 /**
- * Generates signed Access and Refresh JWTs
+ * Calculates SHA-256 hash of a token string (never logs or indexes raw JWTs)
+ */
+export function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Generates signed Access and Refresh JWTs with unique JTI and Family ID for rotation tracking
  */
 export function generateTokens(
   user: UserRecord,
-  secretOverride?: string,
-): { accessToken: string; refreshToken: string } {
+  optionsOrSecret?: string | { familyId?: string; secretOverride?: string },
+): { accessToken: string; refreshToken: string; jti: string; familyId: string } {
+  const secretOverride =
+    typeof optionsOrSecret === "string" ? optionsOrSecret : optionsOrSecret?.secretOverride;
+  const familyIdOverride = typeof optionsOrSecret === "object" ? optionsOrSecret?.familyId : undefined;
+
   const secret = secretOverride || getJwtSecret();
+  const accessJti = crypto.randomBytes(16).toString("hex");
+  const refreshJti = crypto.randomBytes(16).toString("hex");
+  const familyId = familyIdOverride || `fam-${crypto.randomBytes(16).toString("hex")}`;
+
   const accessPayload: JwtPayload = {
     sub: user.id,
     email: user.email,
     role: user.role,
     companyId: user.companyId,
     tokenType: "access",
+    jti: accessJti,
   };
 
   const refreshPayload: JwtPayload = {
@@ -147,12 +163,14 @@ export function generateTokens(
     role: user.role,
     companyId: user.companyId,
     tokenType: "refresh",
+    jti: refreshJti,
+    familyId: familyId,
   };
 
   const accessToken = jwt.sign(accessPayload, secret, { expiresIn: ACCESS_TOKEN_EXPIRY });
   const refreshToken = jwt.sign(refreshPayload, secret, { expiresIn: REFRESH_TOKEN_EXPIRY });
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, jti: refreshJti, familyId };
 }
 
 /**
