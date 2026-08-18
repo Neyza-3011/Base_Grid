@@ -22,7 +22,7 @@ beforeEach(async () => {
   const app = createApp();
   await new Promise<void>((resolve) => {
     server = http.createServer(app);
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(0, "127.0.0.1", async () => {
       const address = server.address() as { port: number };
       baseUrl = `http://127.0.0.1:${address.port}`;
       resolve();
@@ -77,8 +77,8 @@ async function apiRequest(
   };
 }
 
-describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
-  describe("1. Registration (/api/v1/auth/register)", () => {
+describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async () => {
+  describe("1. Registration (/api/v1/auth/register)", async () => {
     it("creates new user & company and sets HttpOnly cookies without leaking token in JSON body", async () => {
       const res = await apiRequest("/api/v1/auth/register", {
         method: "POST",
@@ -161,7 +161,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("2. Login (/api/v1/auth/login)", () => {
+  describe("2. Login (/api/v1/auth/login)", async () => {
     it("authenticates valid credentials, sets HttpOnly cookies, and returns safe user session", async () => {
       const res = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -209,8 +209,8 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
 
     it("rejects inactive users with 401", async () => {
-      const user = db.findUserByEmail("tech@rossi.it")!;
-      db.updateUser(user.id, { isActive: false });
+      const user = await db.findUserByEmail("tech@rossi.it")!;
+      await db.updateUser(user.id, { isActive: false });
 
       const res = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -225,9 +225,9 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("3. Server-Authoritative Session (/api/v1/auth/session)", () => {
+  describe("3. Server-Authoritative Session (/api/v1/auth/session)", async () => {
     it("returns authenticated user session when valid access_token cookie is provided", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(user);
 
       const res = await apiRequest("/api/v1/auth/session", {
@@ -260,7 +260,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("4. Refresh Token Rotation & Replay Protection (/api/v1/auth/refresh)", () => {
+  describe("4. Refresh Token Rotation & Replay Protection (/api/v1/auth/refresh)", async () => {
     it("successfully rotates R1 -> fresh access_token + R2 on valid refresh request", async () => {
       const loginRes = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -370,7 +370,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
 
     it("rejects an expired refresh token with 401", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const secret = getJwtSecret();
       const expiredToken = jwt.sign(
         {
@@ -405,7 +405,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
 
     it("rejects invalid tokens, forged signatures, and wrong tokenTypes with 401", async () => {
       // 1. Forged signature
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const forgedSecret = "wrong-forged-secret-key-32-chars-long!!";
       const forgedToken = jwt.sign(
         {
@@ -471,7 +471,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       expect(resGhost.status).toBe(401);
 
       // 2. Inactive user
-      const user = db.findUserByEmail("tech@rossi.it")!;
+      const user = await db.findUserByEmail("tech@rossi.it")!;
       const { refreshToken } = generateTokens(user);
       await tokenStore.registerToken({
         token: refreshToken,
@@ -481,7 +481,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       });
 
       // Deactivate user
-      db.updateUser(user.id, { isActive: false });
+      await db.updateUser(user.id, { isActive: false });
 
       const resInactive = await apiRequest("/api/v1/auth/refresh", {
         method: "POST",
@@ -520,7 +520,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("5. Logout (/api/v1/auth/logout)", () => {
+  describe("5. Logout (/api/v1/auth/logout)", async () => {
     it("clears access_token, refresh_token, and csrf_token cookies and revokes refresh token in store", async () => {
       const loginRes = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -558,9 +558,9 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("6. CSRF Protection", () => {
+  describe("6. CSRF Protection", async () => {
     it("rejects mutating requests when X-CSRF-Token header does not match csrf_token cookie", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(user);
 
       const res = await apiRequest("/api/v1/users/me", {
@@ -582,7 +582,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
 
     it("allows mutating requests when X-CSRF-Token matches csrf_token cookie", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(user);
       const csrf = "valid-csrf-token-123";
 
@@ -605,9 +605,9 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("7. Role-Based Access Control & Tenant Isolation", () => {
+  describe("7. Role-Based Access Control & Tenant Isolation", async () => {
     it("allows Master SuperAdmin to access /api/v1/admin/stats and /api/v1/admin/tenants", async () => {
-      const superAdmin = db.findUserByEmail("saas@rapporti.it")!;
+      const superAdmin = await db.findUserByEmail("saas@rapporti.it")!;
       const { accessToken } = generateTokens(superAdmin);
 
       const res = await apiRequest("/api/v1/admin/stats", {
@@ -621,7 +621,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
 
     it("forbids regular admin and technician from accessing /api/v1/admin/stats", async () => {
-      const regularAdmin = db.findUserByEmail("admin@rossi.it")!;
+      const regularAdmin = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(regularAdmin);
 
       const res = await apiRequest("/api/v1/admin/stats", {
@@ -635,7 +635,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
 
     it("enforces tenant isolation on reports: tenant A cannot see or delete tenant B reports", async () => {
       // Create Tenant B
-      const { user: userB } = db.createUser({
+      const { user: userB } = await db.createUser({
         email: "admin@tenantb.it",
         fullName: "User B",
         password: "Password123!",
@@ -643,13 +643,13 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       });
 
       // Seed report for Tenant B
-      const repB = db.createReport(userB.companyId, {
+      const repB = await db.createReport(userB.companyId, {
         client: { name: "Client of B" },
         workHours: 5,
       });
 
       // User A (Rossi) tries to read reports
-      const userA = db.findUserByEmail("admin@rossi.it")!;
+      const userA = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken: tokenA } = generateTokens(userA);
 
       const resA = await apiRequest("/api/v1/reports", {
@@ -678,8 +678,8 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("8. JWT Secret Security & Strict Environment Enforcement", () => {
-    it("fails startup in production when JWT_SECRET and SECRET_KEY are missing", () => {
+  describe("8. JWT Secret Security & Strict Environment Enforcement", async () => {
+    it("fails startup in production when JWT_SECRET and SECRET_KEY are missing", async () => {
       expect(() =>
         assertValidJwtSecret({
           NODE_ENV: "production",
@@ -687,19 +687,19 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       ).toThrow(/CRITICAL SECURITY ERROR.*JWT secret is missing/i);
     });
 
-    it("fails startup in production when JWT secret is empty or whitespace-only", () => {
+    it("fails startup in production when JWT secret is empty or whitespace-only", async () => {
       expect(() => getJwtSecret({ NODE_ENV: "production", JWT_SECRET: "   " })).toThrow(/JWT secret is empty/i);
       expect(() => assertValidJwtSecret({ NODE_ENV: "production", JWT_SECRET: "" })).toThrow(/JWT secret is missing/i);
     });
 
-    it("fails startup in production when JWT secret is too short (< 32 characters)", () => {
+    it("fails startup in production when JWT secret is too short (< 32 characters)", async () => {
       const shortSecret = "short-secret-12345";
       expect(() => getJwtSecret({ NODE_ENV: "production", JWT_SECRET: shortSecret })).toThrow(
         /JWT secret is too short \(18 chars\)\. It must be at least 32 characters long/i,
       );
     });
 
-    it("fails startup in production when JWT secret is a known insecure placeholder", () => {
+    it("fails startup in production when JWT secret is a known insecure placeholder", async () => {
       const bannedPlaceholders = [
         "secret",
         "changeme",
@@ -719,22 +719,22 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       }
     });
 
-    it("succeeds startup when a valid, cryptographically strong secret is provided via JWT_SECRET or SECRET_KEY", () => {
+    it("succeeds startup when a valid, cryptographically strong secret is provided via JWT_SECRET or SECRET_KEY", async () => {
       const validSecret = "a_super_strong_cryptographic_secret_key_with_at_least_32_characters!";
       expect(getJwtSecret({ NODE_ENV: "production", JWT_SECRET: validSecret })).toBe(validSecret);
       expect(getJwtSecret({ NODE_ENV: "production", SECRET_KEY: validSecret })).toBe(validSecret);
       expect(() => assertValidJwtSecret({ NODE_ENV: "production", JWT_SECRET: validSecret })).not.toThrow();
     });
 
-    it("allows dev startup fallback in development environment", () => {
+    it("allows dev startup fallback in development environment", async () => {
       expect(() => assertValidJwtSecret({ NODE_ENV: "development" })).not.toThrow();
     });
 
-    it("rejects JWT signature verification when token generated with Secret A is verified with Secret B", () => {
+    it("rejects JWT signature verification when token generated with Secret A is verified with Secret B", async () => {
       const secretA = "cryptographically_secure_test_secret_alpha_key_32_chars!";
       const secretB = "cryptographically_secure_test_secret_bravo_key_32_chars!";
 
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(user, secretA);
 
       // Verified with correct Secret A -> succeeds
@@ -747,7 +747,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       expect(invalidPayload).toBeNull();
     });
 
-    it("never leaks secret values in thrown error messages", () => {
+    it("never leaks secret values in thrown error messages", async () => {
       const shortSecret = "my-secret-123456789";
       try {
         getJwtSecret({ NODE_ENV: "production", JWT_SECRET: shortSecret });
@@ -759,9 +759,9 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
   });
 
-  describe("9. Distributed Storage Engine & Cross-Instance Verification", () => {
+  describe("9. Distributed Storage Engine & Cross-Instance Verification", async () => {
     it("never stores raw JWT strings in storage records, only SHA-256 digests", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { refreshToken } = generateTokens(user);
 
       await tokenStore.registerToken({
@@ -787,7 +787,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       const instanceB = new RefreshTokenStore(sharedAdapter);
       const instanceC = new RefreshTokenStore(sharedAdapter);
 
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { refreshToken: r1, jti, familyId } = generateTokens(user);
 
       // Instance A registers R1
@@ -814,7 +814,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
       expect(record?.status).toBe("revoked");
     });
 
-    it("verifies RedisTokenStorageAdapter instantiation and environment configuration fallback", () => {
+    it("verifies RedisTokenStorageAdapter instantiation and environment configuration fallback", async () => {
       const redisAdapter = new (tokenStore.constructor as any)();
       expect(redisAdapter).toBeDefined();
       expect(typeof redisAdapter.consumeToken).toBe("function");
@@ -824,7 +824,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     it("ensures exactly 1 out of 10 concurrent consumeToken calls succeeds across distributed nodes", async () => {
       const sharedAdapter = tokenStore.getAdapter();
       const instance = new RefreshTokenStore(sharedAdapter);
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const { refreshToken: r1, jti, familyId } = generateTokens(user);
 
       await instance.registerToken({
@@ -853,7 +853,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", () => {
     });
 
     it("revokes all tokens across all families when revokeAllUserTokens is triggered", async () => {
-      const user = db.findUserByEmail("admin@rossi.it")!;
+      const user = await db.findUserByEmail("admin@rossi.it")!;
       const t1 = generateTokens(user);
       const t2 = generateTokens(user);
 

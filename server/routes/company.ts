@@ -8,13 +8,13 @@ export const companyRouter = Router();
  * GET /api/v1/company/settings
  * Multi-tenant company settings read
  */
-companyRouter.get("/settings", authenticate, (req: Request, res: Response): void => {
+companyRouter.get("/settings", authenticate, async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
   }
 
-  const company = db.findCompanyById(req.user.companyId);
+  const company = await db.findCompanyById(req.user.companyId);
   if (!company) {
     res.status(404).json({ detail: "Azienda non trovata." });
     return;
@@ -41,7 +41,7 @@ companyRouter.put(
   "/settings",
   authenticate,
   requireRole(["admin", "superadmin"]),
-  (req: Request, res: Response): void => {
+  async (req: any, res: any): void => {
     if (!req.user) {
       res.status(401).json({ detail: "Non autenticato." });
       return;
@@ -66,7 +66,7 @@ companyRouter.put(
       updates.stripeSubscriptionStatus = String(stripe_subscription_status);
     }
 
-    const updated = db.updateCompany(req.user.companyId, updates);
+    const updated = await db.updateCompany(req.user.companyId, updates);
     if (!updated) {
       res.status(500).json({ detail: "Impossibile aggiornare i dati aziendali." });
       return;

@@ -9,7 +9,7 @@ export const usersRouter = Router();
  * GET /api/v1/users/me
  * Returns current authenticated user
  */
-usersRouter.get("/me", authenticate, (req: Request, res: Response): void => {
+usersRouter.get("/me", authenticate, (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -21,7 +21,7 @@ usersRouter.get("/me", authenticate, (req: Request, res: Response): void => {
  * PUT /api/v1/users/me
  * Updates current authenticated user profile
  */
-usersRouter.put("/me", authenticate, (req: Request, res: Response): void => {
+usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -42,7 +42,7 @@ usersRouter.put("/me", authenticate, (req: Request, res: Response): void => {
     }
     // If email is changing, ensure uniqueness
     if (normalized !== req.user.email) {
-      const existing = db.findUserByEmail(normalized);
+      const existing = await db.findUserByEmail(normalized);
       if (existing) {
         res.status(409).json({ detail: "Questa email è già in uso da un altro utente." });
         return;
@@ -65,7 +65,7 @@ usersRouter.put("/me", authenticate, (req: Request, res: Response): void => {
     updates.phoneNumber = phone_number;
   }
 
-  const updatedUser = db.updateUser(req.user.id, updates);
+  const updatedUser = await db.updateUser(req.user.id, updates);
   if (!updatedUser) {
     res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
     return;

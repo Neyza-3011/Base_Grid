@@ -2,9 +2,9 @@ import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config } from "./config";
+import { IDatabaseAdapter, TransactionClient, PostgresAdapter } from "./db-postgres";
 
-// In-memory persistent database store with multi-tenancy guarantees
-class DatabaseStore {
+class DatabaseStore implements IDatabaseAdapter {
   private users: Map<string, UserRecord> = new Map();
   private companies: Map<string, CompanyRecord> = new Map();
   private reports: Map<string, ReportRecord> = new Map();
@@ -25,32 +25,27 @@ class DatabaseStore {
 
     const now = new Date().toISOString();
 
-    // 1. Master Company for SuperAdmin
     const masterCompanyId = "comp-master-001";
     const masterCompany: CompanyRecord = {
       id: masterCompanyId,
-      name: config.SUPERADMIN_COMPANY_NAME,
-      vatNumber: "IT00000000000",
-      address: "Via della Spiga 1, Milano",
-      defaultHourlyRate: 65,
-      reportFooterNotes: "Rapportino conforme agli standard BaseGrid Enterprise.",
-      stripeSubscriptionStatus: "Attivo (Enterprise Unlimited)",
-      maxUsers: 100,
+      name: config.SUPERADMIN_COMPANY_NAME || "Rapportini B2B - Control Panel",
+      vatNumber: "00000000000",
+      address: "Admin Network",
+      defaultHourlyRate: 0,
+      reportFooterNotes: "",
+      stripeSubscriptionStatus: "Master",
+      maxUsers: 999,
       featurePdfExport: true,
       createdAt: now,
       updatedAt: now,
     };
     this.companies.set(masterCompanyId, masterCompany);
 
-    // Master SuperAdmin user
-    const superAdminEmail = config.SUPERADMIN_EMAIL;
-    const superAdminPassword = config.SUPERADMIN_PASSWORD;
-    const { hash: saHash, salt: saSalt } = hashPassword(superAdminPassword);
-    
+    const { hash: saHash, salt: saSalt } = hashPassword(config.SUPERADMIN_PASSWORD || "admin");
     const superAdminUser: UserRecord = {
       id: "usr-superadmin-001",
-      email: normalizeEmail(superAdminEmail),
-      fullName: "Master SuperAdmin",
+      email: normalizeEmail(config.SUPERADMIN_EMAIL || "admin@rapportinib2b.it"),
+      fullName: "System SuperAdmin",
       role: "superadmin",
       companyId: masterCompanyId,
       companyName: masterCompany.name,
@@ -65,7 +60,6 @@ class DatabaseStore {
     };
     this.users.set(superAdminUser.id, superAdminUser);
 
-    // 2. Demo Customer Company: Rossi Impianti Srl
     const demoCompanyId = "comp-rossi-001";
     const demoCompany: CompanyRecord = {
       id: demoCompanyId,
@@ -82,7 +76,6 @@ class DatabaseStore {
     };
     this.companies.set(demoCompanyId, demoCompany);
 
-    // Demo Admin: admin@rossi.it
     const { hash: admHash, salt: admSalt } = hashPassword("Password123!");
     const adminUser: UserRecord = {
       id: "usr-rossi-admin",
@@ -102,7 +95,6 @@ class DatabaseStore {
     };
     this.users.set(adminUser.id, adminUser);
 
-    // Demo Technician: tech@rossi.it
     const { hash: techHash, salt: techSalt } = hashPassword("Password123!");
     const techUser: UserRecord = {
       id: "usr-rossi-tech",
@@ -121,63 +113,14 @@ class DatabaseStore {
       updatedAt: now,
     };
     this.users.set(techUser.id, techUser);
-
-    // Seed some initial reports for Rossi Impianti
-    const rep1: ReportRecord = {
-      id: "REP-2026-001",
-      companyId: demoCompanyId,
-      date: "27/07/2026",
-      time: "18:30",
-      workHours: 4.5,
-      travelHours: 1.0,
-      status: "approved",
-      client: {
-        name: "Rossi Impianti Srl",
-        address: "Via Milano 12, Milano",
-        city: "Milano",
-      },
-      technician: { fullName: "Marco Rossi" },
-      materialsUsed: [
-        { name: "Cavo FG16 3x2.5", quantity: 25 },
-        { name: "Interruttore MT 25A", quantity: 2 },
-      ],
-      notes: "Installazione quadro principale completata con collaudo.",
-      createdAt: now,
-    };
-    this.reports.set(rep1.id, rep1);
-
-    const rep2: ReportRecord = {
-      id: "REP-2026-002",
-      companyId: demoCompanyId,
-      date: "27/07/2026",
-      time: "14:15",
-      workHours: 3.0,
-      travelHours: 0.5,
-      status: "submitted",
-      client: {
-        name: "Cantiere Impianti Verdi",
-        address: "Corso Italia 88, Torino",
-        city: "Torino",
-      },
-      technician: { fullName: "Luca Bianchi" },
-      materialsUsed: [
-        { name: "Presa Schuko IP55", quantity: 6 },
-        { name: "Tubo corrugato Ø25", quantity: 15 },
-      ],
-      notes: "Posa tubazioni esterne e montaggio prese stagne.",
-      createdAt: now,
-    };
-    this.reports.set(rep2.id, rep2);
   }
 
-  // --- Users Operations ---
-
-  public findUserById(id: string): UserRecord | null {
+  public async findUserById(id: string): Promise<UserRecord | null> {
     const user = this.users.get(id);
     return user || null;
   }
 
-  public findUserByEmail(email: string): UserRecord | null {
+  public async findUserByEmail(email: string): Promise<UserRecord | null> {
     const normalized = normalizeEmail(email);
     for (const u of this.users.values()) {
       if (u.email === normalized) {
@@ -187,17 +130,9 @@ class DatabaseStore {
     return null;
   }
 
-  public createUser(params: {
-    email: string;
-    fullName: string;
-    password: string;
-    role?: UserRole;
-    companyName: string;
-    provider?: "local" | "google";
-    phoneNumber?: string;
-  }): { user: UserRecord; company: CompanyRecord } {
+  public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    if (this.findUserByEmail(normalized)) {
+    if (await this.findUserByEmail(normalized)) {
       throw new Error("Email already registered");
     }
 
@@ -210,7 +145,7 @@ class DatabaseStore {
       vatNumber: "",
       address: "",
       defaultHourlyRate: 45,
-      reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
+      reportFooterNotes: "",
       stripeSubscriptionStatus: "Attivo (Piano Base)",
       maxUsers: 5,
       featurePdfExport: true,
@@ -243,16 +178,12 @@ class DatabaseStore {
     return { user: newUser, company: newCompany };
   }
 
-  public createGoogleUser(params: {
-    email: string;
-    fullName: string;
-    companyName?: string;
-  }): { user: UserRecord; company: CompanyRecord } {
+  public async createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    const existing = this.findUserByEmail(normalized);
+    const existing = await this.findUserByEmail(normalized);
     if (existing) {
-      const company = this.findCompanyById(existing.companyId)!;
-      return { user: existing, company };
+      const company = await this.findCompanyById(existing.companyId);
+      return { user: existing, company: company! };
     }
 
     const now = new Date().toISOString();
@@ -265,7 +196,7 @@ class DatabaseStore {
       vatNumber: "",
       address: "",
       defaultHourlyRate: 50,
-      reportFooterNotes: "Servizi di manutenzione e installazione.",
+      reportFooterNotes: "",
       stripeSubscriptionStatus: "Attivo (Piano Google OAuth)",
       maxUsers: 5,
       featurePdfExport: true,
@@ -274,7 +205,7 @@ class DatabaseStore {
     };
     this.companies.set(companyId, newCompany);
 
-    const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now());
+    const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now().toString());
     const userId = `usr-g-${Date.now()}`;
 
     const newUser: UserRecord = {
@@ -298,7 +229,7 @@ class DatabaseStore {
     return { user: newUser, company: newCompany };
   }
 
-  public updateUser(id: string, updates: Partial<UserRecord>): UserRecord | null {
+  public async updateUser(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null> {
     const user = this.users.get(id);
     if (!user) return null;
 
@@ -311,13 +242,11 @@ class DatabaseStore {
     return updated;
   }
 
-  // --- Company Operations ---
-
-  public findCompanyById(id: string): CompanyRecord | null {
+  public async findCompanyById(id: string): Promise<CompanyRecord | null> {
     return this.companies.get(id) || null;
   }
 
-  public updateCompany(id: string, updates: Partial<CompanyRecord>): CompanyRecord | null {
+  public async updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null> {
     const company = this.companies.get(id);
     if (!company) return null;
 
@@ -330,13 +259,11 @@ class DatabaseStore {
     return updated;
   }
 
-  public getAllTenants(): CompanyRecord[] {
+  public async getAllTenants(): Promise<CompanyRecord[]> {
     return Array.from(this.companies.values());
   }
 
-  // --- Reports Operations (Strict Tenant Isolation) ---
-
-  public getReportsByCompany(companyId: string, limit: number = 100): ReportRecord[] {
+  public async getReportsByCompany(companyId: string, limit: number = 100): Promise<ReportRecord[]> {
     const list: ReportRecord[] = [];
     for (const r of this.reports.values()) {
       if (r.companyId === companyId) {
@@ -346,13 +273,13 @@ class DatabaseStore {
     return list.slice(0, limit);
   }
 
-  public createReport(companyId: string, data: Partial<ReportRecord>): ReportRecord {
+  public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
     const now = new Date().toISOString();
-    const id = data.id || `REP-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const id = data.id || `REP-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
 
     const newReport: ReportRecord = {
       id,
-      companyId, // Server enforces companyId
+      companyId,
       date: data.date || new Date().toLocaleDateString("it-IT"),
       time: data.time || new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
       workHours: data.workHours || 0,
@@ -376,17 +303,15 @@ class DatabaseStore {
     return newReport;
   }
 
-  public deleteReport(companyId: string, reportId: string): boolean {
+  public async deleteReport(companyId: string, reportId: string): Promise<boolean> {
     const report = this.reports.get(reportId);
     if (!report || report.companyId !== companyId) {
-      return false; // Cannot delete reports of another tenant
+      return false;
     }
     return this.reports.delete(reportId);
   }
 
-  // --- Superadmin Stats ---
-
-  public getGlobalStats() {
+  public async getGlobalStats(): Promise<any> {
     return {
       total_tenants: this.companies.size,
       total_users: this.users.size,
@@ -396,6 +321,10 @@ class DatabaseStore {
       system_status: "Operational · 100% Zero-Trust Active",
     };
   }
+
+  public async withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
+    return callback({});
+  }
 }
 
-export const db = new DatabaseStore();
+export const db: IDatabaseAdapter = config.NODE_ENV === "production" ? new PostgresAdapter() : new DatabaseStore();

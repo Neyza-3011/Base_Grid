@@ -22,7 +22,7 @@ const cookieSettings = getCookieSettings(isProduction);
  * POST /api/v1/auth/register
  * Creates a new user & company. Issues HttpOnly session & refresh cookies with rotation registration.
  */
-authRouter.post("/register", async (req: Request, res: Response): Promise<void> => {
+authRouter.post("/register", async (req: any, res: any): Promise<void> => {
   try {
     const { email, password, full_name, company_name, phone_number } = req.body;
 
@@ -45,13 +45,13 @@ authRouter.post("/register", async (req: Request, res: Response): Promise<void> 
     }
 
     // Check email uniqueness
-    const existing = db.findUserByEmail(normalizedEmail);
+    const existing = await db.findUserByEmail(normalizedEmail);
     if (existing) {
       res.status(409).json({ detail: "Email già registrata nel sistema. Effettua il login." });
       return;
     }
 
-    const { user } = db.createUser({
+    const { user } = await db.createUser({
       email: normalizedEmail,
       fullName: full_name,
       password,
@@ -89,7 +89,7 @@ authRouter.post("/register", async (req: Request, res: Response): Promise<void> 
  * POST /api/v1/auth/login
  * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
  */
-authRouter.post("/login", async (req: Request, res: Response): Promise<void> => {
+authRouter.post("/login", async (req: any, res: any): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -99,7 +99,7 @@ authRouter.post("/login", async (req: Request, res: Response): Promise<void> => 
     }
 
     const normalizedEmail = normalizeEmail(email);
-    const user = db.findUserByEmail(normalizedEmail);
+    const user = await db.findUserByEmail(normalizedEmail);
 
     if (!user) {
       // Use uniform 401 to prevent user enumeration
@@ -146,7 +146,7 @@ authRouter.post("/login", async (req: Request, res: Response): Promise<void> => 
  * GET /api/v1/auth/session
  * Server-authoritative session identification using verified access_token cookie.
  */
-authRouter.get("/session", authenticate, (req: Request, res: Response): void => {
+authRouter.get("/session", authenticate, async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Sessione non valida." });
     return;
@@ -165,7 +165,7 @@ authRouter.get("/session", authenticate, (req: Request, res: Response): void => 
  * POST /api/v1/auth/refresh
  * Single-Use Refresh Token rotation with atomic consumption, replay attack detection, and fail-closed storage handling.
  */
-authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> => {
+authRouter.post("/refresh", async (req: any, res: any): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
@@ -189,7 +189,7 @@ authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> =
     }
 
     // Verify user exists and is active
-    const user = db.findUserById(payload.sub);
+    const user = await db.findUserById(payload.sub);
     if (!user || !user.isActive) {
       res.status(401).json({ detail: "Utente non trovato o account disattivato." });
       return;
@@ -243,7 +243,7 @@ authRouter.post("/refresh", async (req: Request, res: Response): Promise<void> =
  * POST /api/v1/auth/logout
  * Atomically revokes refresh token in persistent store and clears HttpOnly cookies.
  */
-authRouter.post("/logout", async (req: Request, res: Response): Promise<void> => {
+authRouter.post("/logout", async (req: any, res: any): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refresh_token;
     if (refreshToken && tokenStore.isAvailable()) {
@@ -264,7 +264,7 @@ authRouter.post("/logout", async (req: Request, res: Response): Promise<void> =>
  * POST /api/v1/auth/google
  * Server-authoritative Google OAuth authentication with token store registration.
  */
-authRouter.post("/google", async (req: Request, res: Response): Promise<void> => {
+authRouter.post("/google", async (req: any, res: any): Promise<void> => {
   try {
     const { email, fullName, companyName } = req.body;
 
@@ -274,7 +274,7 @@ authRouter.post("/google", async (req: Request, res: Response): Promise<void> =>
     }
 
     const normalizedEmail = normalizeEmail(email);
-    const { user } = db.createGoogleUser({
+    const { user } = await db.createGoogleUser({
       email: normalizedEmail,
       fullName,
       companyName,
@@ -313,7 +313,7 @@ authRouter.post("/google", async (req: Request, res: Response): Promise<void> =>
  * GET /api/v1/auth/csrf-token
  * Issues/returns current CSRF token cookie for frontend clients.
  */
-authRouter.get("/csrf-token", (req: Request, res: Response): void => {
+authRouter.get("/csrf-token", async (req: any, res: any): void => {
   let token = req.cookies?.csrf_token;
   if (!token) {
     token = generateCsrfToken();

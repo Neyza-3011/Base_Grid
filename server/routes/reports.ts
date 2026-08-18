@@ -10,14 +10,14 @@ reportsRouter.use(authenticate);
  * GET /api/v1/reports
  * Returns reports strictly belonging to the authenticated user's company (tenant isolation).
  */
-reportsRouter.get("/", (req: Request, res: Response): void => {
+reportsRouter.get("/", async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
   }
 
   const limit = Math.min(Number(req.query.limit) || 100, 1000);
-  const reports = db.getReportsByCompany(req.user.companyId, limit);
+  const reports = await db.getReportsByCompany(req.user.companyId, limit);
 
   // Map to API response schema expected by frontend
   const responseData = reports.map((r) => ({
@@ -47,7 +47,7 @@ reportsRouter.get("/", (req: Request, res: Response): void => {
  * POST /api/v1/reports
  * Creates a report linked strictly to the user's company (tenant isolation).
  */
-reportsRouter.post("/", (req: Request, res: Response): void => {
+reportsRouter.post("/", async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -66,7 +66,7 @@ reportsRouter.post("/", (req: Request, res: Response): void => {
     signature_base64,
   } = req.body;
 
-  const newReport = db.createReport(req.user.companyId, {
+  const newReport = await db.createReport(req.user.companyId, {
     date,
     time,
     workHours: Number(work_hours) || 0,
@@ -103,14 +103,14 @@ reportsRouter.post("/", (req: Request, res: Response): void => {
  * DELETE /api/v1/reports/:id
  * Deletes a report strictly if it belongs to the user's company.
  */
-reportsRouter.delete("/:id", (req: Request, res: Response): void => {
+reportsRouter.delete("/:id", async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
   }
 
   const reportId = req.params.id;
-  const deleted = db.deleteReport(req.user.companyId, reportId);
+  const deleted = await db.deleteReport(req.user.companyId, reportId);
 
   if (!deleted) {
     res.status(404).json({ detail: "Rapportino non trovato o non appartenente alla tua azienda." });
@@ -124,7 +124,7 @@ reportsRouter.delete("/:id", (req: Request, res: Response): void => {
  * GET /api/v1/reports/:id/pdf
  * Generates/returns PDF preview info
  */
-reportsRouter.get("/:id/pdf", (req: Request, res: Response): void => {
+reportsRouter.get("/:id/pdf", async (req: any, res: any): void => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;

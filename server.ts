@@ -2,12 +2,17 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createApp } from "./server/app";
+import { db } from "./server/db";
 
 // Dynamically import Vite if not in production
 const isProd = process.env.NODE_ENV === "production";
 
 async function startServer() {
   const app = createApp();
+  if (db.initDatabase) {
+    await db.initDatabase();
+    console.log("Database initialized.");
+  }
   const PORT = 3000;
 
   // --- Vite / Frontend Serving ---

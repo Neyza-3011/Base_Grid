@@ -1,4 +1,6 @@
-import { Pool, PoolClient } from "pg";
+const fs = require('fs');
+
+const code = `import { Pool, PoolClient } from "pg";
 import { config } from "./config";
 import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { tokenStore } from "./token-store";
@@ -42,9 +44,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ssl: config.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
     });
   }
-
+  
   public async initDatabase(): Promise<void> {
-    await this.pool.query(`
+    await this.pool.query(\`
       CREATE TABLE IF NOT EXISTS companies (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -91,7 +93,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         "signatureBase64" TEXT,
         "createdAt" TIMESTAMP WITH TIME ZONE
       );
-    `);
+    \`);
   }
 
   public async withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T> {
@@ -112,29 +114,25 @@ export class PostgresAdapter implements IDatabaseAdapter {
   // --- Users Operations ---
   public async findUserById(id: string): Promise<UserRecord | null> {
     const res = await this.pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [id]);
-    return (res.rows[0] as UserRecord) || null;
+    return res.rows[0] as UserRecord || null;
   }
 
   public async findUserByEmail(email: string): Promise<UserRecord | null> {
-    const res = await this.pool.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
-      normalizeEmail(email),
-    ]);
-    return (res.rows[0] as UserRecord) || null;
+    const res = await this.pool.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [normalizeEmail(email)]);
+    return res.rows[0] as UserRecord || null;
   }
 
   public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     return this.withTransaction(async (client) => {
       const normalized = normalizeEmail(params.email);
-      const existing = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
-        normalized,
-      ]);
+      const existing = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [normalized]);
       if (existing.rowCount && existing.rowCount > 0) {
         throw new Error("Email already registered");
       }
 
       const now = new Date().toISOString();
-      const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-
+      const companyId = \`comp-\${Date.now()}-\${Math.floor(100 + Math.random() * 900)}\`;
+      
       const newCompany: CompanyRecord = {
         id: companyId,
         name: (params.companyName || "Azienda Senza Nome").trim(),
@@ -150,25 +148,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
       };
 
       await client.query(
-        `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          newCompany.id,
-          newCompany.name,
-          newCompany.vatNumber,
-          newCompany.address,
-          newCompany.defaultHourlyRate,
-          newCompany.reportFooterNotes,
-          newCompany.stripeSubscriptionStatus,
-          newCompany.maxUsers,
-          newCompany.featurePdfExport,
-          newCompany.createdAt,
-          newCompany.updatedAt,
-        ],
+        \`INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\`,
+        [newCompany.id, newCompany.name, newCompany.vatNumber, newCompany.address, newCompany.defaultHourlyRate, newCompany.reportFooterNotes, newCompany.stripeSubscriptionStatus, newCompany.maxUsers, newCompany.featurePdfExport, newCompany.createdAt, newCompany.updatedAt]
       );
 
       const { hash, salt } = hashPassword(params.password || Math.random().toString());
-      const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+      const userId = \`usr-\${Date.now()}-\${Math.floor(100 + Math.random() * 900)}\`;
 
       const newUser: UserRecord = {
         id: userId,
@@ -188,50 +174,29 @@ export class PostgresAdapter implements IDatabaseAdapter {
       };
 
       await client.query(
-        `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-        [
-          newUser.id,
-          newUser.email,
-          newUser.fullName,
-          newUser.role,
-          newUser.companyId,
-          newUser.companyName,
-          newUser.passwordHash,
-          newUser.salt,
-          newUser.isActive,
-          newUser.provider,
-          newUser.emailConfirmed,
-          newUser.phoneNumber,
-          newUser.createdAt,
-          newUser.updatedAt,
-        ],
+        \`INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\`,
+        [newUser.id, newUser.email, newUser.fullName, newUser.role, newUser.companyId, newUser.companyName, newUser.passwordHash, newUser.salt, newUser.isActive, newUser.provider, newUser.emailConfirmed, newUser.phoneNumber, newUser.createdAt, newUser.updatedAt]
       );
 
       return { user: newUser, company: newCompany };
     });
   }
 
-  public async createGoogleUser(
-    params: any,
-  ): Promise<{ user: UserRecord; company: CompanyRecord }> {
+  public async createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     return this.withTransaction(async (client) => {
       const normalized = normalizeEmail(params.email);
-      const existingRes = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
-        normalized,
-      ]);
-
+      const existingRes = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [normalized]);
+      
       if (existingRes.rowCount && existingRes.rowCount > 0) {
         const existing = existingRes.rows[0] as UserRecord;
-        const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [
-          existing.companyId,
-        ]);
+        const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [existing.companyId]);
         return { user: existing, company: compRes.rows[0] as CompanyRecord };
       }
 
       const now = new Date().toISOString();
-      const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-      const companyName = params.companyName || `${params.fullName} Team`;
+      const companyId = \`comp-\${Date.now()}-\${Math.floor(100 + Math.random() * 900)}\`;
+      const companyName = params.companyName || \`\${params.fullName} Team\`;
 
       const newCompany: CompanyRecord = {
         id: companyId,
@@ -248,25 +213,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
       };
 
       await client.query(
-        `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          newCompany.id,
-          newCompany.name,
-          newCompany.vatNumber,
-          newCompany.address,
-          newCompany.defaultHourlyRate,
-          newCompany.reportFooterNotes,
-          newCompany.stripeSubscriptionStatus,
-          newCompany.maxUsers,
-          newCompany.featurePdfExport,
-          newCompany.createdAt,
-          newCompany.updatedAt,
-        ],
+        \`INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\`,
+        [newCompany.id, newCompany.name, newCompany.vatNumber, newCompany.address, newCompany.defaultHourlyRate, newCompany.reportFooterNotes, newCompany.stripeSubscriptionStatus, newCompany.maxUsers, newCompany.featurePdfExport, newCompany.createdAt, newCompany.updatedAt]
       );
 
       const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now());
-      const userId = `usr-g-${Date.now()}`;
+      const userId = \`usr-g-\${Date.now()}\`;
 
       const newUser: UserRecord = {
         id: userId,
@@ -286,24 +239,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
       };
 
       await client.query(
-        `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-        [
-          newUser.id,
-          newUser.email,
-          newUser.fullName,
-          newUser.role,
-          newUser.companyId,
-          newUser.companyName,
-          newUser.passwordHash,
-          newUser.salt,
-          newUser.isActive,
-          newUser.provider,
-          newUser.emailConfirmed,
-          newUser.phoneNumber,
-          newUser.createdAt,
-          newUser.updatedAt,
-        ],
+        \`INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\`,
+        [newUser.id, newUser.email, newUser.fullName, newUser.role, newUser.companyId, newUser.companyName, newUser.passwordHash, newUser.salt, newUser.isActive, newUser.provider, newUser.emailConfirmed, newUser.phoneNumber, newUser.createdAt, newUser.updatedAt]
       );
 
       return { user: newUser, company: newCompany };
@@ -315,22 +253,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
     if (!existing) return null;
 
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
-
+    
     await this.pool.query(
-      `UPDATE users 
+      \`UPDATE users 
        SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "isActive" = $5, "emailConfirmed" = $6, "phoneNumber" = $7, "updatedAt" = $8 
-       WHERE id = $9`,
-      [
-        updated.email,
-        updated.fullName,
-        updated.role,
-        updated.companyName,
-        updated.isActive,
-        updated.emailConfirmed,
-        updated.phoneNumber,
-        updated.updatedAt,
-        id,
-      ],
+       WHERE id = $9\`,
+      [updated.email, updated.fullName, updated.role, updated.companyName, updated.isActive, updated.emailConfirmed, updated.phoneNumber, updated.updatedAt, id]
     );
 
     return updated;
@@ -339,34 +267,20 @@ export class PostgresAdapter implements IDatabaseAdapter {
   // --- Company Operations ---
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
     const res = await this.pool.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [id]);
-    return (res.rows[0] as CompanyRecord) || null;
+    return res.rows[0] as CompanyRecord || null;
   }
 
-  public async updateCompany(
-    id: string,
-    updates: Partial<CompanyRecord>,
-  ): Promise<CompanyRecord | null> {
+  public async updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null> {
     const existing = await this.findCompanyById(id);
     if (!existing) return null;
 
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
 
     await this.pool.query(
-      `UPDATE companies 
+      \`UPDATE companies 
        SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "updatedAt" = $9 
-       WHERE id = $10`,
-      [
-        updated.name,
-        updated.vatNumber,
-        updated.address,
-        updated.defaultHourlyRate,
-        updated.reportFooterNotes,
-        updated.stripeSubscriptionStatus,
-        updated.maxUsers,
-        updated.featurePdfExport,
-        updated.updatedAt,
-        id,
-      ],
+       WHERE id = $10\`,
+      [updated.name, updated.vatNumber, updated.address, updated.defaultHourlyRate, updated.reportFooterNotes, updated.stripeSubscriptionStatus, updated.maxUsers, updated.featurePdfExport, updated.updatedAt, id]
     );
 
     return updated;
@@ -378,27 +292,20 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   // --- Reports Operations ---
-  public async getReportsByCompany(
-    companyId: string,
-    limit: number = 100,
-  ): Promise<ReportRecord[]> {
-    const res = await this.pool.query('SELECT * FROM reports WHERE "companyId" = $1 LIMIT $2', [
-      companyId,
-      limit,
-    ]);
+  public async getReportsByCompany(companyId: string, limit: number = 100): Promise<ReportRecord[]> {
+    const res = await this.pool.query('SELECT * FROM reports WHERE "companyId" = $1 LIMIT $2', [companyId, limit]);
     return res.rows;
   }
 
   public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
     const now = new Date().toISOString();
-    const id = data.id || `REP-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const id = data.id || \`REP-\${Date.now()}-\${Math.floor(100 + Math.random() * 900)}\`;
 
     const newReport: ReportRecord = {
       id,
       companyId,
       date: data.date || new Date().toLocaleDateString("it-IT"),
-      time:
-        data.time || new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+      time: data.time || new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
       workHours: data.workHours || 0,
       travelHours: data.travelHours || 0,
       status: data.status || "submitted",
@@ -417,33 +324,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
     };
 
     await this.pool.query(
-      `INSERT INTO reports (id, "companyId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      [
-        newReport.id,
-        newReport.companyId,
-        newReport.date,
-        newReport.time,
-        newReport.workHours,
-        newReport.travelHours,
-        newReport.status,
-        JSON.stringify(newReport.client),
-        JSON.stringify(newReport.technician),
-        JSON.stringify(newReport.materialsUsed),
-        newReport.notes,
-        newReport.signatureBase64,
-        newReport.createdAt,
-      ],
+      \`INSERT INTO reports (id, "companyId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\`,
+      [newReport.id, newReport.companyId, newReport.date, newReport.time, newReport.workHours, newReport.travelHours, newReport.status, JSON.stringify(newReport.client), JSON.stringify(newReport.technician), JSON.stringify(newReport.materialsUsed), newReport.notes, newReport.signatureBase64, newReport.createdAt]
     );
 
     return newReport;
   }
 
   public async deleteReport(companyId: string, reportId: string): Promise<boolean> {
-    const res = await this.pool.query(
-      'DELETE FROM reports WHERE id = $1 AND "companyId" = $2 RETURNING id',
-      [reportId, companyId],
-    );
+    const res = await this.pool.query('DELETE FROM reports WHERE id = $1 AND "companyId" = $2 RETURNING id', [reportId, companyId]);
     return (res.rowCount ?? 0) > 0;
   }
 
@@ -462,3 +352,5 @@ export class PostgresAdapter implements IDatabaseAdapter {
     };
   }
 }
+`;
+fs.writeFileSync('server/db-postgres.ts', code);
