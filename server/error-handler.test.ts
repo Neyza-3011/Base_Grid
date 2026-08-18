@@ -1,76 +1,65 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
-import express from "express";
+import { createApp } from "./app";
+import { authRouter } from "./routes/auth";
 
-describe("App Express Error Handler & Health Check", () => {
-  it("Error handler does not expose err.message for 500 internal errors and logs safely", async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const app = express();
+// Mock security module
+vi.mock("./security", async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    assertValidJwtSecret: vi.fn(),
+    getJwtSecret: vi.fn(() => "test-secret-value"),
+  };
+});
+
+describe("App Express Error Handler Integration", () => {
+  it("Error handler does not expose err.message for 500 internal errors and logs safely with correlation ID", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     
-    // Route that throws a 500 error
-    app.get("/trigger-error", (req, res, next) => {
-      const err = new Error("SUPER_SECRET_DATABASE_PASSWORD_LEAK");
-      (err as any).status = 500;
+    // Register route on authRouter which is mounted before the error handler in createApp
+    authRouter.get("/test-trigger-500", (_req, _res, next) => {
+      const err: any = new Error("SUPER_SECRET_DATABASE_PASSWORD_LEAK");
+      err.status = 500;
       next(err);
     });
 
-    // The handler under test
-    app.use((err: any, _req: any, res: any, _next: any) => {
-      const status = err.status || 500;
-      const safeMessage = status < 500 ? (err.message || "Richiesta non valida.") : "Errore interno del server.";
-      
-      if (status >= 500) {
-        console.error(`[ServerError] ${err.name || "Error"}: Internal Server Error`);
-      } else {
-        console.error(`[ServerError] ${err.name || "Error"}:`, err.message);
-      }
-      
-      res.status(status).json({ detail: safeMessage });
-    });
-
-    const response = await request(app).get("/trigger-error");
+    const app = createApp();
+    const response = await request(app).get("/api/v1/auth/test-trigger-500");
+    
     expect(response.status).toBe(500);
     expect(response.body.detail).toBe("Errore interno del server.");
-    expect(response.body.detail).not.toContain("SUPER_SECRET_DATABASE_PASSWORD_LEAK");
+    expect(response.text).not.toContain("SUPER_SECRET_DATABASE_PASSWORD_LEAK");
     
-    // Verify console log doesn't contain the secret
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("[ServerError]"));
-    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining("SUPER_SECRET_DATABASE_PASSWORD_LEAK"));
+    // Verify console log contains correlation ID and not the secret
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/\[ServerError\] Error: Internal Server Error \(ID: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)/)
+    );
+    expect(consoleSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("SUPER_SECRET_DATABASE_PASSWORD_LEAK")
+    );
     
     consoleSpy.mockRestore();
   });
 
-  it("Error handler exposes err.message for expected client errors (400) and logs the message", async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const app = express();
+  it("Error handler exposes err.message for expected client errors (400)", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     
-    // Route that throws a 400 error
-    app.get("/trigger-400", (req, res, next) => {
+    authRouter.get("/test-trigger-400", (_req, _res, next) => {
       const err: any = new Error("Invalid payload format");
       err.status = 400;
       next(err);
     });
 
-    // The handler under test
-    app.use((err: any, _req: any, res: any, _next: any) => {
-      const status = err.status || 500;
-      const safeMessage = status < 500 ? (err.message || "Richiesta non valida.") : "Errore interno del server.";
-      
-      if (status >= 500) {
-        console.error(`[ServerError] ${err.name || "Error"}: Internal Server Error`);
-      } else {
-        console.error(`[ServerError] ${err.name || "Error"}:`, err.message);
-      }
-      
-      res.status(status).json({ detail: safeMessage });
-    });
-
-    const response = await request(app).get("/trigger-400");
+    const app = createApp();
+    const response = await request(app).get("/api/v1/auth/test-trigger-400");
+    
     expect(response.status).toBe(400);
     expect(response.body.detail).toBe("Invalid payload format");
-    
-    // Verify console log DOES contain the error details for 400
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("[ServerError]"), "Invalid payload format");
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[ServerError]"),
+      "Invalid payload format"
+    );
     
     consoleSpy.mockRestore();
   });

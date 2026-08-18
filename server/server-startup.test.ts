@@ -9,8 +9,10 @@ const requiredEnv = {
   JWT_SECRET: "test-secret-at-least-32-chars-long-here",
   DATABASE_URL: "postgres://fake:fake@127.0.0.1:5432/fake",
   REDIS_URL: "redis://127.0.0.1:6379",
-  FRONTEND_URL: "http://127.0.0.1:10007",
-  CORS_ORIGINS: "http://127.0.0.1:10007",
+  FRONTEND_URL: "https://app.basegrid.io",
+  CORS_ORIGINS: "https://app.basegrid.io",
+  SUPERADMIN_EMAIL: "superadmin@example.com",
+  SUPERADMIN_PASSWORD: "SuperAdminPassword1234!",
 };
 
 describe("Production Startup Sequence", () => {
