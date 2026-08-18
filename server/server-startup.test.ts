@@ -1,0 +1,77 @@
+import { describe, it, expect } from "vitest";
+import { spawn } from "child_process";
+import fs from "fs";
+import path from "path";
+
+const requiredEnv = {
+  ...process.env,
+  NODE_ENV: "production",
+  JWT_SECRET: "test-secret-at-least-32-chars-long-here",
+  DATABASE_URL: "postgres://fake:fake@127.0.0.1:5432/fake",
+  REDIS_URL: "redis://127.0.0.1:6379",
+  FRONTEND_URL: "http://127.0.0.1:10007",
+  CORS_ORIGINS: "http://127.0.0.1:10007",
+};
+
+describe("Production Startup Sequence", () => {
+  it("Fails closed (exit code 1) when Nitro fails to start in production", async () => {
+    const nitroPath = path.resolve(process.cwd(), "frontend/.output/server/index.mjs");
+    const backupPath = nitroPath + ".backup";
+    let moved = false;
+    if (fs.existsSync(nitroPath)) {
+      fs.renameSync(nitroPath, backupPath);
+      moved = true;
+    }
+
+    try {
+      await new Promise<void>((resolve) => {
+        const child = spawn("npx", ["tsx", "server.ts"], {
+          env: { ...requiredEnv, PORT: "10007" },
+        });
+
+        let output = "";
+        child.stderr?.on("data", (data) => { output += data; });
+        child.stdout?.on("data", (data) => { output += data; });
+
+        child.on("exit", (code) => {
+          expect(code).toBe(1);
+          expect(output).toContain("CRITICAL STARTUP ERROR");
+          expect(output).toContain("Nitro frontend failed to bind");
+          resolve();
+        });
+      });
+    } finally {
+      if (moved) {
+        fs.renameSync(backupPath, nitroPath);
+      }
+    }
+  }, 30000);
+
+  it("Successfully binds and starts when Nitro is ready", async () => {
+    await new Promise<void>((resolve) => {
+      const child = spawn("npx", ["tsx", "server.ts"], {
+        env: { ...requiredEnv, PORT: "10008" },
+      });
+
+      let output = "";
+      child.stderr?.on("data", (data) => { output += data; });
+      child.stdout?.on("data", (data) => { output += data; });
+
+      const checkInterval = setInterval(() => {
+        if (output.includes("Nitro frontend is ready.")) {
+          clearInterval(checkInterval);
+          // npx creates a child process for tsx, sending SIGTERM to the process group helps, 
+          // or we can just assume tests verify what they need to and exit.
+          // Since it's a test, let's just use child.kill.
+          child.kill("SIGTERM"); 
+        }
+      }, 500);
+
+      child.on("exit", (code) => {
+        clearInterval(checkInterval);
+        expect(output).toContain("Nitro frontend is ready.");
+        resolve();
+      });
+    });
+  }, 30000);
+});

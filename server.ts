@@ -47,6 +47,30 @@ async function startServer() {
       stdio: "inherit"
     });
     
+    // Readiness check for Nitro
+    console.log("Waiting for Nitro frontend to become ready...");
+    let nitroReady = false;
+    for (let i = 0; i < 30; i++) {
+      try {
+        const res = await fetch("http://127.0.0.1:3001/");
+        // Any valid HTTP response means Nitro is listening and bound to the port
+        if (res.ok || res.status === 404 || res.status === 200 || res.status === 500) {
+          nitroReady = true;
+          break;
+        }
+      } catch (err) {
+        // Connection refused - still starting
+      }
+      // Wait 500ms before next check (max 15 seconds total)
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    if (!nitroReady) {
+      console.error("CRITICAL STARTUP ERROR: Nitro frontend failed to bind to port 3001 within 15 seconds.");
+      process.exit(1); // Fail-closed in production
+    }
+    console.log("Nitro frontend is ready.");
+    
     // Use http-proxy to forward requests
     const httpProxy = await import("http-proxy");
     const proxy = httpProxy.createProxyServer();

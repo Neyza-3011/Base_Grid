@@ -53,10 +53,18 @@ export function createApp(): Express {
 
   // Centralized safe error handler (never leaks stack traces or internal secrets)
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[ServerError]", err?.message || err);
-    res.status(err.status || 500).json({
-      detail: err.message || "Errore interno del server.",
-    });
+    const status = err.status || 500;
+    
+    // Log the error safely (do not expose secrets in logs; only the error name/message)
+    console.error(`[ServerError] ${err.name || "Error"}:`, err.message || err);
+    
+    // Only return the exact error message to the client for expected HTTP errors (status < 500)
+    // For 500 Internal Server Errors, always mask the underlying cause to prevent leakage.
+    const safeMessage = status < 500 
+      ? (err.message || "Richiesta non valida.") 
+      : "Errore interno del server.";
+
+    res.status(status).json({ detail: safeMessage });
   });
 
   return app;
