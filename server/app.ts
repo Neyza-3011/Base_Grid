@@ -8,6 +8,7 @@ import { adminRouter } from "./routes/admin";
 import { reportsRouter } from "./routes/reports";
 import { verifyCsrf } from "./middleware/auth";
 import { assertValidJwtSecret } from "./security";
+import { config } from "./config";
 
 export function createApp(): Express {
   // Validate JWT Secret configuration on application initialization / startup
@@ -18,7 +19,7 @@ export function createApp(): Express {
   // Basic security and parsing middlewares
   app.use(
     cors({
-      origin: true, // Allow frontend origin
+      origin: config.NODE_ENV === "production" ? config.CORS_ORIGINS : true, // Restrict in production
       credentials: true, // Allow cookies
     }),
   );

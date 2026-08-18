@@ -26,7 +26,7 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: SUPERADMIN_EMAIL
+      - key: SUPERADMIN_COMPANY_NAME
         sync: false
       - key: SUPERADMIN_EMAIL
         sync: false

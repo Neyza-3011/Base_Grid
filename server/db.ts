@@ -1,6 +1,7 @@
 import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
+import { config } from "./config";
 
 // In-memory persistent database store with multi-tenancy guarantees
 class DatabaseStore {
@@ -25,7 +26,7 @@ class DatabaseStore {
     const masterCompanyId = "comp-master-001";
     const masterCompany: CompanyRecord = {
       id: masterCompanyId,
-      name: "BaseGrid Master Platform",
+      name: config.SUPERADMIN_COMPANY_NAME,
       vatNumber: "IT00000000000",
       address: "Via della Spiga 1, Milano",
       defaultHourlyRate: 65,
@@ -38,11 +39,14 @@ class DatabaseStore {
     };
     this.companies.set(masterCompanyId, masterCompany);
 
-    // Master SuperAdmin user: saas@rapporti.it
-    const { hash: saHash, salt: saSalt } = hashPassword("SuperAdmin2026!");
+    // Master SuperAdmin user
+    const superAdminEmail = config.SUPERADMIN_EMAIL || "saas@rapporti.it";
+    const superAdminPassword = config.SUPERADMIN_PASSWORD || "SuperAdmin2026!";
+    const { hash: saHash, salt: saSalt } = hashPassword(superAdminPassword);
+    
     const superAdminUser: UserRecord = {
       id: "usr-superadmin-001",
-      email: normalizeEmail("saas@rapporti.it"),
+      email: normalizeEmail(superAdminEmail),
       fullName: "Master SuperAdmin",
       role: "superadmin",
       companyId: masterCompanyId,

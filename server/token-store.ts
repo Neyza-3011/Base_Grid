@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import Redis, { RedisOptions } from "ioredis";
+import { config } from "./config";
 
 export class StoreUnavailableError extends Error {
   constructor(message = "Token storage is currently unavailable") {
@@ -179,7 +180,7 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
         enableOfflineQueue: false,
       });
     } else {
-      const url = process.env.REDIS_URL;
+      const url = config.REDIS_URL;
       if (url) {
         this.client = new Redis(url, {
           lazyConnect: true,
@@ -187,8 +188,11 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
           enableOfflineQueue: false,
         });
       } else {
-        const host = process.env.REDIS_HOST || "127.0.0.1";
-        const port = Number(process.env.REDIS_PORT) || 6379;
+        if (config.NODE_ENV === "production") {
+          throw new Error("CRITICAL SECURITY ERROR: REDIS_URL is required in production for distributed token revocation.");
+        }
+        const host = config.REDIS_HOST;
+        const port = config.REDIS_PORT;
         this.client = new Redis({
           host,
           port,
@@ -549,9 +553,13 @@ export class RefreshTokenStore {
   constructor(customAdapter?: ITokenStorageAdapter) {
     if (customAdapter) {
       this.adapter = customAdapter;
-    } else if (process.env.REDIS_URL || process.env.REDIS_HOST) {
+    } else if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       this.adapter = new RedisTokenStorageAdapter();
     } else {
+      if (config.NODE_ENV === "production") {
+        throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");
+      }
+      // Fallback local memory storage for development / testing when Redis is not provided
       this.adapter = new DistributedStorageEngine();
     }
   }
