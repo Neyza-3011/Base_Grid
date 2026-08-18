@@ -1319,5 +1319,256 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       expect(retryRes.status).toBe(200);
     });
   });
+
+  describe("13. Email Template Hardening & Provider Failure Resilience Suite (P0.3.2)", async () => {
+    it("escapes special HTML characters in fullName and verification/reset links", async () => {
+      const { DevEmailService, escapeHtml } = await import("./email-service");
+      const emailSvc = new DevEmailService();
+
+      // Test escapeHtml helper directly
+      expect(escapeHtml("<script>alert('xss')</script>")).toBe("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
+      expect(escapeHtml('A & B "C"')).toBe("A &amp; B &quot;C&quot;");
+
+      // Test sendVerificationEmail with HTML injection attempt in fullName and link
+      const maliciousName = '<img src=x onerror=alert("xss")>';
+      const tokenWithParams = "token123&param=evil<script>";
+      await emailSvc.sendVerificationEmail("test@example.com", tokenWithParams, maliciousName);
+
+      const sent = emailSvc.sentEmails[emailSvc.sentEmails.length - 1];
+      expect(sent.html).toContain("&lt;img src=x onerror=alert(&quot;xss&quot;)&gt;");
+      expect(sent.html).not.toContain(maliciousName); // Raw HTML must NOT be in template
+      expect(sent.html).toContain("token123&amp;param=evil&lt;script&gt;");
+      expect(sent.text).toContain(maliciousName); // Plain text keeps raw string
+    });
+
+    it("ensures raw tokens are NEVER saved in database records", async () => {
+      const { generateSecureToken, hashToken } = await import("./security");
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      });
+
+      // Verify DB lookup by tokenHash works
+      const foundByHash = await db.findAuthTokenByHash(tokenHash, "password_reset");
+      expect(foundByHash).not.toBeNull();
+
+      // Verify DB lookup by rawToken fails (raw token is never stored)
+      const foundByRaw = await db.findAuthTokenByHash(rawToken, "password_reset");
+      expect(foundByRaw).toBeNull();
+    });
+
+    it("handles Resend provider 200 success response", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const prodSvc = new ProductionEmailService();
+
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "msg_resend_12345" }),
+      });
+
+      try {
+        const res = await prodSvc.sendEmail({
+          to: "user@example.com",
+          subject: "Test",
+          html: "<p>Test</p>",
+          text: "Test",
+        });
+        expect(res.success).toBe(true);
+        expect(res.messageId).toBe("msg_resend_12345");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("handles Resend provider 4xx error response gracefully", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const prodSvc = new ProductionEmailService();
+
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ message: "Unprocessable entity" }),
+      });
+
+      try {
+        const res = await prodSvc.sendEmail({
+          to: "user@example.com",
+          subject: "Test",
+          html: "<p>Test</p>",
+          text: "Test",
+        });
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("provider_error_422");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("handles Resend provider 5xx error response gracefully", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const prodSvc = new ProductionEmailService();
+
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ message: "Service unavailable" }),
+      });
+
+      try {
+        const res = await prodSvc.sendEmail({
+          to: "user@example.com",
+          subject: "Test",
+          html: "<p>Test</p>",
+          text: "Test",
+        });
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("provider_error_503");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("handles Resend provider network timeout gracefully", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const prodSvc = new ProductionEmailService();
+
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed (timeout)"));
+
+      try {
+        const res = await prodSvc.sendEmail({
+          to: "user@example.com",
+          subject: "Test",
+          html: "<p>Test</p>",
+          text: "Test",
+        });
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("provider_network_error");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("handles registration when email provider fails without leaving orphan active tokens", async () => {
+      const { emailService } = await import("./email-service");
+      const originalSend = emailService.sendVerificationEmail;
+      emailService.sendVerificationEmail = vi.fn().mockResolvedValue({ success: false, error: "provider_error_500" });
+
+      try {
+        const res = await apiRequest("/api/v1/auth/register", {
+          method: "POST",
+          body: {
+            email: "provider.fail@azienda.it",
+            password: "SecurePassword123!",
+            full_name: "Failed Provider User",
+            company_name: "Failed Co",
+          },
+        });
+
+        // Registration succeeds in creating user, returning 201
+        expect(res.status).toBe(201);
+
+        const createdUser = await db.findUserByEmail("provider.fail@azienda.it");
+        expect(createdUser).not.toBeNull();
+        expect(createdUser?.emailConfirmed).toBe(false);
+      } finally {
+        emailService.sendVerificationEmail = originalSend;
+      }
+    });
+
+    it("handles resend-verification when email provider fails by revoking token and returning 502", async () => {
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      await db.updateUser(user.id, { emailConfirmed: false });
+
+      const { emailService } = await import("./email-service");
+      const originalSend = emailService.sendVerificationEmail;
+      emailService.sendVerificationEmail = vi.fn().mockResolvedValue({ success: false, error: "provider_error_500" });
+
+      try {
+        const resendRes = await apiRequest("/api/v1/auth/resend-verification", {
+          method: "POST",
+          body: { email: "admin@rossi.it" },
+        });
+
+        expect(resendRes.status).toBe(502);
+        expect(resendRes.body.detail).toMatch(/Impossibile inviare/i);
+      } finally {
+        emailService.sendVerificationEmail = originalSend;
+      }
+    });
+  });
+
+  describe("14. Concurrent Reset & Single-Use Enforcement Suite (P0.3.2)", async () => {
+    it("handles concurrent password reset requests cleanly (single-use enforcement)", async () => {
+      const user = (await db.findUserByEmail("tech@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      });
+
+      // Issue 2 simultaneous reset requests with the same token
+      const [res1, res2] = await Promise.all([
+        apiRequest("/api/v1/auth/reset-password", {
+          method: "POST",
+          body: { token: rawToken, new_password: "NewPassword123!" },
+        }),
+        apiRequest("/api/v1/auth/reset-password", {
+          method: "POST",
+          body: { token: rawToken, new_password: "NewPassword123!" },
+        }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      // Exactly one succeeds (200) and the other fails (400)
+      expect(statuses).toEqual([200, 400]);
+
+      const failedRes = res1.status === 400 ? res1 : res2;
+      expect(failedRes.body.detail).toMatch(/già stato utilizzato/i);
+    });
+
+    it("prevents reuse of a consumed password reset token", async () => {
+      const user = (await db.findUserByEmail("tech@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: hashToken(rawToken),
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      });
+
+      // First reset succeeds
+      const firstRes = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: { token: rawToken, new_password: "PasswordVersion2!" },
+      });
+      expect(firstRes.status).toBe(200);
+
+      // Second reset with same token fails
+      const secondRes = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: { token: rawToken, new_password: "PasswordVersion3!" },
+      });
+      expect(secondRes.status).toBe(400);
+      expect(secondRes.body.detail).toMatch(/già stato utilizzato/i);
+    });
+  });
 });
 

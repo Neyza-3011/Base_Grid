@@ -1,5 +1,28 @@
 import { config } from "./config";
 
+/**
+ * Escapes special HTML characters to prevent XSS/HTML injection in email templates.
+ */
+export function escapeHtml(value: string): string {
+  if (!value) return "";
+  return value.replace(/[&<>"']/g, (match) => {
+    switch (match) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return match;
+    }
+  });
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
@@ -35,10 +58,12 @@ export class DevEmailService implements IEmailService {
   public async sendVerificationEmail(to: string, token: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
     const frontendUrl = config.FRONTEND_URL || "http://localhost:5173";
     const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
-    const name = fullName ? fullName.trim() : "Gentile Utente";
+    const rawName = fullName ? fullName.trim() : "Gentile Utente";
+    const safeName = escapeHtml(rawName);
+    const safeVerificationUrl = escapeHtml(verificationUrl);
 
     const subject = "Conferma il tuo account BaseGrid";
-    const text = `Ciao ${name},\n\nGrazie per esserti registrato su BaseGrid. Per confermare il tuo indirizzo email, visita il seguente link:\n${verificationUrl}\n\nIl link scadrà tra 24 ore.\n\nIl Team di BaseGrid`;
+    const text = `Ciao ${rawName},\n\nGrazie per esserti registrato su BaseGrid. Per confermare il tuo indirizzo email, visita il seguente link:\n${verificationUrl}\n\nIl link scadrà tra 24 ore.\n\nIl Team di BaseGrid`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 8px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -48,17 +73,17 @@ export class DevEmailService implements IEmailService {
         <div style="background-color: #ffffff; padding: 32px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Conferma il tuo indirizzo email</h2>
           <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-            Ciao <strong>${name}</strong>,<br>
+            Ciao <strong>${safeName}</strong>,<br>
             Grazie per aver creato il tuo account aziendale su BaseGrid. Per attivare tutte le funzionalità e completare la verifica, clicca sul pulsante qui sotto:
           </p>
           <div style="text-align: center; margin: 28px 0;">
-            <a href="${verificationUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
+            <a href="${safeVerificationUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
               Conferma Account
             </a>
           </div>
           <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px;">
             Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:<br>
-            <a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a>
+            <a href="${safeVerificationUrl}" style="color: #2563eb; word-break: break-all;">${safeVerificationUrl}</a>
           </p>
           <p style="font-size: 12px; color: #94a3b8; margin-top: 16px; border-top: 1px solid #f1f5f9; pt: 12px;">
             Questo link scadrà tra 24 ore. Se non hai richiesto tu questa registrazione, puoi ignorare questa email.
@@ -80,10 +105,12 @@ export class DevEmailService implements IEmailService {
   public async sendPasswordResetEmail(to: string, token: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
     const frontendUrl = config.FRONTEND_URL || "http://localhost:5173";
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const name = fullName ? fullName.trim() : "Gentile Utente";
+    const rawName = fullName ? fullName.trim() : "Gentile Utente";
+    const safeName = escapeHtml(rawName);
+    const safeResetUrl = escapeHtml(resetUrl);
 
     const subject = "Reimposta la password del tuo account BaseGrid";
-    const text = `Ciao ${name},\n\nAbbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid.\n\nPer creare una nuova password, visita il seguente link:\n${resetUrl}\n\nIl link scadrà tra 1 ora.\n\nSe non hai richiesto tu la reimpostazione, puoi ignorare questo messaggio.\n\nIl Team di BaseGrid`;
+    const text = `Ciao ${rawName},\n\nAbbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid.\n\nPer creare una nuova password, visita il seguente link:\n${resetUrl}\n\nIl link scadrà tra 1 ora.\n\nSe non hai richiesto tu la reimpostazione, puoi ignorare questo messaggio.\n\nIl Team di BaseGrid`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 8px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -93,17 +120,17 @@ export class DevEmailService implements IEmailService {
         <div style="background-color: #ffffff; padding: 32px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Reimpostazione Password</h2>
           <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-            Ciao <strong>${name}</strong>,<br>
+            Ciao <strong>${safeName}</strong>,<br>
             Abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid. Clicca sul pulsante qui sotto per impostarne una nuova:
           </p>
           <div style="text-align: center; margin: 28px 0;">
-            <a href="${resetUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
+            <a href="${safeResetUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
               Reimposta Password
             </a>
           </div>
           <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px;">
             Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:<br>
-            <a href="${resetUrl}" style="color: #2563eb; word-break: break-all;">${resetUrl}</a>
+            <a href="${safeResetUrl}" style="color: #2563eb; word-break: break-all;">${safeResetUrl}</a>
           </p>
           <p style="font-size: 12px; color: #94a3b8; margin-top: 16px; border-top: 1px solid #f1f5f9; pt: 12px;">
             Questo link è valido per 1 ora. Se non hai richiesto tu la reimpostazione della password, puoi ignorare in tutta sicurezza questa email.
@@ -248,10 +275,12 @@ export class ProductionEmailService implements IEmailService {
   public async sendVerificationEmail(to: string, token: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
     const frontendUrl = config.FRONTEND_URL || "https://app.basegrid.io";
     const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
-    const name = fullName ? fullName.trim() : "Gentile Utente";
+    const rawName = fullName ? fullName.trim() : "Gentile Utente";
+    const safeName = escapeHtml(rawName);
+    const safeVerificationUrl = escapeHtml(verificationUrl);
 
     const subject = "Conferma il tuo account BaseGrid";
-    const text = `Ciao ${name},\n\nGrazie per esserti registrato su BaseGrid. Per confermare il tuo indirizzo email, visita il seguente link:\n${verificationUrl}\n\nIl link scadrà tra 24 ore.\n\nIl Team di BaseGrid`;
+    const text = `Ciao ${rawName},\n\nGrazie per esserti registrato su BaseGrid. Per confermare il tuo indirizzo email, visita il seguente link:\n${verificationUrl}\n\nIl link scadrà tra 24 ore.\n\nIl Team di BaseGrid`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 8px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -261,17 +290,17 @@ export class ProductionEmailService implements IEmailService {
         <div style="background-color: #ffffff; padding: 32px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Conferma il tuo indirizzo email</h2>
           <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-            Ciao <strong>${name}</strong>,<br>
+            Ciao <strong>${safeName}</strong>,<br>
             Grazie per aver creato il tuo account aziendale su BaseGrid. Per attivare tutte le funzionalità e completare la verifica, clicca sul pulsante qui sotto:
           </p>
           <div style="text-align: center; margin: 28px 0;">
-            <a href="${verificationUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
+            <a href="${safeVerificationUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
               Conferma Account
             </a>
           </div>
           <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px;">
             Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:<br>
-            <a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a>
+            <a href="${safeVerificationUrl}" style="color: #2563eb; word-break: break-all;">${safeVerificationUrl}</a>
           </p>
           <p style="font-size: 12px; color: #94a3b8; margin-top: 16px; border-top: 1px solid #f1f5f9; pt: 12px;">
             Questo link scadrà tra 24 ore. Se non hai richiesto tu questa registrazione, puoi ignorare questa email.
@@ -293,10 +322,12 @@ export class ProductionEmailService implements IEmailService {
   public async sendPasswordResetEmail(to: string, token: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
     const frontendUrl = config.FRONTEND_URL || "https://app.basegrid.io";
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const name = fullName ? fullName.trim() : "Gentile Utente";
+    const rawName = fullName ? fullName.trim() : "Gentile Utente";
+    const safeName = escapeHtml(rawName);
+    const safeResetUrl = escapeHtml(resetUrl);
 
     const subject = "Reimposta la password del tuo account BaseGrid";
-    const text = `Ciao ${name},\n\nAbbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid.\n\nPer creare una nuova password, visita il seguente link:\n${resetUrl}\n\nIl link scadrà tra 1 ora.\n\nSe non hai richiesto tu la reimpostazione, puoi ignorare questo messaggio.\n\nIl Team di BaseGrid`;
+    const text = `Ciao ${rawName},\n\nAbbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid.\n\nPer creare una nuova password, visita il seguente link:\n${resetUrl}\n\nIl link scadrà tra 1 ora.\n\nSe non hai richiesto tu la reimpostazione, puoi ignorare questo messaggio.\n\nIl Team di BaseGrid`;
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background-color: #f8fafc; border-radius: 8px;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -306,17 +337,17 @@ export class ProductionEmailService implements IEmailService {
         <div style="background-color: #ffffff; padding: 32px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Reimpostazione Password</h2>
           <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-            Ciao <strong>${name}</strong>,<br>
+            Ciao <strong>${safeName}</strong>,<br>
             Abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account BaseGrid. Clicca sul pulsante qui sotto per impostarne una nuova:
           </p>
           <div style="text-align: center; margin: 28px 0;">
-            <a href="${resetUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
+            <a href="${safeResetUrl}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
               Reimposta Password
             </a>
           </div>
           <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 24px;">
             Se il pulsante non funziona, copia e incolla questo indirizzo nel tuo browser:<br>
-            <a href="${resetUrl}" style="color: #2563eb; word-break: break-all;">${resetUrl}</a>
+            <a href="${safeResetUrl}" style="color: #2563eb; word-break: break-all;">${safeResetUrl}</a>
           </p>
           <p style="font-size: 12px; color: #94a3b8; margin-top: 16px; border-top: 1px solid #f1f5f9; pt: 12px;">
             Questo link è valido per 1 ora. Se non hai richiesto tu la reimpostazione della password, puoi ignorare in tutta sicurezza questa email.

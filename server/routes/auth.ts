@@ -80,7 +80,10 @@ authRouter.post("/register", async (req: any, res: any): Promise<void> => {
     });
 
     // Dispatch verification email
-    await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
+    const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
+    if (!emailRes.success) {
+      await db.revokeActiveAuthTokens(user.id, "email_verification");
+    }
 
     const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
     await tokenStore.registerToken({
@@ -175,7 +178,12 @@ authRouter.post("/resend-verification", async (req: any, res: any): Promise<void
           expiresAt,
         });
 
-        await emailService.sendVerificationEmail(user.email, rawToken, user.fullName);
+        const emailRes = await emailService.sendVerificationEmail(user.email, rawToken, user.fullName);
+        if (!emailRes.success) {
+          await db.revokeActiveAuthTokens(user.id, "email_verification");
+          res.status(502).json({ detail: "Impossibile inviare l'email di verifica. Riprova più tardi." });
+          return;
+        }
       }
     }
 
@@ -220,7 +228,12 @@ authRouter.post("/forgot-password", async (req: any, res: any): Promise<void> =>
         expiresAt,
       });
 
-      await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName);
+      const emailRes = await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName);
+      if (!emailRes.success) {
+        await db.revokeActiveAuthTokens(user.id, "password_reset");
+        res.status(502).json({ detail: "Impossibile inviare l'email di reset password. Riprova più tardi." });
+        return;
+      }
     }
 
     // Uniform indistinguishable response
