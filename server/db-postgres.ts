@@ -137,6 +137,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       connectionString: dbUrl,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
+
+    // Handle unexpected idle client connection pool errors
+    this.pool.on("error", (err) => {
+      console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err.message || err);
+    });
   }
 
   public async close(): Promise<void> {

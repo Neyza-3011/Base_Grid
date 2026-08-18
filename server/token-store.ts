@@ -202,11 +202,23 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
         });
       }
     }
+
+    // Attach silent error listener to prevent uncaught exception process crashes
+    this.client.on("error", (err) => {
+      console.error("[RedisError] Unexpected error on Redis connection:", err.message || err);
+    });
   }
 
   public isAvailable(): boolean {
     if (this.isExplicitlyDisabled) return false;
-    return this.client.status === "ready" || this.client.status === "connect";
+    const status = this.client.status;
+    return (
+      status === "ready" ||
+      status === "connect" ||
+      status === "connecting" ||
+      status === "wait" ||
+      status === "reconnecting"
+    );
   }
 
   public setAvailability(isAvailable: boolean): void {

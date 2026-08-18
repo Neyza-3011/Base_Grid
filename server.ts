@@ -3,17 +3,28 @@ import path from "path";
 import fs from "fs";
 import { createApp } from "./server/app";
 import { db } from "./server/db";
+import { tokenStore } from "./server/token-store";
 
 // Dynamically import Vite if not in production
 const isProd = process.env.NODE_ENV === "production";
 
 async function startServer() {
   const app = createApp();
+
   if (db.initDatabase) {
-    await db.initDatabase();
-    console.log("Database initialized.");
+    try {
+      await db.initDatabase();
+      console.log("Database initialized successfully.");
+    } catch (err) {
+      console.error("CRITICAL STARTUP ERROR: Database initialization failed:", err);
+      if (isProd) {
+        process.exit(1);
+      }
+    }
   }
+
   const PORT = Number(process.env.PORT) || 3000;
+  let nitroProcess: any = null;
 
   // --- Vite / Frontend Serving ---
   if (!isProd) {
@@ -31,7 +42,7 @@ async function startServer() {
     
     // Spawn Nitro on port 3001
     const nitroEnv = { ...process.env, PORT: "3001" };
-    const nitroProcess = spawn("node", [path.resolve(process.cwd(), "frontend/.output/server/index.mjs")], {
+    nitroProcess = spawn("node", [path.resolve(process.cwd(), "frontend/.output/server/index.mjs")], {
       env: nitroEnv,
       stdio: "inherit"
     });
@@ -47,10 +58,64 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`BaseGrid Server running on http://localhost:${PORT}`);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`BaseGrid Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Graceful Shutdown Handler
+  let isShuttingDown = false;
+  const gracefulShutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`Received ${signal}. Initiating graceful shutdown...`);
+
+    // 1. Close Express server to stop accepting new requests
+    server.close(() => {
+      console.log("Express server stopped accepting new connections.");
+    });
+
+    // 2. Kill the spawned Nitro frontend process
+    if (nitroProcess) {
+      console.log("Terminating Nitro frontend process...");
+      try {
+        nitroProcess.kill("SIGTERM");
+      } catch (err) {
+        console.error("Error killing Nitro process:", err);
+      }
+    }
+
+    // 3. Close the DB adapter connection pool
+    try {
+      if (db && typeof db.close === "function") {
+        console.log("Closing PostgreSQL connection pool...");
+        await db.close();
+      }
+    } catch (err) {
+      console.error("Error closing PostgreSQL pool:", err);
+    }
+
+    // 4. Close the tokenStore (Redis) adapter
+    try {
+      const adapter = tokenStore.getAdapter();
+      if (adapter && typeof adapter.close === "function") {
+        console.log("Closing Redis token store connection...");
+        await adapter.close();
+      }
+    } catch (err) {
+      console.error("Error closing Redis token store:", err);
+    }
+
+    console.log("Graceful shutdown sequence completed.");
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("CRITICAL: Uncaught server startup failure:", err);
+  process.exit(1);
+});
+
 
