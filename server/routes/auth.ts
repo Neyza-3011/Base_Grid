@@ -140,6 +140,7 @@ authRouter.post("/verify-email", async (req: any, res: any): Promise<void> => {
     const updatedUser = await db.findUserById(result.userId!);
     res.status(200).json({
       message: "Email verificata con successo.",
+      emailConfirmed: true,
       user: updatedUser ? toSafeUserSession(updatedUser) : undefined,
     });
   } catch (error) {
@@ -252,9 +253,39 @@ authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => 
       return;
     }
 
-    const tokenHash = hashToken(token);
-    const { hash: newPasswordHash, salt: newSalt } = hashPassword(newPassword);
+    // 1. Fail-closed: Verify tokenStore availability BEFORE making any changes
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
 
+    const tokenHash = hashToken(token);
+
+    // 2. Validate reset token in DB before revoking sessions or changing password
+    const tokenRecord = await db.findAuthTokenByHash(tokenHash, "password_reset");
+    if (!tokenRecord) {
+      res.status(400).json({ detail: "Token di reset non valido." });
+      return;
+    }
+    if (tokenRecord.consumed) {
+      res.status(400).json({ detail: "Il link di reset password è già stato utilizzato." });
+      return;
+    }
+    const expiresAt = new Date(tokenRecord.expiresAt).getTime();
+    if (Date.now() > expiresAt) {
+      res.status(400).json({ detail: "Il link di reset password è scaduto. Richiedi un nuovo link." });
+      return;
+    }
+
+    // 3. Revoke all active sessions and refresh tokens for this user in tokenStore (Redis)
+    // If Redis fails or is unavailable, this throws StoreUnavailableError -> caught -> 503
+    // DB has NOT been touched, so password is NOT updated and token remains valid!
+    await tokenStore.revokeAllUserTokens(tokenRecord.userId);
+
+    // 4. Update user's password and consume reset token in DB
+    const { hash: newPasswordHash, salt: newSalt } = hashPassword(newPassword);
     const result = await db.resetPasswordWithToken(tokenHash, newPasswordHash, newSalt);
 
     if (!result.success) {
@@ -270,12 +301,7 @@ authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => 
       return;
     }
 
-    // Revoke all existing sessions and refresh tokens for this user across all devices
-    if (result.userId && tokenStore.isAvailable()) {
-      await tokenStore.revokeAllUserTokens(result.userId);
-    }
-
-    // Clear any cookies on current client
+    // 5. Clear current client cookies
     res.clearCookie("access_token", { path: "/" });
     res.clearCookie("refresh_token", { path: "/api/v1/auth" });
     res.clearCookie("csrf_token", { path: "/" });
@@ -284,6 +310,12 @@ authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => 
       message: "Password reimpostata con successo. Effettua il login con la nuova password.",
     });
   } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
     res.status(500).json({ detail: "Errore durante la reimpostazione della password." });
   }
 });

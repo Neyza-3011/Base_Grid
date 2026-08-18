@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import http from "http";
 import jwt from "jsonwebtoken";
 import { createApp } from "./app";
@@ -884,6 +884,439 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       const res1 = await tokenStore.consumeToken(t1.refreshToken);
       expect(res1.success).toBe(false);
       expect(res1.reason).toBe("revoked");
+    });
+  });
+
+  describe("10. Production Email & Resend Integration Suite (P0.3.1)", async () => {
+    it("fails startup in production if EMAIL_API_KEY, EMAIL_FROM, or FRONTEND_URL is missing", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+
+      const origEnv = process.env.NODE_ENV;
+      const origKey = process.env.EMAIL_API_KEY;
+      const origFrom = process.env.EMAIL_FROM;
+      const origFrontend = process.env.FRONTEND_URL;
+      const origProvider = process.env.EMAIL_PROVIDER;
+
+      try {
+        process.env.NODE_ENV = "production";
+        process.env.EMAIL_PROVIDER = "resend";
+        delete process.env.EMAIL_API_KEY;
+        process.env.EMAIL_FROM = "no-reply@basegrid.io";
+        process.env.FRONTEND_URL = "https://app.basegrid.io";
+
+        expect(() => new ProductionEmailService()).toThrow(/EMAIL_API_KEY is required in production/i);
+
+        process.env.EMAIL_API_KEY = "re_test_key";
+        delete process.env.EMAIL_FROM;
+        expect(() => new ProductionEmailService()).toThrow(/EMAIL_FROM is required in production/i);
+
+        process.env.EMAIL_FROM = "no-reply@basegrid.io";
+        delete process.env.FRONTEND_URL;
+        expect(() => new ProductionEmailService()).toThrow(/FRONTEND_URL is required in production/i);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origKey) process.env.EMAIL_API_KEY = origKey;
+        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origFrontend) process.env.FRONTEND_URL = origFrontend;
+        if (origProvider) process.env.EMAIL_PROVIDER = origProvider;
+      }
+    });
+
+    it("succeeds when provider HTTP returns 200 with valid message ID", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const service = new ProductionEmailService();
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "msg_resend_12345" }),
+      } as Response);
+
+      const origKey = process.env.EMAIL_API_KEY;
+      const origFrom = process.env.EMAIL_FROM;
+      process.env.EMAIL_API_KEY = "re_valid_key_123";
+      process.env.EMAIL_FROM = "no-reply@basegrid.io";
+
+      try {
+        const res = await service.sendEmail({
+          to: "cliente@azienda.it",
+          subject: "Test Subject",
+          text: "Test body",
+          html: "<p>Test body</p>",
+        });
+
+        expect(res.success).toBe(true);
+        expect(res.messageId).toBe("msg_resend_12345");
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          "https://api.resend.com/emails",
+          expect.objectContaining({
+            method: "POST",
+            headers: expect.objectContaining({
+              Authorization: "Bearer re_valid_key_123",
+              "Content-Type": "application/json",
+            }),
+          }),
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        if (origKey) process.env.EMAIL_API_KEY = origKey;
+        if (origFrom) process.env.EMAIL_FROM = origFrom;
+      }
+    });
+
+    it("fails when provider HTTP returns 4xx/5xx status error", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const service = new ProductionEmailService();
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({ message: "Unprocessable entity" }),
+      } as Response);
+
+      const origKey = process.env.EMAIL_API_KEY;
+      const origFrom = process.env.EMAIL_FROM;
+      process.env.EMAIL_API_KEY = "re_valid_key_123";
+      process.env.EMAIL_FROM = "no-reply@basegrid.io";
+
+      try {
+        const res = await service.sendEmail({
+          to: "cliente@azienda.it",
+          subject: "Test Subject",
+          text: "Test body",
+          html: "<p>Test body</p>",
+        });
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("provider_error_422");
+      } finally {
+        globalThis.fetch = originalFetch;
+        if (origKey) process.env.EMAIL_API_KEY = origKey;
+        if (origFrom) process.env.EMAIL_FROM = origFrom;
+      }
+    });
+
+    it("fails gracefully when provider request times out", async () => {
+      const { ProductionEmailService } = await import("./email-service");
+      const service = new ProductionEmailService();
+
+      const originalFetch = globalThis.fetch;
+      const abortError = new Error("The operation was aborted");
+      abortError.name = "AbortError";
+      globalThis.fetch = vi.fn().mockRejectedValueOnce(abortError);
+
+      const origKey = process.env.EMAIL_API_KEY;
+      const origFrom = process.env.EMAIL_FROM;
+      process.env.EMAIL_API_KEY = "re_valid_key_123";
+      process.env.EMAIL_FROM = "no-reply@basegrid.io";
+
+      try {
+        const res = await service.sendEmail({
+          to: "cliente@azienda.it",
+          subject: "Test Subject",
+          text: "Test body",
+          html: "<p>Test body</p>",
+        });
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe("provider_timeout");
+      } finally {
+        globalThis.fetch = originalFetch;
+        if (origKey) process.env.EMAIL_API_KEY = origKey;
+        if (origFrom) process.env.EMAIL_FROM = origFrom;
+      }
+    });
+
+    it("verifies raw tokens and secrets are never present in API responses", async () => {
+      const res = await apiRequest("/api/v1/auth/forgot-password", {
+        method: "POST",
+        body: { email: "admin@rossi.it" },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.token).toBeUndefined();
+      expect(res.body.rawToken).toBeUndefined();
+      expect(res.body.tokenHash).toBeUndefined();
+      expect(JSON.stringify(res.body)).not.toMatch(/re_[a-zA-Z0-9_-]+/);
+    });
+  });
+
+  describe("11. Email Verification Security Suite (P0.3.1)", async () => {
+    it("confirms user email when valid token is submitted", async () => {
+      // 1. Register a new user
+      const regRes = await apiRequest("/api/v1/auth/register", {
+        method: "POST",
+        body: {
+          email: "verifica.utente@azienda.it",
+          password: "SecurePassword123!",
+          full_name: "Verifica Utente",
+          company_name: "Verifica Srl",
+        },
+      });
+      expect(regRes.status).toBe(201);
+
+      const user = (await db.findUserByEmail("verifica.utente@azienda.it"))!;
+      expect(user.emailConfirmed).toBe(false);
+
+      // Create a test verification token directly to get rawToken
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "email_verification",
+        expiresAt,
+      });
+
+      // 2. Submit verification request
+      const verifyRes = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token: rawToken },
+      });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.emailConfirmed).toBe(true);
+
+      // Verify in DB
+      const updatedUser = (await db.findUserByEmail("verifica.utente@azienda.it"))!;
+      expect(updatedUser.emailConfirmed).toBe(true);
+    });
+
+    it("rejects token when consumed a second time (Single-Use Enforcement)", async () => {
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "email_verification",
+        expiresAt,
+      });
+
+      // First verification call
+      const firstRes = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token: rawToken },
+      });
+      expect(firstRes.status).toBe(200);
+
+      // Second verification call with same token
+      const secondRes = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token: rawToken },
+      });
+      expect(secondRes.status).toBe(400);
+      expect(secondRes.body.detail).toMatch(/già stato utilizzato/i);
+    });
+
+    it("rejects expired verification tokens", async () => {
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+      const expiredAt = new Date(Date.now() - 10000).toISOString(); // Expired 10s ago
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "email_verification",
+        expiresAt: expiredAt,
+      });
+
+      const res = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token: rawToken },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toMatch(/scaduto/i);
+    });
+
+    it("invalidates previous verification token when a new verification email is requested", async () => {
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      await db.updateUser(user.id, { emailConfirmed: false });
+      const { generateSecureToken, hashToken } = await import("./security");
+      
+      const rawToken1 = generateSecureToken();
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: hashToken(rawToken1),
+        type: "email_verification",
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      });
+
+      // Request resend verification
+      const resendRes = await apiRequest("/api/v1/auth/resend-verification", {
+        method: "POST",
+        body: { email: "admin@rossi.it" },
+      });
+      expect(resendRes.status).toBe(200);
+
+      // Attempt to verify with token 1 -> rejected because resend invalidated it
+      const verifyAttempt1 = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token: rawToken1 },
+      });
+      expect(verifyAttempt1.status).toBe(400);
+    });
+  });
+
+  describe("12. Fail-Closed Password Reset Security Suite (P0.3.1)", async () => {
+    it("successfully resets password, revokes sessions across devices, and enforces new password login", async () => {
+      const user = (await db.findUserByEmail("tech@rossi.it"))!;
+      
+      // 1. Establish an active session with refresh token for tech@rossi.it
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "tech@rossi.it",
+          password: "Password123!",
+        },
+      });
+      expect(loginRes.status).toBe(200);
+      const oldRefreshToken = loginRes.setCookieHeaders
+        .find((c) => c.startsWith("refresh_token="))!
+        .split(";")[0]
+        .split("=")[1];
+
+      // 2. Request password reset
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: hashToken(rawToken),
+        type: "password_reset",
+        expiresAt,
+      });
+
+      // 3. Complete password reset with new password
+      const newPassword = "NewSuperPassword1234!";
+      const resetRes = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: {
+          token: rawToken,
+          new_password: newPassword,
+        },
+      });
+
+      expect(resetRes.status).toBe(200);
+
+      // 4. Old refresh token MUST be revoked and return 401
+      const oldRefreshAttempt = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: oldRefreshToken },
+      });
+      expect(oldRefreshAttempt.status).toBe(401);
+
+      // 5. Old password login MUST fail
+      const oldLoginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "tech@rossi.it",
+          password: "Password123!",
+        },
+      });
+      expect(oldLoginRes.status).toBe(401);
+
+      // 6. New password login MUST succeed
+      const newLoginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "tech@rossi.it",
+          password: newPassword,
+        },
+      });
+      expect(newLoginRes.status).toBe(200);
+      expect(newLoginRes.body.email).toBe("tech@rossi.it");
+    });
+
+    it("rejects weak passwords violating password policy", async () => {
+      const { generateSecureToken, hashToken } = await import("./security");
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      const rawToken = generateSecureToken();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: hashToken(rawToken),
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+
+      const res = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: {
+          token: rawToken,
+          new_password: "weak", // < 8 chars
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toMatch(/password/i);
+    });
+
+    it("fails closed with 503 when tokenStore (Redis) is unavailable without updating password or consuming token", async () => {
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+
+      // Simulate token store outage
+      tokenStore.setAvailability(false);
+
+      const res = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: {
+          token: rawToken,
+          new_password: "AnotherNewPassword123!",
+        },
+      });
+
+      expect(res.status).toBe(503);
+      expect(res.body.detail).toMatch(/temporaneamente non disponibile/i);
+
+      // Restore tokenStore to verify DB state
+      tokenStore.setAvailability(true);
+
+      // Verify password in DB was NOT changed (old password still works)
+      const oldPassLogin = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      expect(oldPassLogin.status).toBe(200);
+
+      // Verify token in DB was NOT consumed
+      const tokenRec = await db.findAuthTokenByHash(tokenHash, "password_reset");
+      expect(tokenRec).not.toBeNull();
+      expect(tokenRec?.consumed).toBe(false);
+
+      // After restoring tokenStore availability, reset with same token now succeeds!
+      const retryRes = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: {
+          token: rawToken,
+          new_password: "AnotherNewPassword123!",
+        },
+      });
+      expect(retryRes.status).toBe(200);
     });
   });
 });

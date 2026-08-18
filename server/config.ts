@@ -40,7 +40,7 @@ export function loadConfig(env = process.env): ServerConfig {
   const SUPERADMIN_COMPANY_NAME = env.SUPERADMIN_COMPANY_NAME || "BaseGrid Master Platform";
 
   const EMAIL_PROVIDER = env.EMAIL_PROVIDER || (isProduction ? "" : "dev");
-  const EMAIL_FROM = env.EMAIL_FROM || "no-reply@basegrid.io";
+  const EMAIL_FROM = env.EMAIL_FROM || (isProduction ? "" : "no-reply@basegrid.io");
   const EMAIL_API_KEY = env.EMAIL_API_KEY;
   const SMTP_HOST = env.SMTP_HOST;
   const SMTP_PORT = env.SMTP_PORT ? Number(env.SMTP_PORT) : undefined;
@@ -87,6 +87,30 @@ export function loadConfig(env = process.env): ServerConfig {
     if (CORS_ORIGINS_RAW.includes("localhost") || CORS_ORIGINS_RAW.includes("127.0.0.1")) {
       throw new Error(
         "CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain localhost in production."
+      );
+    }
+
+    if (!EMAIL_PROVIDER) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be provided in production."
+      );
+    }
+
+    if (EMAIL_PROVIDER !== "resend") {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be 'resend' in production."
+      );
+    }
+
+    if (!EMAIL_API_KEY) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: EMAIL_API_KEY must be provided in production when EMAIL_PROVIDER=resend."
+      );
+    }
+
+    if (!EMAIL_FROM) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: EMAIL_FROM must be provided in production."
       );
     }
   } else {

@@ -125,7 +125,11 @@ export function verifyCsrf(req: Request, res: Response, next: NextFunction): voi
     path === "/api/v1/auth/register" ||
     path === "/api/v1/auth/refresh" ||
     path === "/api/v1/auth/logout" ||
-    path === "/api/v1/auth/google"
+    path === "/api/v1/auth/google" ||
+    path === "/api/v1/auth/forgot-password" ||
+    path === "/api/v1/auth/reset-password" ||
+    path === "/api/v1/auth/verify-email" ||
+    path === "/api/v1/auth/resend-verification"
   ) {
     return next();
   }

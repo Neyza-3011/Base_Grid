@@ -132,42 +132,117 @@ export class DevEmailService implements IEmailService {
 }
 
 /**
- * Production-Grade Email Service.
- * Implements strict fail-closed enforcement when email sending is configured or required.
+ * Production-Grade Email Service using Resend.
+ * Implements real HTTP API dispatch to Resend with timeout, error handling,
+ * fail-closed security, and zero logging of raw tokens or credentials.
  */
 export class ProductionEmailService implements IEmailService {
   private provider: string;
 
   constructor() {
-    this.provider = config.EMAIL_PROVIDER || "";
+    const env = process.env.NODE_ENV || config.NODE_ENV;
+    const provider = process.env.EMAIL_PROVIDER || config.EMAIL_PROVIDER || "resend";
+    const apiKey = process.env.EMAIL_API_KEY || config.EMAIL_API_KEY;
+    const from = process.env.EMAIL_FROM || config.EMAIL_FROM;
+    const frontendUrl = process.env.FRONTEND_URL || config.FRONTEND_URL;
+
+    this.provider = provider;
+
+    if (env === "production") {
+      if (this.provider !== "resend") {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_PROVIDER must be 'resend' in production.");
+      }
+      if (!process.env.EMAIL_API_KEY) {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_API_KEY is required in production.");
+      }
+      if (!process.env.EMAIL_FROM) {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_FROM is required in production.");
+      }
+      if (!process.env.FRONTEND_URL) {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: FRONTEND_URL is required in production.");
+      }
+    }
   }
 
   public async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (!this.provider || this.provider === "none") {
-      // In production without configured email provider, fail closed explicitly
-      if (config.NODE_ENV === "production") {
-        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_PROVIDER is required in production for outgoing emails.");
+    const provider = process.env.EMAIL_PROVIDER || config.EMAIL_PROVIDER || "resend";
+    const apiKey = process.env.EMAIL_API_KEY || config.EMAIL_API_KEY;
+    const from = process.env.EMAIL_FROM || config.EMAIL_FROM;
+    const env = process.env.NODE_ENV || config.NODE_ENV;
+
+    if (provider !== "resend") {
+      if (env === "production") {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: Unsupported EMAIL_PROVIDER in production.");
       }
-      return { success: false, error: "email_provider_not_configured" };
+      return { success: false, error: "email_provider_not_supported" };
     }
 
-    if (this.provider === "smtp") {
-      if (!config.SMTP_HOST) {
-        throw new Error("CRITICAL EMAIL CONFIG ERROR: SMTP_HOST must be provided when EMAIL_PROVIDER=smtp.");
+    if (!apiKey) {
+      if (env === "production") {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_API_KEY is missing in production.");
       }
-      // Stub for SMTP transport
-      return { success: true, messageId: `msg-smtp-${Date.now()}` };
+      return { success: false, error: "missing_email_api_key" };
     }
 
-    if (["resend", "postmark", "sendgrid"].includes(this.provider)) {
-      if (!config.EMAIL_API_KEY) {
-        throw new Error(`CRITICAL EMAIL CONFIG ERROR: EMAIL_API_KEY must be provided when EMAIL_PROVIDER=${this.provider}.`);
+    if (!from) {
+      if (env === "production") {
+        throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_FROM is missing in production.");
       }
-      // Stub for HTTP API dispatch
-      return { success: true, messageId: `msg-${this.provider}-${Date.now()}` };
+      return { success: false, error: "missing_email_from" };
     }
 
-    return { success: true, messageId: `msg-${Date.now()}` };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from,
+          to: [options.to],
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const status = response.status;
+        if (config.NODE_ENV !== "test") {
+          console.error(`[ProductionEmailService] Resend API HTTP error ${status}`);
+        }
+        return { success: false, error: `provider_error_${status}` };
+      }
+
+      const data = await response.json();
+      if (!data || typeof data.id !== "string" || !data.id) {
+        if (config.NODE_ENV !== "test") {
+          console.error("[ProductionEmailService] Resend API response missing valid message id");
+        }
+        return { success: false, error: "invalid_provider_response" };
+      }
+
+      return { success: true, messageId: data.id };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") {
+        if (config.NODE_ENV !== "test") {
+          console.error("[ProductionEmailService] Resend API request timed out");
+        }
+        return { success: false, error: "provider_timeout" };
+      }
+      if (config.NODE_ENV !== "test") {
+        console.error("[ProductionEmailService] Resend API network error");
+      }
+      return { success: false, error: "provider_network_error" };
+    }
   }
 
   public async sendVerificationEmail(to: string, token: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
@@ -262,7 +337,7 @@ export class ProductionEmailService implements IEmailService {
 }
 
 export function createEmailService(): IEmailService {
-  if (config.NODE_ENV === "production" && config.EMAIL_PROVIDER !== "dev") {
+  if (config.NODE_ENV === "production" || config.EMAIL_PROVIDER === "resend") {
     return new ProductionEmailService();
   }
   return new DevEmailService();

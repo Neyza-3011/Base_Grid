@@ -11,7 +11,7 @@ const isProd = process.env.NODE_ENV === "production";
 async function startServer() {
   const app = createApp();
 
-  if (db.initDatabase) {
+  if (db.initDatabase && process.env.SKIP_DB_INIT !== "true") {
     try {
       await db.initDatabase();
       console.log("Database initialized successfully.");
@@ -46,11 +46,15 @@ async function startServer() {
       env: nitroEnv,
       stdio: "inherit"
     });
+    let nitroProcessExited = false;
+    nitroProcess.on("error", () => { nitroProcessExited = true; });
+    nitroProcess.on("exit", () => { nitroProcessExited = true; });
     
     // Readiness check for Nitro
     console.log("Waiting for Nitro frontend to become ready...");
     let nitroReady = false;
     for (let i = 0; i < 30; i++) {
+      if (nitroProcessExited) break;
       try {
         const res = await fetch("http://127.0.0.1:3001/");
         // Any valid HTTP response means Nitro is listening and bound to the port
@@ -61,8 +65,8 @@ async function startServer() {
       } catch (err) {
         // Connection refused - still starting
       }
-      // Wait 500ms before next check (max 15 seconds total)
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait 250ms before next check (max 7.5 seconds total)
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
     if (!nitroReady) {
