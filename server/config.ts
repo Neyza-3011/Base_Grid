@@ -91,7 +91,7 @@ export function loadConfig(env = process.env): ServerConfig {
     REDIS_URL,
     REDIS_HOST,
     REDIS_PORT,
-    PORT: Number(env.PORT) || 8000,
+    PORT: Number(env.PORT) || 3000,
     FRONTEND_URL,
     CORS_ORIGINS,
     SUPERADMIN_EMAIL,

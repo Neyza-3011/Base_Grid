@@ -126,9 +126,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
       throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");
     }
 
+    const isLocalDb = Boolean(
+      dbUrl?.includes("localhost") ||
+      dbUrl?.includes("127.0.0.1") ||
+      dbUrl?.includes("sslmode=disable")
+    );
+    const useSsl = isProd && !isLocalDb;
+
     this.pool = new Pool({
       connectionString: dbUrl,
-      ssl: isProd ? { rejectUnauthorized: false } : false,
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
   }
 

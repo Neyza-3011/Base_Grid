@@ -106,5 +106,26 @@ describe("Configuration Security", () => {
     expect(config.NODE_ENV).toBe("development");
     expect(config.SUPERADMIN_EMAIL).toBe("saas@rapporti.it"); // Has fallback
     expect(config.CORS_ORIGINS).toContain("http://localhost:5173");
+    expect(config.PORT).toBe(3000);
+  });
+
+  it("uses process.env.PORT as source of truth and falls back to 3000", () => {
+    const customPortConfig = loadConfig({
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+      FRONTEND_URL: "https://example.com",
+      CORS_ORIGINS: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+      PORT: "10000",
+    } as any);
+    expect(customPortConfig.PORT).toBe(10000);
+
+    const defaultPortConfig = loadConfig({
+      NODE_ENV: "development",
+    } as any);
+    expect(defaultPortConfig.PORT).toBe(3000);
   });
 });

@@ -13,7 +13,7 @@ async function startServer() {
     await db.initDatabase();
     console.log("Database initialized.");
   }
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // --- Vite / Frontend Serving ---
   if (!isProd) {
