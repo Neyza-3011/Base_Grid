@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import crypto from "crypto";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
 import { companyRouter } from "./routes/company";
@@ -55,8 +56,12 @@ export function createApp(): Express {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || 500;
     
-    // Log the error safely (do not expose secrets in logs; only the error name/message)
-    console.error(`[ServerError] ${err.name || "Error"}:`, err.message || err);
+    // Log the error safely (do not expose secrets in logs for 500s)
+    if (status >= 500) {
+      console.error(`[ServerError] ${err.name || "Error"}: Internal Server Error (ID: ${crypto.randomUUID()})`);
+    } else {
+      console.error(`[ServerError] ${err.name || "Error"}:`, err.message || err);
+    }
     
     // Only return the exact error message to the client for expected HTTP errors (status < 500)
     // For 500 Internal Server Errors, always mask the underlying cause to prevent leakage.
