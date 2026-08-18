@@ -22,7 +22,8 @@ adminRouter.get("/stats", async (req: any, res: any): void => {
  * List of all registered tenant companies for Master Super-Admin
  */
 adminRouter.get("/tenants", async (req: any, res: any): void => {
-  const tenants = await db.getAllTenants().map((t) => ({
+  const tenantsList = await db.getAllTenants();
+  const tenants = tenantsList.map((t) => ({
     id: t.id,
     name: t.name,
     plan: t.stripeSubscriptionStatus,

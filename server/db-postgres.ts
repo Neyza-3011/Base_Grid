@@ -8,6 +8,86 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function mapUserRow(row: any): UserRecord {
+  return {
+    id: row.id,
+    email: row.email,
+    fullName: row.fullName,
+    role: row.role as UserRole,
+    companyId: row.companyId,
+    companyName: row.companyName,
+    passwordHash: row.passwordHash,
+    salt: row.salt,
+    isActive: Boolean(row.isActive),
+    provider: row.provider as "local" | "google",
+    emailConfirmed: Boolean(row.emailConfirmed),
+    phoneNumber: row.phoneNumber || "",
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+  };
+}
+
+function mapCompanyRow(row: any): CompanyRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    vatNumber: row.vatNumber || "",
+    address: row.address || "",
+    defaultHourlyRate: Number(row.defaultHourlyRate) || 0,
+    reportFooterNotes: row.reportFooterNotes || "",
+    stripeSubscriptionStatus: row.stripeSubscriptionStatus || "",
+    maxUsers: Number(row.maxUsers) || 0,
+    featurePdfExport: Boolean(row.featurePdfExport),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+  };
+}
+
+function mapReportRow(row: any): ReportRecord {
+  let client = row.client;
+  if (typeof client === "string") {
+    try {
+      client = JSON.parse(client);
+    } catch {
+      client = { name: client };
+    }
+  }
+
+  let technician = row.technician;
+  if (typeof technician === "string") {
+    try {
+      technician = JSON.parse(technician);
+    } catch {
+      technician = { fullName: technician };
+    }
+  }
+
+  let materialsUsed = row.materialsUsed;
+  if (typeof materialsUsed === "string") {
+    try {
+      materialsUsed = JSON.parse(materialsUsed);
+    } catch {
+      materialsUsed = [];
+    }
+  }
+
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    date: row.date || "",
+    time: row.time || "",
+    workHours: Number(row.workHours) || 0,
+    travelHours: Number(row.travelHours) || 0,
+    status: row.status || "submitted",
+    client: client || { name: "" },
+    technician: technician || { fullName: "" },
+    materialsUsed: Array.isArray(materialsUsed) ? materialsUsed : [],
+    notes: row.notes || "",
+    signatureBase64: row.signatureBase64 || undefined,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+  };
+}
+
 export type TransactionClient = PoolClient;
 
 export interface IDatabaseAdapter {
@@ -25,22 +105,35 @@ export interface IDatabaseAdapter {
   getGlobalStats(): Promise<any>;
   withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T>;
   initDatabase?(): Promise<void>;
+  seedInitialData?(): void;
+  close?(): Promise<void>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: Pool;
   public tokenStore = tokenStore;
 
-  constructor() {
-    if (!config.DATABASE_URL) {
-      if (config.NODE_ENV === "production") {
-        throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");
-      }
+  constructor(customPool?: Pool) {
+    if (customPool) {
+      this.pool = customPool;
+      return;
     }
+
+    const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
+    const dbUrl = process.env.DATABASE_URL || config.DATABASE_URL;
+
+    if (!dbUrl && isProd) {
+      throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");
+    }
+
     this.pool = new Pool({
-      connectionString: config.DATABASE_URL,
-      ssl: config.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      connectionString: dbUrl,
+      ssl: isProd ? { rejectUnauthorized: false } : false,
     });
+  }
+
+  public async close(): Promise<void> {
+    await this.pool.end();
   }
 
   public async initDatabase(): Promise<void> {
@@ -91,6 +184,10 @@ export class PostgresAdapter implements IDatabaseAdapter {
         "signatureBase64" TEXT,
         "createdAt" TIMESTAMP WITH TIME ZONE
       );
+
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
+      CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId");
     `);
   }
 
@@ -112,14 +209,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
   // --- Users Operations ---
   public async findUserById(id: string): Promise<UserRecord | null> {
     const res = await this.pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [id]);
-    return (res.rows[0] as UserRecord) || null;
+    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
   }
 
   public async findUserByEmail(email: string): Promise<UserRecord | null> {
     const res = await this.pool.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
       normalizeEmail(email),
     ]);
-    return (res.rows[0] as UserRecord) || null;
+    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
   }
 
   public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
@@ -222,11 +319,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ]);
 
       if (existingRes.rowCount && existingRes.rowCount > 0) {
-        const existing = existingRes.rows[0] as UserRecord;
+        const existing = mapUserRow(existingRes.rows[0]);
         const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [
           existing.companyId,
         ]);
-        return { user: existing, company: compRes.rows[0] as CompanyRecord };
+        return { user: existing, company: mapCompanyRow(compRes.rows[0]) };
       }
 
       const now = new Date().toISOString();
@@ -318,13 +415,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     await this.pool.query(
       `UPDATE users 
-       SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "isActive" = $5, "emailConfirmed" = $6, "phoneNumber" = $7, "updatedAt" = $8 
-       WHERE id = $9`,
+       SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "passwordHash" = $5, salt = $6, "isActive" = $7, "emailConfirmed" = $8, "phoneNumber" = $9, "updatedAt" = $10 
+       WHERE id = $11`,
       [
         updated.email,
         updated.fullName,
         updated.role,
         updated.companyName,
+        updated.passwordHash,
+        updated.salt,
         updated.isActive,
         updated.emailConfirmed,
         updated.phoneNumber,
@@ -339,7 +438,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
   // --- Company Operations ---
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
     const res = await this.pool.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [id]);
-    return (res.rows[0] as CompanyRecord) || null;
+    return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
   }
 
   public async updateCompany(
@@ -373,8 +472,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
-    const res = await this.pool.query("SELECT * FROM companies");
-    return res.rows;
+    const res = await this.pool.query('SELECT * FROM companies ORDER BY "createdAt" DESC');
+    return res.rows.map(mapCompanyRow);
   }
 
   // --- Reports Operations ---
@@ -382,11 +481,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
     companyId: string,
     limit: number = 100,
   ): Promise<ReportRecord[]> {
-    const res = await this.pool.query('SELECT * FROM reports WHERE "companyId" = $1 LIMIT $2', [
+    const res = await this.pool.query('SELECT * FROM reports WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT $2', [
       companyId,
       limit,
     ]);
-    return res.rows;
+    return res.rows.map(mapReportRow);
   }
 
   public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
@@ -453,9 +552,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const reports = await this.pool.query("SELECT COUNT(*) FROM reports");
 
     return {
-      total_tenants: parseInt(tenants.rows[0].count, 10),
-      total_users: parseInt(users.rows[0].count, 10),
-      total_reports: parseInt(reports.rows[0].count, 10),
+      total_tenants: parseInt(tenants.rows[0]?.count || "0", 10),
+      total_users: parseInt(users.rows[0]?.count || "0", 10),
+      total_reports: parseInt(reports.rows[0]?.count || "0", 10),
       total_clients: 42,
       sandbox_mode_active: false,
       system_status: "Operational · 100% Zero-Trust Active (PostgreSQL)",

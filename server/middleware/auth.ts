@@ -18,7 +18,7 @@ declare global {
  * Strictly server-authoritative. Reads access_token from HttpOnly cookie,
  * verifies signature, claims, user existence and active status.
  */
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = req.cookies?.access_token;
   if (!token) {
     res.status(401).json({ detail: "Non autenticato o sessione scaduta." });
@@ -31,7 +31,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  const user = db.findUserById(payload.sub);
+  const user = await db.findUserById(payload.sub);
   if (!user) {
     res.status(401).json({ detail: "Utente non trovato." });
     return;
@@ -42,7 +42,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  const company = db.findCompanyById(user.companyId);
+  const company = await db.findCompanyById(user.companyId);
   if (!company) {
     res.status(401).json({ detail: "Azienda associata non trovata." });
     return;
@@ -56,7 +56,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 /**
  * Optional authentication: Populates req.user if valid token present, but doesn't block.
  */
-export function optionalAuthenticate(req: Request, res: Response, next: NextFunction): void {
+export async function optionalAuthenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = req.cookies?.access_token;
   if (!token) {
     return next();
@@ -64,10 +64,10 @@ export function optionalAuthenticate(req: Request, res: Response, next: NextFunc
 
   const payload = verifyAccessToken(token);
   if (payload && payload.sub) {
-    const user = db.findUserById(payload.sub);
+    const user = await db.findUserById(payload.sub);
     if (user && user.isActive) {
       req.user = user;
-      const company = db.findCompanyById(user.companyId);
+      const company = await db.findCompanyById(user.companyId);
       if (company) {
         req.company = company;
       }
