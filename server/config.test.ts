@@ -26,11 +26,67 @@ describe("Configuration Security", () => {
     ).toThrow(/CRITICAL CONFIG ERROR: SUPERADMIN_PASSWORD must be at least 12 characters/i);
   });
 
+  it("fails in production when REDIS_URL is missing", () => {
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/CRITICAL CONFIG ERROR: REDIS_URL must be provided/i);
+  });
+
+  it("fails in production when DATABASE_URL is missing", () => {
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/CRITICAL CONFIG ERROR: DATABASE_URL must be provided/i);
+  });
+
+  it("fails in production when CORS_ORIGINS contains localhost or is missing", () => {
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS must be explicitly provided/i);
+
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "http://localhost:5173",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain localhost/i);
+  });
+
   it("loads valid production configuration safely without leaking", () => {
     const config = loadConfig({
       NODE_ENV: "production",
       JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
       REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com,https://api.example.com",
       SUPERADMIN_EMAIL: "admin@example.com",

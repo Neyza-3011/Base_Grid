@@ -11,6 +11,9 @@ class DatabaseStore {
   public tokenStore = tokenStore;
 
   constructor() {
+    if (config.NODE_ENV === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: In-memory database cannot be used in production. PostgreSQL adapter is required.");
+    }
     this.seedInitialData();
   }
 

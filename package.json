@@ -15,13 +15,15 @@
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "http-proxy": "^1.18.1",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.23.1",
     "cookie-parser": "^1.4.7",
     "esbuild": "^0.23.1",
     "jsonwebtoken": "^9.0.3",

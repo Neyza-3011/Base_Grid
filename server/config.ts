@@ -3,6 +3,7 @@ import { getJwtSecret } from "./security";
 export interface ServerConfig {
   NODE_ENV: "development" | "production" | "test";
   JWT_SECRET: string;
+  DATABASE_URL?: string;
   REDIS_URL?: string;
   REDIS_HOST: string;
   REDIS_PORT: number;
@@ -22,6 +23,7 @@ export function loadConfig(env = process.env): ServerConfig {
 
   let FRONTEND_URL = env.FRONTEND_URL;
   let CORS_ORIGINS_RAW = env.CORS_ORIGINS;
+  let DATABASE_URL = env.DATABASE_URL;
   let REDIS_URL = env.REDIS_URL;
   const REDIS_HOST = env.REDIS_HOST || "127.0.0.1";
   const REDIS_PORT = Number(env.REDIS_PORT) || 6379;
@@ -49,6 +51,12 @@ export function loadConfig(env = process.env): ServerConfig {
       );
     }
 
+    if (!DATABASE_URL) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: DATABASE_URL must be provided in production for PostgreSQL persistence."
+      );
+    }
+
     if (!FRONTEND_URL) {
       throw new Error(
         "CRITICAL CONFIG ERROR: FRONTEND_URL must be provided in production."
@@ -56,10 +64,9 @@ export function loadConfig(env = process.env): ServerConfig {
     }
 
     if (!CORS_ORIGINS_RAW) {
-      // In production, we don't fallback to localhost if CORS_ORIGINS isn't set.
-      // If FRONTEND_URL is set, we could use that, but strict requirement means we should require CORS_ORIGINS or derive it safely.
-      // Let's enforce CORS_ORIGINS or use FRONTEND_URL.
-      CORS_ORIGINS_RAW = FRONTEND_URL;
+      throw new Error(
+        "CRITICAL CONFIG ERROR: CORS_ORIGINS must be explicitly provided in production."
+      );
     }
     
     if (CORS_ORIGINS_RAW.includes("localhost") || CORS_ORIGINS_RAW.includes("127.0.0.1")) {
@@ -80,6 +87,7 @@ export function loadConfig(env = process.env): ServerConfig {
   return {
     NODE_ENV: (env.NODE_ENV as any) || "development",
     JWT_SECRET,
+    DATABASE_URL,
     REDIS_URL,
     REDIS_HOST,
     REDIS_PORT,
