@@ -189,6 +189,48 @@ export class PostgresAdapter implements IDatabaseAdapter {
       CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
       CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId");
     `);
+
+    // Ensure master company exists in PostgreSQL
+    const masterCompanyId = "comp-master-001";
+    const masterCompanyName = config.SUPERADMIN_COMPANY_NAME || "BaseGrid Master Platform";
+    const now = new Date().toISOString();
+
+    await this.pool.query(
+      `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (id) DO NOTHING`,
+      [masterCompanyId, masterCompanyName, "00000000000", "Admin Network", 0, "", "Master", 999, true, now, now],
+    );
+
+    // Ensure SuperAdmin user exists in PostgreSQL if credentials configured
+    if (config.SUPERADMIN_EMAIL && config.SUPERADMIN_PASSWORD) {
+      const saEmail = normalizeEmail(config.SUPERADMIN_EMAIL);
+      const existingSa = await this.pool.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [saEmail]);
+      if (!existingSa || existingSa.rowCount === 0) {
+        const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
+        await this.pool.query(
+          `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           ON CONFLICT (email) DO NOTHING`,
+          [
+            "usr-superadmin-001",
+            saEmail,
+            "System SuperAdmin",
+            "superadmin",
+            masterCompanyId,
+            masterCompanyName,
+            hash,
+            salt,
+            true,
+            "local",
+            true,
+            "+39 02 1234567",
+            now,
+            now,
+          ],
+        );
+      }
+    }
   }
 
   public async withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T> {

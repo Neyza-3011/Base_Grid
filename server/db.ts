@@ -1,18 +1,21 @@
 import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
-import { config } from "./config";
+import { config, ServerConfig } from "./config";
 import { IDatabaseAdapter, TransactionClient, PostgresAdapter } from "./db-postgres";
 
-class DatabaseStore implements IDatabaseAdapter {
+export { IDatabaseAdapter, TransactionClient, PostgresAdapter };
+
+export class DatabaseStore implements IDatabaseAdapter {
   private users: Map<string, UserRecord> = new Map();
   private companies: Map<string, CompanyRecord> = new Map();
   private reports: Map<string, ReportRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
-    if (config.NODE_ENV === "production") {
-      throw new Error("CRITICAL SECURITY ERROR: In-memory database cannot be used in production. PostgreSQL adapter is required.");
+    const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
+    if (isProd) {
+      throw new Error("CRITICAL SECURITY ERROR: DatabaseStore (in-memory) cannot be used in production. PostgreSQL adapter is required.");
     }
     this.seedInitialData();
   }
@@ -28,7 +31,7 @@ class DatabaseStore implements IDatabaseAdapter {
     const masterCompanyId = "comp-master-001";
     const masterCompany: CompanyRecord = {
       id: masterCompanyId,
-      name: config.SUPERADMIN_COMPANY_NAME || "Rapportini B2B - Control Panel",
+      name: config.SUPERADMIN_COMPANY_NAME,
       vatNumber: "00000000000",
       address: "Admin Network",
       defaultHourlyRate: 0,
@@ -41,10 +44,10 @@ class DatabaseStore implements IDatabaseAdapter {
     };
     this.companies.set(masterCompanyId, masterCompany);
 
-    const { hash: saHash, salt: saSalt } = hashPassword(config.SUPERADMIN_PASSWORD || "admin");
+    const { hash: saHash, salt: saSalt } = hashPassword(config.SUPERADMIN_PASSWORD);
     const superAdminUser: UserRecord = {
       id: "usr-superadmin-001",
-      email: normalizeEmail(config.SUPERADMIN_EMAIL || "admin@rapportinib2b.it"),
+      email: normalizeEmail(config.SUPERADMIN_EMAIL),
       fullName: "System SuperAdmin",
       role: "superadmin",
       companyId: masterCompanyId,
@@ -318,7 +321,7 @@ class DatabaseStore implements IDatabaseAdapter {
       total_reports: this.reports.size,
       total_clients: 42,
       sandbox_mode_active: false,
-      system_status: "Operational · 100% Zero-Trust Active",
+      system_status: "Operational · 100% Zero-Trust Active (In-Memory)",
     };
   }
 
@@ -327,4 +330,16 @@ class DatabaseStore implements IDatabaseAdapter {
   }
 }
 
-export const db: IDatabaseAdapter = config.NODE_ENV === "production" ? new PostgresAdapter() : new DatabaseStore();
+/**
+ * Database Provider Factory:
+ * Strictly selects PostgresAdapter in production and DatabaseStore in development/test.
+ */
+export function createDatabaseAdapter(envConfig: ServerConfig = config): IDatabaseAdapter {
+  const isProd = process.env.NODE_ENV === "production" || envConfig.NODE_ENV === "production";
+  if (isProd) {
+    return new PostgresAdapter();
+  }
+  return new DatabaseStore();
+}
+
+export const db: IDatabaseAdapter = createDatabaseAdapter();

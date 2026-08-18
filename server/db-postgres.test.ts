@@ -13,7 +13,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     };
 
     mockPool = {
-      query: vi.fn(),
+      query: vi.fn().mockResolvedValue({ rowCount: 0, rows: [] }),
       connect: vi.fn().mockResolvedValue(mockClient),
       end: vi.fn().mockResolvedValue(undefined),
     };
@@ -40,7 +40,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     const adapter = new PostgresAdapter(mockPool);
     await adapter.initDatabase();
 
-    expect(mockPool.query).toHaveBeenCalledTimes(1);
+    expect(mockPool.query).toHaveBeenCalled();
     const queryArg = mockPool.query.mock.calls[0][0];
     expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS companies");
     expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS users");
