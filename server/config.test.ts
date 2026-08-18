@@ -31,6 +31,7 @@ describe("Configuration Security", () => {
       NODE_ENV: "production",
       JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
       REDIS_URL: "redis://127.0.0.1:6379",
+      FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com,https://api.example.com",
       SUPERADMIN_EMAIL: "admin@example.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
@@ -47,7 +48,7 @@ describe("Configuration Security", () => {
     } as any);
     
     expect(config.NODE_ENV).toBe("development");
-    expect(config.SUPERADMIN_EMAIL).toBeUndefined(); // Falls back to default in db.ts
+    expect(config.SUPERADMIN_EMAIL).toBe("saas@rapporti.it"); // Has fallback
     expect(config.CORS_ORIGINS).toContain("http://localhost:5173");
   });
 });

@@ -1,18 +1,18 @@
 services:
   - type: web
-    name: rapportini-backend
-    env: docker
+    name: basegrid-production
+    env: node
     region: frankfurt
     plan: free
     branch: main
     autoDeploy: true
-    rootDir: backend
-    dockerfilePath: Dockerfile
-    healthCheckPath: /api/health
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /health
     envVars:
-      - key: ENVIRONMENT
+      - key: NODE_ENV
         value: production
-      - key: SECRET_KEY
+      - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
         sync: false

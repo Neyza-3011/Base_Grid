@@ -40,8 +40,8 @@ class DatabaseStore {
     this.companies.set(masterCompanyId, masterCompany);
 
     // Master SuperAdmin user
-    const superAdminEmail = config.SUPERADMIN_EMAIL || "saas@rapporti.it";
-    const superAdminPassword = config.SUPERADMIN_PASSWORD || "SuperAdmin2026!";
+    const superAdminEmail = config.SUPERADMIN_EMAIL;
+    const superAdminPassword = config.SUPERADMIN_PASSWORD;
     const { hash: saHash, salt: saSalt } = hashPassword(superAdminPassword);
     
     const superAdminUser: UserRecord = {
