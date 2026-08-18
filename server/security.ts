@@ -229,7 +229,7 @@ export function getCookieSettings(isProd: boolean) {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax" as const,
-      path: "/", // Set to "/" so all auth and refresh endpoints have access
+      path: "/api/v1/auth",
       maxAge: REFRESH_COOKIE_MAX_AGE,
     },
     csrfCookie: {

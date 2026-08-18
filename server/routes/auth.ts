@@ -254,7 +254,7 @@ authRouter.post("/logout", async (req: Request, res: Response): Promise<void> =>
   }
 
   res.clearCookie("access_token", { path: "/" });
-  res.clearCookie("refresh_token", { path: "/" });
+  res.clearCookie("refresh_token", { path: "/api/v1/auth" });
   res.clearCookie("csrf_token", { path: "/" });
 
   res.status(200).json({ message: "Logout effettuato con successo." });
