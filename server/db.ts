@@ -1,4 +1,4 @@
-import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config, ServerConfig } from "./config";
@@ -10,6 +10,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   private users: Map<string, UserRecord> = new Map();
   private companies: Map<string, CompanyRecord> = new Map();
   private reports: Map<string, ReportRecord> = new Map();
+  private authTokens: Map<string, AuthTokenRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -24,6 +25,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.users.clear();
     this.companies.clear();
     this.reports.clear();
+    this.authTokens.clear();
     this.tokenStore.reset();
 
     const now = new Date().toISOString();
@@ -171,7 +173,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       salt: salt,
       isActive: true,
       provider: params.provider || "local",
-      emailConfirmed: true,
+      emailConfirmed: Boolean(params.emailConfirmed ?? false),
       phoneNumber: params.phoneNumber || "",
       createdAt: now,
       updatedAt: now,
@@ -327,6 +329,112 @@ export class DatabaseStore implements IDatabaseAdapter {
 
   public async withTransaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
     return callback({});
+  }
+
+  // --- Auth Tokens & Email Verification Operations ---
+  public async createAuthToken(params: {
+    userId: string;
+    tokenHash: string;
+    type: AuthTokenType;
+    expiresAt: string;
+  }): Promise<AuthTokenRecord> {
+    const id = `tok-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const now = new Date().toISOString();
+    const tokenRecord: AuthTokenRecord = {
+      id,
+      userId: params.userId,
+      tokenHash: params.tokenHash,
+      type: params.type,
+      consumed: false,
+      expiresAt: params.expiresAt,
+      createdAt: now,
+    };
+    this.authTokens.set(tokenRecord.tokenHash, tokenRecord);
+    return tokenRecord;
+  }
+
+  public async findAuthTokenByHash(tokenHash: string, type: AuthTokenType): Promise<AuthTokenRecord | null> {
+    const token = this.authTokens.get(tokenHash);
+    if (!token || token.type !== type) return null;
+    return token;
+  }
+
+  public async consumeAuthToken(tokenHash: string, type: AuthTokenType): Promise<boolean> {
+    const token = this.authTokens.get(tokenHash);
+    if (!token || token.type !== type || token.consumed) return false;
+    token.consumed = true;
+    token.consumedAt = new Date().toISOString();
+    this.authTokens.set(tokenHash, token);
+    return true;
+  }
+
+  public async verifyEmailWithToken(tokenHash: string): Promise<{ success: boolean; userId?: string; error?: string }> {
+    const token = this.authTokens.get(tokenHash);
+    if (!token || token.type !== "email_verification") {
+      return { success: false, error: "invalid_token" };
+    }
+    if (token.consumed) {
+      return { success: false, error: "already_used" };
+    }
+    const expiresAt = new Date(token.expiresAt).getTime();
+    if (Date.now() > expiresAt) {
+      return { success: false, error: "expired_token" };
+    }
+
+    token.consumed = true;
+    token.consumedAt = new Date().toISOString();
+    this.authTokens.set(tokenHash, token);
+
+    const user = this.users.get(token.userId);
+    if (user) {
+      user.emailConfirmed = true;
+      user.updatedAt = new Date().toISOString();
+      this.users.set(user.id, user);
+    }
+
+    return { success: true, userId: token.userId };
+  }
+
+  public async resetPasswordWithToken(
+    tokenHash: string,
+    newPasswordHash: string,
+    newSalt: string,
+  ): Promise<{ success: boolean; userId?: string; error?: string }> {
+    const token = this.authTokens.get(tokenHash);
+    if (!token || token.type !== "password_reset") {
+      return { success: false, error: "invalid_token" };
+    }
+    if (token.consumed) {
+      return { success: false, error: "already_used" };
+    }
+    const expiresAt = new Date(token.expiresAt).getTime();
+    if (Date.now() > expiresAt) {
+      return { success: false, error: "expired_token" };
+    }
+
+    token.consumed = true;
+    token.consumedAt = new Date().toISOString();
+    this.authTokens.set(tokenHash, token);
+
+    const user = this.users.get(token.userId);
+    if (user) {
+      user.passwordHash = newPasswordHash;
+      user.salt = newSalt;
+      user.updatedAt = new Date().toISOString();
+      this.users.set(user.id, user);
+    }
+
+    return { success: true, userId: token.userId };
+  }
+
+  public async revokeActiveAuthTokens(userId: string, type: AuthTokenType): Promise<void> {
+    for (const [hash, tok] of this.authTokens.entries()) {
+      if (tok.userId === userId && tok.type === type && !tok.consumed) {
+        tok.consumed = true;
+        tok.consumedAt = new Date().toISOString();
+        this.authTokens.set(hash, tok);
+      }
+    }
   }
 }
 

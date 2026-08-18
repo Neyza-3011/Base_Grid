@@ -1,6 +1,6 @@
 import { Pool, PoolClient } from "pg";
 import { config } from "./config";
-import { CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
 
@@ -104,6 +104,21 @@ export interface IDatabaseAdapter {
   deleteReport(companyId: string, reportId: string): Promise<boolean>;
   getGlobalStats(): Promise<any>;
   withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T>;
+  createAuthToken(params: {
+    userId: string;
+    tokenHash: string;
+    type: AuthTokenType;
+    expiresAt: string;
+  }): Promise<AuthTokenRecord>;
+  findAuthTokenByHash(tokenHash: string, type: AuthTokenType): Promise<AuthTokenRecord | null>;
+  consumeAuthToken(tokenHash: string, type: AuthTokenType): Promise<boolean>;
+  verifyEmailWithToken(tokenHash: string): Promise<{ success: boolean; userId?: string; error?: string }>;
+  resetPasswordWithToken(
+    tokenHash: string,
+    newPasswordHash: string,
+    newSalt: string,
+  ): Promise<{ success: boolean; userId?: string; error?: string }>;
+  revokeActiveAuthTokens(userId: string, type: AuthTokenType): Promise<void>;
   initDatabase?(): Promise<void>;
   seedInitialData?(): void;
   close?(): Promise<void>;
@@ -197,9 +212,22 @@ export class PostgresAdapter implements IDatabaseAdapter {
         "createdAt" TIMESTAMP WITH TIME ZONE
       );
 
+      CREATE TABLE IF NOT EXISTS auth_tokens (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "tokenHash" VARCHAR(255) NOT NULL UNIQUE,
+        type VARCHAR(50) NOT NULL,
+        consumed BOOLEAN DEFAULT false,
+        "expiresAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "consumedAt" TIMESTAMP WITH TIME ZONE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
       CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId");
+      CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON auth_tokens("tokenHash");
+      CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type ON auth_tokens("userId", type);
     `);
 
     // Ensure master company exists in PostgreSQL
@@ -332,7 +360,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         salt: salt,
         isActive: true,
         provider: params.provider || "local",
-        emailConfirmed: true,
+        emailConfirmed: Boolean(params.emailConfirmed ?? false),
         phoneNumber: params.phoneNumber || "",
         createdAt: now,
         updatedAt: now,
@@ -613,5 +641,146 @@ export class PostgresAdapter implements IDatabaseAdapter {
       sandbox_mode_active: false,
       system_status: "Operational · 100% Zero-Trust Active (PostgreSQL)",
     };
+  }
+
+  // --- Auth Tokens & Email Verification Operations ---
+  public async createAuthToken(params: {
+    userId: string;
+    tokenHash: string;
+    type: AuthTokenType;
+    expiresAt: string;
+  }): Promise<AuthTokenRecord> {
+    const id = `tok-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const now = new Date().toISOString();
+    const tokenRecord: AuthTokenRecord = {
+      id,
+      userId: params.userId,
+      tokenHash: params.tokenHash,
+      type: params.type,
+      consumed: false,
+      expiresAt: params.expiresAt,
+      createdAt: now,
+    };
+
+    await this.pool.query(
+      `INSERT INTO auth_tokens (id, "userId", "tokenHash", type, consumed, "expiresAt", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        tokenRecord.id,
+        tokenRecord.userId,
+        tokenRecord.tokenHash,
+        tokenRecord.type,
+        tokenRecord.consumed,
+        tokenRecord.expiresAt,
+        tokenRecord.createdAt,
+      ],
+    );
+    return tokenRecord;
+  }
+
+  public async findAuthTokenByHash(tokenHash: string, type: AuthTokenType): Promise<AuthTokenRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM auth_tokens WHERE "tokenHash" = $1 AND type = $2 LIMIT 1`,
+      [tokenHash, type],
+    );
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      id: r.id,
+      userId: r.userId,
+      tokenHash: r.tokenHash,
+      type: r.type,
+      consumed: Boolean(r.consumed),
+      expiresAt: r.expiresAt instanceof Date ? r.expiresAt.toISOString() : String(r.expiresAt),
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+      consumedAt: r.consumedAt ? (r.consumedAt instanceof Date ? r.consumedAt.toISOString() : String(r.consumedAt)) : undefined,
+    };
+  }
+
+  public async consumeAuthToken(tokenHash: string, type: AuthTokenType): Promise<boolean> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE auth_tokens SET consumed = true, "consumedAt" = $1
+       WHERE "tokenHash" = $2 AND type = $3 AND consumed = false`,
+      [now, tokenHash, type],
+    );
+    return Boolean(res.rowCount && res.rowCount > 0);
+  }
+
+  public async verifyEmailWithToken(tokenHash: string): Promise<{ success: boolean; userId?: string; error?: string }> {
+    return this.withTransaction(async (client) => {
+      const res = await client.query(
+        `SELECT * FROM auth_tokens WHERE "tokenHash" = $1 AND type = 'email_verification' FOR UPDATE`,
+        [tokenHash],
+      );
+      if (!res.rows[0]) {
+        return { success: false, error: "invalid_token" };
+      }
+      const token = res.rows[0];
+      if (token.consumed) {
+        return { success: false, error: "already_used" };
+      }
+      const expiresAt = new Date(token.expiresAt).getTime();
+      if (Date.now() > expiresAt) {
+        return { success: false, error: "expired_token" };
+      }
+
+      const now = new Date().toISOString();
+      await client.query(
+        `UPDATE auth_tokens SET consumed = true, "consumedAt" = $1 WHERE id = $2`,
+        [now, token.id],
+      );
+      await client.query(
+        `UPDATE users SET "emailConfirmed" = true, "updatedAt" = $1 WHERE id = $2`,
+        [now, token.userId],
+      );
+
+      return { success: true, userId: token.userId };
+    });
+  }
+
+  public async resetPasswordWithToken(
+    tokenHash: string,
+    newPasswordHash: string,
+    newSalt: string,
+  ): Promise<{ success: boolean; userId?: string; error?: string }> {
+    return this.withTransaction(async (client) => {
+      const res = await client.query(
+        `SELECT * FROM auth_tokens WHERE "tokenHash" = $1 AND type = 'password_reset' FOR UPDATE`,
+        [tokenHash],
+      );
+      if (!res.rows[0]) {
+        return { success: false, error: "invalid_token" };
+      }
+      const token = res.rows[0];
+      if (token.consumed) {
+        return { success: false, error: "already_used" };
+      }
+      const expiresAt = new Date(token.expiresAt).getTime();
+      if (Date.now() > expiresAt) {
+        return { success: false, error: "expired_token" };
+      }
+
+      const now = new Date().toISOString();
+      await client.query(
+        `UPDATE auth_tokens SET consumed = true, "consumedAt" = $1 WHERE id = $2`,
+        [now, token.id],
+      );
+      await client.query(
+        `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+        [newPasswordHash, newSalt, now, token.userId],
+      );
+
+      return { success: true, userId: token.userId };
+    });
+  }
+
+  public async revokeActiveAuthTokens(userId: string, type: AuthTokenType): Promise<void> {
+    const now = new Date().toISOString();
+    await this.pool.query(
+      `UPDATE auth_tokens SET consumed = true, "consumedAt" = $1
+       WHERE "userId" = $2 AND type = $3 AND consumed = false`,
+      [now, userId, type],
+    );
   }
 }

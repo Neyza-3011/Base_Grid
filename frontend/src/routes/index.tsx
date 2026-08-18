@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const [modal, setModal] = useState<null | "login" | "signup">(null);
+  const [modal, setModal] = useState<null | "login" | "signup" | "forgot">(null);
 
   return (
     <div id="top" className="min-h-screen bg-[#090D16] text-white overflow-x-hidden">

@@ -20,8 +20,10 @@ import {
   Menu,
   User as UserIcon,
   Settings,
+  AlertCircle,
+  Mail,
 } from "lucide-react";
-import { fetchServerSession, logoutUser, UserSession } from "@/lib/auth";
+import { fetchServerSession, logoutUser, resendVerificationEmail, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { ProfileSettings } from "@/components/dashboard/ProfileSettings";
 import { CompanySettings } from "@/components/dashboard/CompanySettings";
@@ -141,6 +143,7 @@ function Dashboard() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rapportiniExpanded, setRapportiniExpanded] = useState(true);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -161,6 +164,21 @@ function Dashboard() {
     await logoutUser();
     toast.info("Sessione terminata. Arrivederci!");
     navigate({ to: "/" });
+  };
+
+  const handleResendEmail = async () => {
+    if (!currentUser?.email) return;
+    setResendingVerification(true);
+    try {
+      const res = await resendVerificationEmail(currentUser.email);
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.error || "Impossibile inviare l'email di verifica.");
+      }
+    } finally {
+      setResendingVerification(false);
+    }
   };
 
   if (!currentUser) {
@@ -451,6 +469,31 @@ function Dashboard() {
         <main
           className={`flex-1 p-4 sm:p-8 space-y-6 overflow-x-hidden ${activeView === "dashboard" ? "bg-[#090D16]" : "bg-[#090D16]"}`}
         >
+          {currentUser.emailConfirmed === false && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-200">
+                    Il tuo indirizzo email non è ancora stato verificato.
+                  </p>
+                  <p className="text-xs text-amber-300/70">
+                    Controlla la tua casella di posta ({currentUser.email}) e clicca sul link di
+                    conferma.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleResendEmail}
+                disabled={resendingVerification}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-medium transition disabled:opacity-50 shrink-0"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                {resendingVerification ? "Invio in corso..." : "Invia di nuovo email"}
+              </button>
+            </div>
+          )}
+
           {activeView === "dashboard" && (
             <DashboardAnalyticsView
               currentUser={currentUser}

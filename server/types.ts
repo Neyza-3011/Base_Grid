@@ -76,3 +76,16 @@ export interface SafeUserSession {
   emailConfirmed: boolean;
   phoneNumber?: string;
 }
+
+export type AuthTokenType = "email_verification" | "password_reset";
+
+export interface AuthTokenRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  type: AuthTokenType;
+  consumed: boolean;
+  expiresAt: string;
+  createdAt: string;
+  consumedAt?: string;
+}

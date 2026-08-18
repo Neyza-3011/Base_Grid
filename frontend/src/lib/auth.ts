@@ -29,6 +29,7 @@ function parseUserSession(data: {
   companyId: string;
   companyName: string;
   provider?: string;
+  emailConfirmed?: boolean;
 }): UserSession {
   return {
     id: data.id,
@@ -38,7 +39,7 @@ function parseUserSession(data: {
     companyId: data.companyId,
     companyName: data.companyName,
     provider: data.provider || "local",
-    emailConfirmed: true,
+    emailConfirmed: Boolean(data.emailConfirmed),
   };
 }
 
@@ -126,17 +127,7 @@ export async function loginUser(
 
     if (res.ok) {
       const data = await res.json();
-      const user: UserSession = {
-        id: data.id,
-        email: data.email,
-        fullName: data.fullName,
-        role: data.role as "superadmin" | "admin" | "technician",
-        companyId: data.companyId,
-        companyName: data.companyName,
-        provider: data.provider || "local",
-        emailConfirmed: true,
-      };
-      return { success: true, user };
+      return { success: true, user: parseUserSession(data) };
     } else {
       const errorData = await res.json().catch(() => ({ detail: "Credenziali non valide." }));
       return {
@@ -153,7 +144,7 @@ export async function loginUser(
 }
 
 /**
-  Registers a new company and admin user on the FastAPI backend.
+  Registers a new company and admin user on the backend.
  */
 export async function signupUser(
   email: string,
@@ -176,17 +167,7 @@ export async function signupUser(
 
     if (res.ok) {
       const data = await res.json();
-      const user: UserSession = {
-        id: data.id,
-        email: data.email,
-        fullName: data.fullName,
-        role: data.role as "superadmin" | "admin" | "technician",
-        companyId: data.companyId,
-        companyName: data.companyName,
-        provider: data.provider || "local",
-        emailConfirmed: true,
-      };
-      return { success: true, user };
+      return { success: true, user: parseUserSession(data) };
     } else {
       const errorData = await res
         .json()
@@ -200,6 +181,150 @@ export async function signupUser(
     return {
       success: false,
       error: "Errore di rete. Impossibile contattare il server.",
+    };
+  }
+}
+
+/**
+ * Verifies email using URL verification token.
+ */
+export async function verifyEmail(
+  token: string,
+): Promise<{ success: boolean; user?: UserSession; message?: string; error?: string }> {
+  try {
+    const res = await fetch("/api/v1/auth/verify-email", {
+      method: "POST",
+      headers: appendCsrfHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return {
+        success: true,
+        user: data.user ? parseUserSession(data.user) : undefined,
+        message: data.message || "Email verificata con successo.",
+      };
+    } else {
+      return {
+        success: false,
+        error: data.detail || "Token di verifica non valido o scaduto.",
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      error: "Errore di rete durante la verifica dell'email.",
+    };
+  }
+}
+
+/**
+ * Requests sending a new email verification link.
+ */
+export async function resendVerificationEmail(
+  email?: string,
+): Promise<{ success: boolean; message: string; error?: string }> {
+  try {
+    const res = await fetch("/api/v1/auth/resend-verification", {
+      method: "POST",
+      headers: appendCsrfHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return {
+        success: true,
+        message: data.message || "Email di verifica inviata.",
+      };
+    } else {
+      return {
+        success: false,
+        message: "",
+        error: data.detail || "Impossibile inviare l'email di verifica.",
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      message: "",
+      error: "Errore di rete durante l'invio dell'email di verifica.",
+    };
+  }
+}
+
+/**
+ * Requests password reset instructions.
+ */
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ success: boolean; message: string; error?: string }> {
+  try {
+    const res = await fetch("/api/v1/auth/forgot-password", {
+      method: "POST",
+      headers: appendCsrfHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return {
+        success: true,
+        message: data.message || "Istruzioni di recupero password inviate.",
+      };
+    } else {
+      return {
+        success: false,
+        message: "",
+        error: data.detail || "Impossibile elaborare la richiesta.",
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      message: "",
+      error: "Errore di rete durante la richiesta di recupero password.",
+    };
+  }
+}
+
+/**
+ * Submits new password with reset token.
+ */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ success: boolean; message: string; error?: string }> {
+  try {
+    const res = await fetch("/api/v1/auth/reset-password", {
+      method: "POST",
+      headers: appendCsrfHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return {
+        success: true,
+        message: data.message || "Password reimpostata con successo.",
+      };
+    } else {
+      return {
+        success: false,
+        message: "",
+        error: data.detail || "Impossibile reimpostare la password.",
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      message: "",
+      error: "Errore di rete durante la reimpostazione della password.",
     };
   }
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { X, Mail, Lock, User } from "lucide-react";
+import { X, Mail, Lock, User, KeyRound, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
-import { loginUser, signupUser } from "@/lib/auth";
+import { loginUser, signupUser, requestPasswordReset } from "@/lib/auth";
 
 export function AuthModal({
   open,
@@ -11,9 +11,9 @@ export function AuthModal({
   onSwitch,
 }: {
   open: boolean;
-  mode: "login" | "signup";
+  mode: "login" | "signup" | "forgot";
   onClose: () => void;
-  onSwitch: (m: "login" | "signup") => void;
+  onSwitch: (m: "login" | "signup" | "forgot") => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -41,7 +41,7 @@ export function AuthModal({
         } else {
           toast.error(res.error || "Credenziali non valide.");
         }
-      } else {
+      } else if (mode === "signup") {
         const res = await signupUser(email, password, fullName);
         if (res.success && res.user) {
           toast.success(
@@ -51,6 +51,14 @@ export function AuthModal({
           navigate({ to: "/dashboard" });
         } else {
           toast.error(res.error || "Errore durante la registrazione.");
+        }
+      } else if (mode === "forgot") {
+        const res = await requestPasswordReset(email);
+        if (res.success) {
+          toast.success(res.message);
+          onSwitch("login");
+        } else {
+          toast.error(res.error || "Impossibile inviare la richiesta di reset.");
         }
       }
     } catch {
@@ -73,12 +81,18 @@ export function AuthModal({
         </button>
 
         <h2 className="text-2xl font-semibold tracking-tight">
-          {mode === "signup" ? "Prova Rapportini gratis" : "Bentornato"}
+          {mode === "signup"
+            ? "Prova Rapportini gratis"
+            : mode === "forgot"
+              ? "Recupera Password"
+              : "Bentornato"}
         </h2>
         <p className="mt-1 text-sm text-white/60">
           {mode === "signup"
             ? "30 giorni gratuiti. Autenticazione sicura via Email & Password."
-            : "Accedi con le tue credenziali aziendali."}
+            : mode === "forgot"
+              ? "Inserisci la tua email per ricevere le istruzioni di reimpostazione."
+              : "Accedi con le tue credenziali aziendali."}
         </p>
 
         <form onSubmit={submit} className="space-y-4 mt-6">
@@ -97,6 +111,7 @@ export function AuthModal({
               </div>
             </label>
           )}
+
           <label className="block">
             <span className="sr-only">Email</span>
             <div className="relative">
@@ -111,20 +126,36 @@ export function AuthModal({
               />
             </div>
           </label>
-          <label className="block">
-            <span className="sr-only">Password</span>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full h-11 rounded-xl bg-white/5 border border-white/10 pl-10 pr-3 text-sm text-white placeholder:text-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+
+          {mode !== "forgot" && (
+            <div>
+              <label className="block">
+                <span className="sr-only">Password</span>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    className="w-full h-11 rounded-xl bg-white/5 border border-white/10 pl-10 pr-3 text-sm text-white placeholder:text-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </label>
+              {mode === "login" && (
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onSwitch("forgot")}
+                    className="text-xs text-white/60 hover:text-white transition"
+                  >
+                    Password dimenticata?
+                  </button>
+                </div>
+              )}
             </div>
-          </label>
+          )}
 
           <button
             disabled={loading}
@@ -134,20 +165,34 @@ export function AuthModal({
               ? "Attendere..."
               : mode === "signup"
                 ? "Registrati & Invia Email Conferma"
-                : "Accedi"}
+                : mode === "forgot"
+                  ? "Invia Istruzioni di Reset"
+                  : "Accedi"}
           </button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-white/60">
-          {mode === "signup" ? "Hai già un account?" : "Non hai un account?"}{" "}
-          <button
-            type="button"
-            className="text-white hover:underline font-medium"
-            onClick={() => onSwitch(mode === "signup" ? "login" : "signup")}
-          >
-            {mode === "signup" ? "Accedi" : "Prova gratis"}
-          </button>
-        </p>
+        {mode === "forgot" ? (
+          <p className="mt-5 text-center text-sm text-white/60">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-white hover:underline font-medium"
+              onClick={() => onSwitch("login")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Torna al Login
+            </button>
+          </p>
+        ) : (
+          <p className="mt-5 text-center text-sm text-white/60">
+            {mode === "signup" ? "Hai già un account?" : "Non hai un account?"}{" "}
+            <button
+              type="button"
+              className="text-white hover:underline font-medium"
+              onClick={() => onSwitch(mode === "signup" ? "login" : "signup")}
+            >
+              {mode === "signup" ? "Accedi" : "Prova gratis"}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

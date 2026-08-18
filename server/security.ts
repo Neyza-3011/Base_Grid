@@ -100,6 +100,30 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
+ * Validates password strength according to SaaS security policy
+ * Requires at least 8 characters (max 128).
+ */
+export function validatePasswordPolicy(password: string): { valid: boolean; message?: string } {
+  if (!password || typeof password !== "string") {
+    return { valid: false, message: "La password è obbligatoria." };
+  }
+  if (password.length < 8) {
+    return { valid: false, message: "La password deve contenere almeno 8 caratteri." };
+  }
+  if (password.length > 128) {
+    return { valid: false, message: "La password non può superare i 128 caratteri." };
+  }
+  return { valid: true };
+}
+
+/**
+ * Generates cryptographically secure 256-bit random token string (hex format)
+ */
+export function generateSecureToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+/**
  * Hashes password using PBKDF2 with 100,000 iterations and random salt
  */
 export function hashPassword(password: string): { hash: string; salt: string } {
