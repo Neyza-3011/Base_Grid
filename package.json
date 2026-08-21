@@ -6,7 +6,7 @@
   ],
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "npm run build --workspace=frontend && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs",
+    "build": "NODE_ENV=production npm run build --workspace=frontend && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "npm run lint --workspace=frontend"
   },

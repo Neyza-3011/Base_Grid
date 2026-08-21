@@ -1,9 +1,11 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import httpProxy from "http-proxy";
 import { createApp } from "./server/app";
 import { db } from "./server/db";
 import { tokenStore } from "./server/token-store";
+
 
 // Dynamically import Vite if not in production
 const isProd = process.env.NODE_ENV === "production";
@@ -40,23 +42,39 @@ async function startServer() {
     // In production, start the Nitro server on a different port and proxy to it
     const { spawn } = await import("child_process");
     
-    // Spawn Nitro on port 3001
-    const nitroEnv = { ...process.env, PORT: "3001" };
+    // Calculate internal Nitro port to avoid collision with main process PORT
+    const nitroPort = process.env.NITRO_PORT
+      ? Number(process.env.NITRO_PORT)
+      : PORT === 3001
+      ? 3002
+      : 3001;
+    const nitroEnv = {
+      ...process.env,
+      PORT: String(nitroPort),
+      NITRO_PORT: String(nitroPort),
+    };
+
     nitroProcess = spawn("node", [path.resolve(process.cwd(), "frontend/.output/server/index.mjs")], {
       env: nitroEnv,
       stdio: "inherit"
     });
     let nitroProcessExited = false;
-    nitroProcess.on("error", () => { nitroProcessExited = true; });
-    nitroProcess.on("exit", () => { nitroProcessExited = true; });
+    nitroProcess.on("error", (err: any) => {
+      console.error("Nitro process error:", err);
+      nitroProcessExited = true;
+    });
+    nitroProcess.on("exit", (code: number, signal: string) => {
+      console.error(`Nitro process exited with code ${code}, signal ${signal}`);
+      nitroProcessExited = true;
+    });
     
     // Readiness check for Nitro
-    console.log("Waiting for Nitro frontend to become ready...");
+    console.log(`Waiting for Nitro frontend to become ready on port ${nitroPort}...`);
     let nitroReady = false;
     for (let i = 0; i < 30; i++) {
       if (nitroProcessExited) break;
       try {
-        const res = await fetch("http://127.0.0.1:3001/");
+        const res = await fetch(`http://127.0.0.1:${nitroPort}/`);
         // Any valid HTTP response means Nitro is listening and bound to the port
         if (res.ok || res.status === 404 || res.status === 200 || res.status === 500) {
           nitroReady = true;
@@ -70,17 +88,17 @@ async function startServer() {
     }
 
     if (!nitroReady) {
-      console.error("CRITICAL STARTUP ERROR: Nitro frontend failed to bind to port 3001 within 15 seconds.");
+      console.error(`CRITICAL STARTUP ERROR: Nitro frontend failed to bind to port ${nitroPort} within 7.5 seconds.`);
       process.exit(1); // Fail-closed in production
     }
     console.log("Nitro frontend is ready.");
     
     // Use http-proxy to forward requests
-    const httpProxy = await import("http-proxy");
-    const proxy = httpProxy.createProxyServer();
+    const createProxy = httpProxy.createProxyServer || (httpProxy as any).default?.createProxyServer;
+    const proxy = createProxy.call(httpProxy);
     
     app.use((req, res) => {
-      proxy.web(req, res, { target: "http://127.0.0.1:3001" }, (e) => {
+      proxy.web(req, res, { target: `http://127.0.0.1:${nitroPort}` }, (e) => {
         res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
       });
     });

@@ -60,6 +60,11 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
+      if (response.status >= 500) {
+        const cloned = response.clone();
+        const text = await cloned.text();
+        console.error(`SSR_RESPONSE_ERROR_${response.status}:`, text);
+      }
       const normalized = await normalizeCatastrophicSsrResponse(response);
 
       const newHeaders = new Headers(normalized.headers);
@@ -73,7 +78,7 @@ export default {
         headers: newHeaders,
       });
     } catch (error) {
-      console.error(error);
+      console.error("SSR_RENDER_ERROR_STACK:", error);
       return new Response(renderErrorPage(), {
         status: 500,
         headers: {
