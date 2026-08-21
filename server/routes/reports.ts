@@ -10,7 +10,7 @@ reportsRouter.use(authenticate);
  * GET /api/v1/reports
  * Returns reports strictly belonging to the authenticated user's company (tenant isolation).
  */
-reportsRouter.get("/", async (req: any, res: any): void => {
+reportsRouter.get("/", async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -47,7 +47,7 @@ reportsRouter.get("/", async (req: any, res: any): void => {
  * POST /api/v1/reports
  * Creates a report linked strictly to the user's company (tenant isolation).
  */
-reportsRouter.post("/", async (req: any, res: any): void => {
+reportsRouter.post("/", async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -103,7 +103,7 @@ reportsRouter.post("/", async (req: any, res: any): void => {
  * DELETE /api/v1/reports/:id
  * Deletes a report strictly if it belongs to the user's company.
  */
-reportsRouter.delete("/:id", async (req: any, res: any): void => {
+reportsRouter.delete("/:id", async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -124,12 +124,17 @@ reportsRouter.delete("/:id", async (req: any, res: any): void => {
  * GET /api/v1/reports/:id/pdf
  * Generates/returns PDF preview info
  */
-reportsRouter.get("/:id/pdf", async (req: any, res: any): void => {
+reportsRouter.get("/:id/pdf", async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
   }
-
+  const reportId = req.params.id;
+  const report = await db.getReportById(req.user.companyId, reportId);
+  if (!report) {
+    res.status(404).json({ detail: "Rapportino non trovato o non accessibile." });
+    return;
+  }
   res.setHeader("Content-Type", "application/pdf");
-  res.send(Buffer.from("%PDF-1.4 Mock BaseGrid PDF Document"));
+  res.send(Buffer.from("%PDF-1.4 Mock BaseGrid PDF Document per Rapportino " + reportId));
 });

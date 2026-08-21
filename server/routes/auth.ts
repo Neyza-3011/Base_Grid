@@ -398,7 +398,7 @@ authRouter.post("/login", async (req: any, res: any): Promise<void> => {
  * GET /api/v1/auth/session
  * Server-authoritative session identification using verified access_token cookie.
  */
-authRouter.get("/session", authenticate, async (req: any, res: any): void => {
+authRouter.get("/session", authenticate, async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Sessione non valida." });
     return;
@@ -450,7 +450,7 @@ authRouter.post("/refresh", async (req: any, res: any): Promise<void> => {
     // Atomic single-use consumption: detects reuse and invalidates compromised families
     const consumeResult = await tokenStore.consumeToken(refreshToken);
     if (!consumeResult.success) {
-      if (consumeResult.reason === "already_used") {
+      if ("reason" in consumeResult && consumeResult.reason === "already_used") {
         res.status(401).json({
           detail: "Refresh token già utilizzato. Rilevato potenziale tentativo di replay.",
         });
@@ -565,7 +565,7 @@ authRouter.post("/google", async (req: any, res: any): Promise<void> => {
  * GET /api/v1/auth/csrf-token
  * Issues/returns current CSRF token cookie for frontend clients.
  */
-authRouter.get("/csrf-token", async (req: any, res: any): void => {
+authRouter.get("/csrf-token", async (req: any, res: any): Promise<void> => {
   let token = req.cookies?.csrf_token;
   if (!token) {
     token = generateCsrfToken();

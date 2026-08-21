@@ -308,6 +308,14 @@ export class DatabaseStore implements IDatabaseAdapter {
     return newReport;
   }
 
+  public async getReportById(companyId: string, reportId: string): Promise<ReportRecord | null> {
+    const report = this.reports.get(reportId);
+    if (!report || report.companyId !== companyId) {
+      return null;
+    }
+    return report;
+  }
+
   public async deleteReport(companyId: string, reportId: string): Promise<boolean> {
     const report = this.reports.get(reportId);
     if (!report || report.companyId !== companyId) {

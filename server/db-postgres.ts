@@ -101,6 +101,7 @@ export interface IDatabaseAdapter {
   getAllTenants(): Promise<CompanyRecord[]>;
   getReportsByCompany(companyId: string, limit?: number): Promise<ReportRecord[]>;
   createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord>;
+  getReportById(companyId: string, reportId: string): Promise<ReportRecord | null>;
   deleteReport(companyId: string, reportId: string): Promise<boolean>;
   getGlobalStats(): Promise<any>;
   withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T>;
@@ -618,6 +619,38 @@ export class PostgresAdapter implements IDatabaseAdapter {
     );
 
     return newReport;
+  }
+
+  public async getReportById(companyId: string, reportId: string): Promise<ReportRecord | null> {
+    const res = await this.pool.query(
+      `SELECT id, company_id, date, time, work_hours, travel_hours, status, 
+              client_name, client_address, technician_name, materials_used, notes, 
+              created_at
+       FROM reports
+       WHERE id = $1 AND company_id = $2`,
+      [reportId, companyId]
+    );
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      id: r.id,
+      companyId: r.company_id,
+      date: r.date,
+      time: r.time,
+      workHours: Number(r.work_hours),
+      travelHours: Number(r.travel_hours),
+      status: r.status,
+      client: {
+        name: r.client_name,
+        address: r.client_address,
+      },
+      technician: {
+        fullName: r.technician_name,
+      },
+      materialsUsed: Array.isArray(r.materials_used) ? r.materials_used : [],
+      notes: r.notes,
+      createdAt: r.created_at.toISOString(),
+    } as ReportRecord;
   }
 
   public async deleteReport(companyId: string, reportId: string): Promise<boolean> {

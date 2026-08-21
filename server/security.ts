@@ -1,5 +1,5 @@
-import crypto from "crypto";
-import jwt from "jsonwebtoken";
+import * as crypto from "crypto";
+import * as jwt from "jsonwebtoken";
 import { JwtPayload, SafeUserSession, UserRecord } from "./types";
 
 const MIN_SECRET_LENGTH = 32;

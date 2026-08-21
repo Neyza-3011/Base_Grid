@@ -8,7 +8,7 @@ export const companyRouter = Router();
  * GET /api/v1/company/settings
  * Multi-tenant company settings read
  */
-companyRouter.get("/settings", authenticate, async (req: any, res: any): void => {
+companyRouter.get("/settings", authenticate, async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -41,7 +41,7 @@ companyRouter.put(
   "/settings",
   authenticate,
   requireRole(["admin", "superadmin"]),
-  async (req: any, res: any): void => {
+  async (req: any, res: any): Promise<void> => {
     if (!req.user) {
       res.status(401).json({ detail: "Non autenticato." });
       return;

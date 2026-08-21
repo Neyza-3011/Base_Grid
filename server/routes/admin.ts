@@ -12,7 +12,7 @@ adminRouter.use(requireSuperAdmin);
  * GET /api/v1/admin/stats
  * Global platform statistics for Master Super-Admin
  */
-adminRouter.get("/stats", async (req: any, res: any): void => {
+adminRouter.get("/stats", async (req: any, res: any): Promise<void> => {
   const stats = await db.getGlobalStats();
   res.status(200).json(stats);
 });
@@ -21,7 +21,7 @@ adminRouter.get("/stats", async (req: any, res: any): void => {
  * GET /api/v1/admin/tenants
  * List of all registered tenant companies for Master Super-Admin
  */
-adminRouter.get("/tenants", async (req: any, res: any): void => {
+adminRouter.get("/tenants", async (req: any, res: any): Promise<void> => {
   const tenantsList = await db.getAllTenants();
   const tenants = tenantsList.map((t) => ({
     id: t.id,
