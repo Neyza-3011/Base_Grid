@@ -112,6 +112,10 @@ authRouter.post("/register", async (req: any, res: any): Promise<void> => {
       res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
       return;
     }
+    if (error.message?.includes("already registered") || error.code === "23505") {
+      res.status(409).json({ detail: "Email già registrata nel sistema. Effettua il login." });
+      return;
+    }
     res.status(500).json({ detail: "Errore interno durante la registrazione." });
   }
 });

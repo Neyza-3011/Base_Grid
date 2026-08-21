@@ -185,7 +185,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         email VARCHAR(255) UNIQUE NOT NULL,
         "fullName" VARCHAR(255) NOT NULL,
         role VARCHAR(50),
-        "companyId" VARCHAR(255) REFERENCES companies(id),
+        "companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE,
         "companyName" VARCHAR(255),
         "passwordHash" TEXT,
         salt TEXT,
@@ -199,12 +199,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       CREATE TABLE IF NOT EXISTS reports (
         id VARCHAR(255) PRIMARY KEY,
-        "companyId" VARCHAR(255) REFERENCES companies(id),
+        "companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE,
         date VARCHAR(255),
         time VARCHAR(255),
-        "workHours" NUMERIC,
-        "travelHours" NUMERIC,
-        status VARCHAR(50),
+        "workHours" NUMERIC DEFAULT 0,
+        "travelHours" NUMERIC DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'submitted',
         client JSONB,
         technician JSONB,
         "materialsUsed" JSONB,
@@ -223,6 +223,51 @@ export class PostgresAdapter implements IDatabaseAdapter {
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "consumedAt" TIMESTAMP WITH TIME ZONE
       );
+
+      -- Safe non-destructive column additions for existing databases
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "vatNumber" VARCHAR(255);
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "defaultHourlyRate" NUMERIC;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "reportFooterNotes" TEXT;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "stripeSubscriptionStatus" VARCHAR(255);
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "maxUsers" INTEGER;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "featurePdfExport" BOOLEAN;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE;
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "fullName" VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "companyId" VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "companyName" VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "passwordHash" TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS salt TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "emailConfirmed" BOOLEAN DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "phoneNumber" VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE;
+
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "companyId" VARCHAR(255);
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS date VARCHAR(255);
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS time VARCHAR(255);
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "workHours" NUMERIC DEFAULT 0;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "travelHours" NUMERIC DEFAULT 0;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'submitted';
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS client JSONB;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS technician JSONB;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "materialsUsed" JSONB;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS notes TEXT;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "signatureBase64" TEXT;
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
+
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "userId" VARCHAR(255);
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "tokenHash" VARCHAR(255);
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS type VARCHAR(50);
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS consumed BOOLEAN DEFAULT false;
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "consumedAt" TIMESTAMP WITH TIME ZONE;
 
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
@@ -282,7 +327,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       await client.query("COMMIT");
       return result;
     } catch (e) {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error("[PostgresTransaction] ROLLBACK failed:", rollbackErr);
+      }
       throw e;
     } finally {
       client.release();
@@ -303,191 +352,212 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
-    return this.withTransaction(async (client) => {
-      const normalized = normalizeEmail(params.email);
-      const existing = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
-        normalized,
-      ]);
-      if (existing.rowCount && existing.rowCount > 0) {
+    try {
+      return await this.withTransaction(async (client) => {
+        const normalized = normalizeEmail(params.email);
+        const existing = await client.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [
+          normalized,
+        ]);
+        if (existing.rowCount && existing.rowCount > 0) {
+          throw new Error("Email already registered");
+        }
+
+        const now = new Date().toISOString();
+        const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+        const newCompany: CompanyRecord = {
+          id: companyId,
+          name: (params.companyName || "Azienda Senza Nome").trim(),
+          vatNumber: "",
+          address: "",
+          defaultHourlyRate: 45,
+          reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
+          stripeSubscriptionStatus: "Attivo (Piano Base)",
+          maxUsers: 5,
+          featurePdfExport: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await client.query(
+          `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            newCompany.id,
+            newCompany.name,
+            newCompany.vatNumber,
+            newCompany.address,
+            newCompany.defaultHourlyRate,
+            newCompany.reportFooterNotes,
+            newCompany.stripeSubscriptionStatus,
+            newCompany.maxUsers,
+            newCompany.featurePdfExport,
+            newCompany.createdAt,
+            newCompany.updatedAt,
+          ],
+        );
+
+        const { hash, salt } = hashPassword(params.password || Math.random().toString());
+        const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+        const newUser: UserRecord = {
+          id: userId,
+          email: normalized,
+          fullName: params.fullName.trim(),
+          role: params.role || "admin",
+          companyId: companyId,
+          companyName: newCompany.name,
+          passwordHash: hash,
+          salt: salt,
+          isActive: true,
+          provider: params.provider || "local",
+          emailConfirmed: Boolean(params.emailConfirmed ?? false),
+          phoneNumber: params.phoneNumber || "",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await client.query(
+          `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            newUser.id,
+            newUser.email,
+            newUser.fullName,
+            newUser.role,
+            newUser.companyId,
+            newUser.companyName,
+            newUser.passwordHash,
+            newUser.salt,
+            newUser.isActive,
+            newUser.provider,
+            newUser.emailConfirmed,
+            newUser.phoneNumber,
+            newUser.createdAt,
+            newUser.updatedAt,
+          ],
+        );
+
+        return { user: newUser, company: newCompany };
+      });
+    } catch (err: any) {
+      if (err.code === "23505" || err.message?.includes("already registered") || err.detail?.includes("Key (email)")) {
         throw new Error("Email already registered");
       }
-
-      const now = new Date().toISOString();
-      const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-
-      const newCompany: CompanyRecord = {
-        id: companyId,
-        name: (params.companyName || "Azienda Senza Nome").trim(),
-        vatNumber: "",
-        address: "",
-        defaultHourlyRate: 45,
-        reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
-        stripeSubscriptionStatus: "Attivo (Piano Base)",
-        maxUsers: 5,
-        featurePdfExport: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await client.query(
-        `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          newCompany.id,
-          newCompany.name,
-          newCompany.vatNumber,
-          newCompany.address,
-          newCompany.defaultHourlyRate,
-          newCompany.reportFooterNotes,
-          newCompany.stripeSubscriptionStatus,
-          newCompany.maxUsers,
-          newCompany.featurePdfExport,
-          newCompany.createdAt,
-          newCompany.updatedAt,
-        ],
-      );
-
-      const { hash, salt } = hashPassword(params.password || Math.random().toString());
-      const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-
-      const newUser: UserRecord = {
-        id: userId,
-        email: normalized,
-        fullName: params.fullName.trim(),
-        role: params.role || "admin",
-        companyId: companyId,
-        companyName: newCompany.name,
-        passwordHash: hash,
-        salt: salt,
-        isActive: true,
-        provider: params.provider || "local",
-        emailConfirmed: Boolean(params.emailConfirmed ?? false),
-        phoneNumber: params.phoneNumber || "",
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await client.query(
-        `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-        [
-          newUser.id,
-          newUser.email,
-          newUser.fullName,
-          newUser.role,
-          newUser.companyId,
-          newUser.companyName,
-          newUser.passwordHash,
-          newUser.salt,
-          newUser.isActive,
-          newUser.provider,
-          newUser.emailConfirmed,
-          newUser.phoneNumber,
-          newUser.createdAt,
-          newUser.updatedAt,
-        ],
-      );
-
-      return { user: newUser, company: newCompany };
-    });
+      throw err;
+    }
   }
 
   public async createGoogleUser(
     params: any,
   ): Promise<{ user: UserRecord; company: CompanyRecord }> {
-    return this.withTransaction(async (client) => {
-      const normalized = normalizeEmail(params.email);
-      const existingRes = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
-        normalized,
-      ]);
-
-      if (existingRes.rowCount && existingRes.rowCount > 0) {
-        const existing = mapUserRow(existingRes.rows[0]);
-        const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [
-          existing.companyId,
+    try {
+      return await this.withTransaction(async (client) => {
+        const normalized = normalizeEmail(params.email);
+        const existingRes = await client.query("SELECT * FROM users WHERE email = $1 LIMIT 1", [
+          normalized,
         ]);
-        return { user: existing, company: mapCompanyRow(compRes.rows[0]) };
+
+        if (existingRes.rowCount && existingRes.rowCount > 0) {
+          const existing = mapUserRow(existingRes.rows[0]);
+          const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [
+            existing.companyId,
+          ]);
+          return { user: existing, company: mapCompanyRow(compRes.rows[0]) };
+        }
+
+        const now = new Date().toISOString();
+        const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const companyName = params.companyName || `${params.fullName} Team`;
+
+        const newCompany: CompanyRecord = {
+          id: companyId,
+          name: companyName,
+          vatNumber: "",
+          address: "",
+          defaultHourlyRate: 50,
+          reportFooterNotes: "Servizi di manutenzione e installazione.",
+          stripeSubscriptionStatus: "Attivo (Piano Google OAuth)",
+          maxUsers: 5,
+          featurePdfExport: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await client.query(
+          `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            newCompany.id,
+            newCompany.name,
+            newCompany.vatNumber,
+            newCompany.address,
+            newCompany.defaultHourlyRate,
+            newCompany.reportFooterNotes,
+            newCompany.stripeSubscriptionStatus,
+            newCompany.maxUsers,
+            newCompany.featurePdfExport,
+            newCompany.createdAt,
+            newCompany.updatedAt,
+          ],
+        );
+
+        const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now());
+        const userId = `usr-g-${Date.now()}`;
+
+        const newUser: UserRecord = {
+          id: userId,
+          email: normalized,
+          fullName: params.fullName,
+          role: "admin",
+          companyId: companyId,
+          companyName: newCompany.name,
+          passwordHash: hash,
+          salt: salt,
+          isActive: true,
+          provider: "google",
+          emailConfirmed: true,
+          phoneNumber: "",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await client.query(
+          `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            newUser.id,
+            newUser.email,
+            newUser.fullName,
+            newUser.role,
+            newUser.companyId,
+            newUser.companyName,
+            newUser.passwordHash,
+            newUser.salt,
+            newUser.isActive,
+            newUser.provider,
+            newUser.emailConfirmed,
+            newUser.phoneNumber,
+            newUser.createdAt,
+            newUser.updatedAt,
+          ],
+        );
+
+        return { user: newUser, company: newCompany };
+      });
+    } catch (err: any) {
+      if (err.code === "23505" || err.detail?.includes("Key (email)")) {
+        const normalized = normalizeEmail(params.email);
+        const existing = await this.findUserByEmail(normalized);
+        if (existing) {
+          const company = await this.findCompanyById(existing.companyId);
+          if (company) {
+            return { user: existing, company };
+          }
+        }
       }
-
-      const now = new Date().toISOString();
-      const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-      const companyName = params.companyName || `${params.fullName} Team`;
-
-      const newCompany: CompanyRecord = {
-        id: companyId,
-        name: companyName,
-        vatNumber: "",
-        address: "",
-        defaultHourlyRate: 50,
-        reportFooterNotes: "Servizi di manutenzione e installazione.",
-        stripeSubscriptionStatus: "Attivo (Piano Google OAuth)",
-        maxUsers: 5,
-        featurePdfExport: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await client.query(
-        `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          newCompany.id,
-          newCompany.name,
-          newCompany.vatNumber,
-          newCompany.address,
-          newCompany.defaultHourlyRate,
-          newCompany.reportFooterNotes,
-          newCompany.stripeSubscriptionStatus,
-          newCompany.maxUsers,
-          newCompany.featurePdfExport,
-          newCompany.createdAt,
-          newCompany.updatedAt,
-        ],
-      );
-
-      const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now());
-      const userId = `usr-g-${Date.now()}`;
-
-      const newUser: UserRecord = {
-        id: userId,
-        email: normalized,
-        fullName: params.fullName,
-        role: "admin",
-        companyId: companyId,
-        companyName: newCompany.name,
-        passwordHash: hash,
-        salt: salt,
-        isActive: true,
-        provider: "google",
-        emailConfirmed: true,
-        phoneNumber: "",
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      await client.query(
-        `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-        [
-          newUser.id,
-          newUser.email,
-          newUser.fullName,
-          newUser.role,
-          newUser.companyId,
-          newUser.companyName,
-          newUser.passwordHash,
-          newUser.salt,
-          newUser.isActive,
-          newUser.provider,
-          newUser.emailConfirmed,
-          newUser.phoneNumber,
-          newUser.createdAt,
-          newUser.updatedAt,
-        ],
-      );
-
-      return { user: newUser, company: newCompany };
-    });
+      throw err;
+    }
   }
 
   public async updateUser(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null> {
@@ -623,29 +693,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   public async getReportById(companyId: string, reportId: string): Promise<ReportRecord | null> {
     const res = await this.pool.query(
-      `SELECT id, "companyId", date, time, "workHours", "travelHours", status, 
-              client, technician, "materialsUsed", notes, "signatureBase64", "createdAt"
-       FROM reports
-       WHERE id = $1 AND "companyId" = $2`,
-      [reportId, companyId]
+      `SELECT * FROM reports WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [reportId, companyId],
     );
     if (res.rows.length === 0) return null;
-    const r = res.rows[0];
-    return {
-      id: r.id,
-      companyId: r.companyId,
-      date: r.date,
-      time: r.time,
-      workHours: Number(r.workHours),
-      travelHours: Number(r.travelHours),
-      status: r.status,
-      client: typeof r.client === "string" ? JSON.parse(r.client) : r.client,
-      technician: typeof r.technician === "string" ? JSON.parse(r.technician) : r.technician,
-      materialsUsed: typeof r.materialsUsed === "string" ? JSON.parse(r.materialsUsed) : (Array.isArray(r.materialsUsed) ? r.materialsUsed : []),
-      notes: r.notes,
-      signatureBase64: r.signatureBase64,
-      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-    } as ReportRecord;
+    return mapReportRow(res.rows[0]);
   }
 
   public async deleteReport(companyId: string, reportId: string): Promise<boolean> {

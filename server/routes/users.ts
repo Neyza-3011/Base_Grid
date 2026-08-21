@@ -65,11 +65,19 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     updates.phoneNumber = phone_number;
   }
 
-  const updatedUser = await db.updateUser(req.user.id, updates);
-  if (!updatedUser) {
-    res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
-    return;
-  }
+  try {
+    const updatedUser = await db.updateUser(req.user.id, updates);
+    if (!updatedUser) {
+      res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
+      return;
+    }
 
-  res.status(200).json(toSafeUserSession(updatedUser));
+    res.status(200).json(toSafeUserSession(updatedUser));
+  } catch (err: any) {
+    if (err.code === "23505" || err.message?.includes("already in use") || err.message?.includes("already registered")) {
+      res.status(409).json({ detail: "Questa email è già in uso da un altro utente." });
+      return;
+    }
+    res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
+  }
 });

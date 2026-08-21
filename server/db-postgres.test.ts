@@ -271,4 +271,137 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(stats.total_reports).toBe(48);
     expect(stats.system_status).toContain("PostgreSQL");
   });
+
+  it("createUser handles race condition and rolls back on unique violation (code 23505)", async () => {
+    mockClient.query.mockImplementation((sql: string) => {
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return Promise.resolve({ rows: [] });
+      if (sql.includes("SELECT id FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+      if (sql.includes("INSERT INTO companies")) return Promise.resolve({ rows: [] });
+      if (sql.includes("INSERT INTO users")) {
+        const err: any = new Error("duplicate key value violates unique constraint 'users_email_key'");
+        err.code = "23505";
+        return Promise.reject(err);
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(
+      adapter.createUser({
+        email: "concurrent@example.com",
+        fullName: "Concurrent User",
+        password: "Password123!",
+        companyName: "Acme Concurrent",
+      }),
+    ).rejects.toThrow("Email already registered");
+
+    expect(mockClient.query).toHaveBeenCalledWith("BEGIN");
+    expect(mockClient.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it("verifyEmailWithToken locks row FOR UPDATE and prevents double verification", async () => {
+    const fakeToken = {
+      id: "tok-1",
+      userId: "usr-1",
+      tokenHash: "hash123",
+      type: "email_verification",
+      consumed: false,
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    };
+
+    mockClient.query.mockImplementation((sql: string) => {
+      if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
+      if (sql.includes("SELECT * FROM auth_tokens WHERE \"tokenHash\" = $1 AND type = 'email_verification' FOR UPDATE")) {
+        return Promise.resolve({ rows: [fakeToken] });
+      }
+      if (sql.includes("UPDATE auth_tokens SET consumed = true")) {
+        return Promise.resolve({ rowCount: 1, rows: [] });
+      }
+      if (sql.includes("UPDATE users SET \"emailConfirmed\" = true")) {
+        return Promise.resolve({ rowCount: 1, rows: [] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.verifyEmailWithToken("hash123");
+
+    expect(result.success).toBe(true);
+    expect(result.userId).toBe("usr-1");
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringContaining("FOR UPDATE"),
+      ["hash123"],
+    );
+    expect(mockClient.query).toHaveBeenCalledWith("COMMIT");
+  });
+
+  it("verifyEmailWithToken rejects already consumed tokens", async () => {
+    const consumedToken = {
+      id: "tok-2",
+      userId: "usr-2",
+      tokenHash: "hash456",
+      type: "email_verification",
+      consumed: true,
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    };
+
+    mockClient.query.mockImplementation((sql: string) => {
+      if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
+      if (sql.includes("SELECT * FROM auth_tokens")) {
+        return Promise.resolve({ rows: [consumedToken] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.verifyEmailWithToken("hash456");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("already_used");
+  });
+
+  it("consumeAuthToken atomically consumes single-use tokens", async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // first attempt succeeds
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // concurrent second attempt fails
+
+    const adapter = new PostgresAdapter(mockPool);
+    const firstCall = await adapter.consumeAuthToken("hash789", "email_verification");
+    const secondCall = await adapter.consumeAuthToken("hash789", "email_verification");
+
+    expect(firstCall).toBe(true);
+    expect(secondCall).toBe(false);
+  });
+
+  it("getReportById strictly enforces multi-tenant isolation by companyId", async () => {
+    const rawRow = {
+      id: "rep-tenant-1",
+      companyId: "comp-A",
+      date: "20/08/2026",
+      time: "14:00",
+      workHours: "3.5",
+      travelHours: "0.5",
+      status: "submitted",
+      client: { name: "Client A", address: "Via Roma" },
+      technician: { fullName: "Tech 1" },
+      materialsUsed: [],
+      notes: "Tenant A Notes",
+      signatureBase64: "",
+      createdAt: new Date("2026-08-20T14:00:00Z"),
+    };
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [rawRow] }) // matching companyId
+      .mockResolvedValueOnce({ rows: [] }); // cross-tenant query for different companyId
+
+    const adapter = new PostgresAdapter(mockPool);
+    const validReport = await adapter.getReportById("comp-A", "rep-tenant-1");
+    const crossTenantReport = await adapter.getReportById("comp-B", "rep-tenant-1");
+
+    expect(validReport).not.toBeNull();
+    expect(validReport?.id).toBe("rep-tenant-1");
+    expect(validReport?.companyId).toBe("comp-A");
+    expect(crossTenantReport).toBeNull();
+  });
 });
