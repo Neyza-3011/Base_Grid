@@ -623,33 +623,28 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   public async getReportById(companyId: string, reportId: string): Promise<ReportRecord | null> {
     const res = await this.pool.query(
-      `SELECT id, company_id, date, time, work_hours, travel_hours, status, 
-              client_name, client_address, technician_name, materials_used, notes, 
-              created_at
+      `SELECT id, "companyId", date, time, "workHours", "travelHours", status, 
+              client, technician, "materialsUsed", notes, "signatureBase64", "createdAt"
        FROM reports
-       WHERE id = $1 AND company_id = $2`,
+       WHERE id = $1 AND "companyId" = $2`,
       [reportId, companyId]
     );
     if (res.rows.length === 0) return null;
     const r = res.rows[0];
     return {
       id: r.id,
-      companyId: r.company_id,
+      companyId: r.companyId,
       date: r.date,
       time: r.time,
-      workHours: Number(r.work_hours),
-      travelHours: Number(r.travel_hours),
+      workHours: Number(r.workHours),
+      travelHours: Number(r.travelHours),
       status: r.status,
-      client: {
-        name: r.client_name,
-        address: r.client_address,
-      },
-      technician: {
-        fullName: r.technician_name,
-      },
-      materialsUsed: Array.isArray(r.materials_used) ? r.materials_used : [],
+      client: typeof r.client === "string" ? JSON.parse(r.client) : r.client,
+      technician: typeof r.technician === "string" ? JSON.parse(r.technician) : r.technician,
+      materialsUsed: typeof r.materialsUsed === "string" ? JSON.parse(r.materialsUsed) : (Array.isArray(r.materialsUsed) ? r.materialsUsed : []),
       notes: r.notes,
-      createdAt: r.created_at.toISOString(),
+      signatureBase64: r.signatureBase64,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
     } as ReportRecord;
   }
 

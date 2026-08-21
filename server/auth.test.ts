@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import http from "http";
 import jwt from "jsonwebtoken";
 import { createApp } from "./app";
@@ -173,6 +173,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         },
       });
 
+      if(res.status !== 200) throw new Error("FAIL_WITH_BODY: " + JSON.stringify(res.body));
       expect(res.status).toBe(200);
       expect(res.body.email).toBe("admin@rossi.it");
       expect(res.body.fullName).toBe("Marco Rossi");
@@ -1681,5 +1682,163 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       
       expect(res.status).toBe(200);
       expect(res.body.fullName).toBe("Valid Edit");
+    });
+  });
+
+  describe("16. Complete Authorization & Tenant Isolation Matrix (P0.4.2)", () => {
+    let compA: any, adminA: any, techA: any, tokenAdminA: string, tokenTechA: string;
+    let compB: any, adminB: any, techB: any, tokenAdminB: string, tokenTechB: string;
+    let superAdmin: any, tokenSuperAdmin: string;
+    let repA1: any, repB1: any;
+
+    beforeEach(async () => {
+      // Company A
+      const resA = await db.createUser({
+        email: "admina@compa.com",
+        fullName: "Admin A",
+        password: "Password123!",
+        companyName: "Company A",
+      });
+      adminA = resA.user;
+      compA = resA.company;
+      tokenAdminA = generateTokens(adminA).accessToken;
+
+      const resTechA = await db.createUser({
+        email: "techa@compa.com",
+        fullName: "Tech A",
+        password: "Password123!",
+        companyName: "Company A",
+      });
+      techA = await db.updateUser(resTechA.user.id, { companyId: compA.id, role: "technician" });
+      tokenTechA = generateTokens(techA).accessToken;
+
+      // Company B
+      const resB = await db.createUser({
+        email: "adminb@compb.com",
+        fullName: "Admin B",
+        password: "Password123!",
+        companyName: "Company B",
+      });
+      adminB = resB.user;
+      compB = resB.company;
+      tokenAdminB = generateTokens(adminB).accessToken;
+
+      const resTechB = await db.createUser({
+        email: "techb@compb.com",
+        fullName: "Tech B",
+        password: "Password123!",
+        companyName: "Company B",
+      });
+      techB = await db.updateUser(resTechB.user.id, { companyId: compB.id, role: "technician" });
+      tokenTechB = generateTokens(techB).accessToken;
+
+      // SuperAdmin
+      const resSA = await db.createUser({
+        email: "super@admin.com",
+        fullName: "Super Admin",
+        password: "Password123!",
+        companyName: "Super Admin Co",
+      });
+      superAdmin = await db.updateUser(resSA.user.id, { role: "superadmin" });
+      tokenSuperAdmin = generateTokens(superAdmin).accessToken;
+
+      // Reports
+      repA1 = await db.createReport(compA.id, { client: { name: "Client A" } });
+      repB1 = await db.createReport(compB.id, { client: { name: "Client B" } });
+    });
+
+    it("A admin -> A resource -> ALLOW (Read Report A)", async () => {
+      const res = await apiRequest("/api/v1/reports", { cookies: { access_token: tokenAdminA } });
+      expect(res.status).toBe(200);
+      expect(res.body.find((r) => r.id === repA1.id)).toBeDefined();
+    });
+
+    it("A technician -> A allowed resource -> ALLOW (Read Report A)", async () => {
+      const res = await apiRequest("/api/v1/reports", { cookies: { access_token: tokenTechA } });
+      expect(res.status).toBe(200);
+      expect(res.body.find((r) => r.id === repA1.id)).toBeDefined();
+    });
+
+    it("A admin -> B resource -> DENY (Cannot read Report B PDF)", async () => {
+      const res = await apiRequest(`/api/v1/reports/${repB1.id}/pdf`, { cookies: { access_token: tokenAdminA } });
+      expect(res.status).toBe(404);
+    });
+
+    it("A technician -> B resource -> DENY (Cannot delete Report B)", async () => {
+      const res = await apiRequest(`/api/v1/reports/${repB1.id}`, {
+        method: "DELETE",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenTechA, csrf_token: "csrf" },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it("B admin -> A resource -> DENY (Cannot delete Report A)", async () => {
+      const res = await apiRequest(`/api/v1/reports/${repA1.id}`, {
+        method: "DELETE",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenAdminB, csrf_token: "csrf" },
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it("normal user (admin) -> admin endpoint -> ALLOW but scoped (Update company settings)", async () => {
+      const res = await apiRequest("/api/v1/company/settings", {
+        method: "PUT",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenAdminA, csrf_token: "csrf" },
+        body: { name: "Company A Updated" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe("Company A Updated");
+    });
+
+    it("technician -> admin endpoint -> DENY (Update company settings)", async () => {
+      const res = await apiRequest("/api/v1/company/settings", {
+        method: "PUT",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenTechA, csrf_token: "csrf" },
+        body: { name: "Tech Tries To Update" },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it("admin -> superadmin-only operation -> DENY (Cannot change subscription status)", async () => {
+      const res = await apiRequest("/api/v1/company/settings", {
+        method: "PUT",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenAdminA, csrf_token: "csrf" },
+        body: { stripe_subscription_status: "Premium" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.stripe_subscription_status).not.toBe("Premium");
+    });
+    
+    it("admin -> superadmin-only endpoint -> DENY (Global Stats)", async () => {
+      const res = await apiRequest("/api/v1/admin/stats", {
+        cookies: { access_token: tokenAdminA },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it("superadmin -> allowed global operation -> ALLOW (Global Stats)", async () => {
+      const res = await apiRequest("/api/v1/admin/stats", {
+        cookies: { access_token: tokenSuperAdmin },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.total_users).toBeDefined();
+    });
+    
+    it("Client-supplied role tampering -> DENY (Cannot escalate to superadmin via profile update)", async () => {
+      const res = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": "csrf" },
+        cookies: { access_token: tokenAdminA, csrf_token: "csrf" },
+        body: { full_name: "Admin Hacker", role: "superadmin", companyId: "hack-id" },
+      });
+      expect(res.status).toBe(200);
+      const updatedUser = await db.findUserById(adminA.id);
+      expect(updatedUser?.role).toBe("admin");
+      expect(updatedUser?.companyId).toBe(compA.id);
     });
   });
