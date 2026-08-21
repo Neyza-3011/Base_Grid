@@ -18,6 +18,8 @@ const TEST_JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long
 
 beforeEach(async () => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
+  const { config } = await import("./config");
+  config.EMAIL_VERIFICATION_ENABLED = true;
   db.seedInitialData();
   const app = createApp();
   await new Promise<void>((resolve) => {
@@ -1572,3 +1574,47 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 });
 
+
+describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = false)", () => {
+  beforeEach(async () => {
+    const { config } = await import("./config");
+    config.EMAIL_VERIFICATION_ENABLED = false;
+  });
+
+  afterEach(async () => {
+    const { config } = await import("./config");
+    config.EMAIL_VERIFICATION_ENABLED = true;
+  });
+
+  it("registers user with emailConfirmed=true and no verification email sent", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "no.email.verify@azienda.it",
+        password: "ValidPassword123!",
+        full_name: "No Email User",
+        company_name: "No Email Co",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    
+    // Check DB
+    const user = await db.findUserByEmail("no.email.verify@azienda.it");
+    expect(user).not.toBeNull();
+    expect(user?.emailConfirmed).toBe(true);
+    
+    // Check no tokens created
+    // We would need to expose finding verification tokens by user ID, but we can just check if login works
+    const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "no.email.verify@azienda.it",
+        password: "ValidPassword123!",
+      }),
+    });
+    expect(loginRes.status).toBe(200);
+  });
+});

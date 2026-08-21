@@ -17,6 +17,7 @@ import { db } from "../db";
 import { tokenStore, StoreUnavailableError } from "../token-store";
 import { authenticate } from "../middleware/auth";
 import { emailService } from "../email-service";
+import { config } from "../config";
 
 export const authRouter = Router();
 
@@ -40,6 +41,7 @@ authRouter.post("/register", async (req: any, res: any): Promise<void> => {
     }
 
     const normalizedEmail = normalizeEmail(email);
+
     if (!isValidEmail(normalizedEmail)) {
       res.status(400).json({ detail: "Formato email non valido." });
       return;
@@ -64,28 +66,31 @@ authRouter.post("/register", async (req: any, res: any): Promise<void> => {
       password,
       companyName: company_name,
       phoneNumber: phone_number,
-      emailConfirmed: false,
+      emailConfirmed: !config.EMAIL_VERIFICATION_ENABLED,
     });
 
-    // Create persistent email verification token (single-use, expires in 24h)
-    const rawVerificationToken = generateSecureToken();
-    const verificationTokenHash = hashToken(rawVerificationToken);
-    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    if (config.EMAIL_VERIFICATION_ENABLED) {
+      // Create persistent email verification token (single-use, expires in 24h)
+      const rawVerificationToken = generateSecureToken();
+      const verificationTokenHash = hashToken(rawVerificationToken);
+      const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    await db.createAuthToken({
-      userId: user.id,
-      tokenHash: verificationTokenHash,
-      type: "email_verification",
-      expiresAt: verificationExpiresAt,
-    });
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: verificationTokenHash,
+        type: "email_verification",
+        expiresAt: verificationExpiresAt,
+      });
 
-    // Dispatch verification email
-    const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
-    if (!emailRes.success) {
-      await db.revokeActiveAuthTokens(user.id, "email_verification");
+      // Dispatch verification email
+      const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
+      if (!emailRes.success) {
+        await db.revokeActiveAuthTokens(user.id, "email_verification");
+      }
     }
 
     const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+
     await tokenStore.registerToken({
       token: refreshToken,
       jti,
@@ -158,8 +163,7 @@ authRouter.post("/verify-email", async (req: any, res: any): Promise<void> => {
 authRouter.post("/resend-verification", async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
-
-    if (email && typeof email === "string") {
+    if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
       const normalized = normalizeEmail(email);
       const user = await db.findUserByEmail(normalized);
 
@@ -203,7 +207,6 @@ authRouter.post("/resend-verification", async (req: any, res: any): Promise<void
 authRouter.post("/forgot-password", async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
-
     if (!email || typeof email !== "string") {
       res.status(400).json({ detail: "L'indirizzo email è obbligatorio." });
       return;
@@ -212,12 +215,13 @@ authRouter.post("/forgot-password", async (req: any, res: any): Promise<void> =>
     const normalized = normalizeEmail(email);
     const user = await db.findUserByEmail(normalized);
 
-    if (user && user.isActive) {
+    if (user && user.isActive && config.EMAIL_VERIFICATION_ENABLED) {
       // Invalidate existing active reset tokens for this user
       await db.revokeActiveAuthTokens(user.id, "password_reset");
 
       const rawToken = generateSecureToken();
       const tokenHash = hashToken(rawToken);
+
       // Short 1-hour expiration for password reset tokens
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 

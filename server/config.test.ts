@@ -81,7 +81,7 @@ describe("Configuration Security", () => {
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain localhost/i);
   });
 
-  it("fails in production when EMAIL_PROVIDER is missing or not resend", () => {
+  it("fails in production when EMAIL_PROVIDER is missing or not resend (when EMAIL_VERIFICATION_ENABLED is true)", () => {
     expect(() =>
       loadConfig({
         NODE_ENV: "production",
@@ -92,6 +92,7 @@ describe("Configuration Security", () => {
         CORS_ORIGINS: "https://example.com",
         SUPERADMIN_EMAIL: "admin@example.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
+        EMAIL_VERIFICATION_ENABLED: "true",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be provided/i);
 
@@ -106,11 +107,12 @@ describe("Configuration Security", () => {
         SUPERADMIN_EMAIL: "admin@example.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "smtp",
+        EMAIL_VERIFICATION_ENABLED: "true",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be 'resend'/i);
   });
 
-  it("fails in production when EMAIL_API_KEY or EMAIL_FROM is missing", () => {
+  it("fails in production when EMAIL_API_KEY or EMAIL_FROM is missing (when EMAIL_VERIFICATION_ENABLED is true)", () => {
     expect(() =>
       loadConfig({
         NODE_ENV: "production",
@@ -122,6 +124,7 @@ describe("Configuration Security", () => {
         SUPERADMIN_EMAIL: "admin@example.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "resend",
+        EMAIL_VERIFICATION_ENABLED: "true",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: EMAIL_API_KEY must be provided/i);
 
@@ -137,8 +140,26 @@ describe("Configuration Security", () => {
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "resend",
         EMAIL_API_KEY: "re_123456",
+        EMAIL_VERIFICATION_ENABLED: "true",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: EMAIL_FROM must be provided/i);
+  });
+
+  it("allows production startup without email config when EMAIL_VERIFICATION_ENABLED is false", () => {
+    const config = loadConfig({
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+      FRONTEND_URL: "https://example.com",
+      CORS_ORIGINS: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+      EMAIL_VERIFICATION_ENABLED: "false", // or not set
+    } as any);
+
+    expect(config.NODE_ENV).toBe("production");
+    expect(config.EMAIL_VERIFICATION_ENABLED).toBe(false);
   });
 
   it("loads valid production configuration safely without leaking", () => {

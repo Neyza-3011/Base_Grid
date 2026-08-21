@@ -20,11 +20,16 @@ export interface ServerConfig {
   SMTP_PORT?: number;
   SMTP_USER?: string;
   SMTP_PASS?: string;
+  EMAIL_VERIFICATION_ENABLED: boolean;
 }
 
 export function loadConfig(env = process.env): ServerConfig {
   const isProduction = env.NODE_ENV === "production";
   
+  // Feature flag for temporary email-independent mode
+  // We default to false per requirements, allowing deployment without email service
+  const EMAIL_VERIFICATION_ENABLED = env.EMAIL_VERIFICATION_ENABLED === "true";
+
   // JWT Secret is handled strictly by security.ts (fail-closed in prod)
   const JWT_SECRET = getJwtSecret(env);
 
@@ -39,8 +44,8 @@ export function loadConfig(env = process.env): ServerConfig {
   let SUPERADMIN_PASSWORD = env.SUPERADMIN_PASSWORD;
   const SUPERADMIN_COMPANY_NAME = env.SUPERADMIN_COMPANY_NAME || "BaseGrid Master Platform";
 
-  const EMAIL_PROVIDER = env.EMAIL_PROVIDER || (isProduction ? "" : "dev");
-  const EMAIL_FROM = env.EMAIL_FROM || (isProduction ? "" : "no-reply@basegrid.io");
+  const EMAIL_PROVIDER = env.EMAIL_PROVIDER || (isProduction ? (EMAIL_VERIFICATION_ENABLED ? "" : "none") : "dev");
+  const EMAIL_FROM = env.EMAIL_FROM || (isProduction ? (EMAIL_VERIFICATION_ENABLED ? "" : "no-reply@basegrid.io") : "no-reply@basegrid.io");
   const EMAIL_API_KEY = env.EMAIL_API_KEY;
   const SMTP_HOST = env.SMTP_HOST;
   const SMTP_PORT = env.SMTP_PORT ? Number(env.SMTP_PORT) : undefined;
@@ -90,28 +95,27 @@ export function loadConfig(env = process.env): ServerConfig {
       );
     }
 
-    if (!EMAIL_PROVIDER) {
-      throw new Error(
-        "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be provided in production."
-      );
-    }
-
-    if (EMAIL_PROVIDER !== "resend") {
-      throw new Error(
-        "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be 'resend' in production."
-      );
-    }
-
-    if (!EMAIL_API_KEY) {
-      throw new Error(
-        "CRITICAL CONFIG ERROR: EMAIL_API_KEY must be provided in production when EMAIL_PROVIDER=resend."
-      );
-    }
-
-    if (!EMAIL_FROM) {
-      throw new Error(
-        "CRITICAL CONFIG ERROR: EMAIL_FROM must be provided in production."
-      );
+    if (EMAIL_VERIFICATION_ENABLED) {
+      if (!EMAIL_PROVIDER) {
+        throw new Error(
+          "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be provided in production when EMAIL_VERIFICATION_ENABLED is true."
+        );
+      }
+      if (EMAIL_PROVIDER !== "resend") {
+        throw new Error(
+          "CRITICAL CONFIG ERROR: EMAIL_PROVIDER must be 'resend' in production when EMAIL_VERIFICATION_ENABLED is true."
+        );
+      }
+      if (!EMAIL_API_KEY) {
+        throw new Error(
+          "CRITICAL CONFIG ERROR: EMAIL_API_KEY must be provided in production when EMAIL_PROVIDER=resend and verification is enabled."
+        );
+      }
+      if (!EMAIL_FROM) {
+        throw new Error(
+          "CRITICAL CONFIG ERROR: EMAIL_FROM must be provided in production when EMAIL_VERIFICATION_ENABLED is true."
+        );
+      }
     }
   } else {
     // Development / Test defaults
@@ -143,6 +147,7 @@ export function loadConfig(env = process.env): ServerConfig {
     SMTP_PORT,
     SMTP_USER,
     SMTP_PASS,
+    EMAIL_VERIFICATION_ENABLED,
   };
 }
 

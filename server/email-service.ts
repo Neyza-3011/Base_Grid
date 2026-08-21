@@ -175,7 +175,7 @@ export class ProductionEmailService implements IEmailService {
 
     this.provider = provider;
 
-    if (env === "production") {
+    if (env === "production" && config.EMAIL_VERIFICATION_ENABLED) {
       if (this.provider !== "resend") {
         throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_PROVIDER must be 'resend' in production.");
       }
@@ -192,27 +192,31 @@ export class ProductionEmailService implements IEmailService {
   }
 
   public async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (!config.EMAIL_VERIFICATION_ENABLED) {
+      return { success: true, messageId: "disabled-by-flag" };
+    }
+
     const provider = process.env.EMAIL_PROVIDER || config.EMAIL_PROVIDER || "resend";
     const apiKey = process.env.EMAIL_API_KEY || config.EMAIL_API_KEY;
     const from = process.env.EMAIL_FROM || config.EMAIL_FROM;
     const env = process.env.NODE_ENV || config.NODE_ENV;
 
     if (provider !== "resend") {
-      if (env === "production") {
+      if (env === "production" && config.EMAIL_VERIFICATION_ENABLED) {
         throw new Error("CRITICAL EMAIL CONFIG ERROR: Unsupported EMAIL_PROVIDER in production.");
       }
       return { success: false, error: "email_provider_not_supported" };
     }
 
     if (!apiKey) {
-      if (env === "production") {
+      if (env === "production" && config.EMAIL_VERIFICATION_ENABLED) {
         throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_API_KEY is missing in production.");
       }
       return { success: false, error: "missing_email_api_key" };
     }
 
     if (!from) {
-      if (env === "production") {
+      if (env === "production" && config.EMAIL_VERIFICATION_ENABLED) {
         throw new Error("CRITICAL EMAIL CONFIG ERROR: EMAIL_FROM is missing in production.");
       }
       return { success: false, error: "missing_email_from" };
