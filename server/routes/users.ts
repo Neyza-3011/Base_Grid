@@ -80,6 +80,13 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
       return;
     }
 
+    try {
+      await tokenStore.revokeAllUserTokens(req.user.id);
+    } catch (err) {
+      res.status(503).json({ detail: "Impossibile revocare le sessioni. Modifica password annullata." });
+      return;
+    }
+
     const { hash, salt } = hashPassword(password);
     updates.passwordHash = hash;
     updates.salt = salt;
@@ -97,11 +104,6 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
 
     if (password && typeof password === "string") {
-      try {
-        await tokenStore.revokeAllUserTokens(req.user.id);
-      } catch (err) {
-        // Fallback catch, though we checked isAvailable()
-      }
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/api/v1/auth" });
       res.clearCookie("csrf_token", { path: "/" });
