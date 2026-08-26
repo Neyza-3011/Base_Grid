@@ -24,7 +24,6 @@ function mapUserRow(row: any): UserRecord {
     phoneNumber: row.phoneNumber || "",
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
-    authVersion: Number(row.authVersion) || 0,
   };
 }
 
@@ -180,8 +179,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         "maxUsers" INTEGER,
         "featurePdfExport" BOOLEAN,
         "createdAt" TIMESTAMP WITH TIME ZONE,
-        "updatedAt" TIMESTAMP WITH TIME ZONE,
-        "authVersion" INTEGER NOT NULL DEFAULT 0
+        "updatedAt" TIMESTAMP WITH TIME ZONE
       );
 
       CREATE TABLE IF NOT EXISTS users (
@@ -238,8 +236,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS "maxUsers" INTEGER;
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS "featurePdfExport" BOOLEAN;
       ALTER TABLE companies ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
-      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE,
-        "authVersion" INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE companies ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE;
 
       ALTER TABLE users ADD COLUMN IF NOT EXISTS "fullName" VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50);
@@ -252,8 +249,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS "emailConfirmed" BOOLEAN DEFAULT false;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS "phoneNumber" VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE,
-        "authVersion" INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "authVersion" INTEGER NOT NULL DEFAULT 0;
 
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS "companyId" VARCHAR(255);
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS date VARCHAR(255);
@@ -349,7 +346,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
   
   public async incrementUserAuthVersion(userId: string): Promise<number | null> {
     try {
-      const res = await pool.query(
+      const res = await this.pool.query(
         'UPDATE users SET "authVersion" = "authVersion" + 1, "updatedAt" = $1 WHERE id = $2 RETURNING "authVersion"',
         [new Date().toISOString(), userId]
       );

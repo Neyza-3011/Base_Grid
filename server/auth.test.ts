@@ -2040,56 +2040,69 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         cookies: { access_token: winningToken, csrf_token: winningCsrf },
         body: { password: "Password123!", current_password: winningPassword },
       });
+    });
+  });
 
   describe("17. Access Token Revocation via authVersion (P0.4.4-B)", () => {
-    it("invalidates previously issued access tokens upon password change", async () => {
-      // 1. login -> access token A
+    it("invalidates all device access tokens and refresh tokens upon password change", async () => {
+      // 1. Device A login -> access token A, refresh token A
       const loginA = await apiRequest("/api/v1/auth/login", {
         method: "POST",
         body: { email: "admin@rossi.it", password: "Password123!" },
       });
+      expect(loginA.status).toBe(200);
       const accessCookieA = loginA.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const refreshCookieA = loginA.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
       const csrfCookieA = loginA.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
-      const tokenA = accessCookieA.split(";")[0].split("=")[1];
-      const csrfA = csrfCookieA.split(";")[0].split("=")[1];
+      const tokenA = accessCookieA!.split(";")[0].split("=")[1];
+      const refreshTokenA = refreshCookieA!.split(";")[0].split("=")[1];
+      const csrfA = csrfCookieA!.split(";")[0].split("=")[1];
 
-      // 7. normal authenticated request before security event -> 200
-      const meReq1 = await apiRequest("/api/v1/users/me", {
+      // Normal authenticated request with token A -> 200
+      const meBefore = await apiRequest("/api/v1/users/me", {
         method: "GET",
         headers: { "x-csrf-token": csrfA },
         cookies: { access_token: tokenA, csrf_token: csrfA },
       });
-      expect(meReq1.status).toBe(200);
+      expect(meBefore.status).toBe(200);
 
-      // 8. user data update senza password -> non invalidare inutilmente la sessione
+      // Normal profile update without password -> session remains valid (no authVersion bump)
       const updateData = await apiRequest("/api/v1/users/me", {
         method: "PUT",
         headers: { "x-csrf-token": csrfA },
         cookies: { access_token: tokenA, csrf_token: csrfA },
-        body: { full_name: "Admin Updated" },
+        body: { full_name: "Mario Rossi Admin" },
       });
       expect(updateData.status).toBe(200);
 
-      // still 200
-      const meReq2 = await apiRequest("/api/v1/users/me", {
+      const meAfterUpdate = await apiRequest("/api/v1/users/me", {
         method: "GET",
         headers: { "x-csrf-token": csrfA },
         cookies: { access_token: tokenA, csrf_token: csrfA },
       });
-      expect(meReq2.status).toBe(200);
+      expect(meAfterUpdate.status).toBe(200);
 
-      // DEVICE B login -> access token B
+      // 2. Device B login -> access token B, refresh token B
       const loginB = await apiRequest("/api/v1/auth/login", {
         method: "POST",
         body: { email: "admin@rossi.it", password: "Password123!" },
       });
+      expect(loginB.status).toBe(200);
       const accessCookieB = loginB.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const refreshCookieB = loginB.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
       const csrfCookieB = loginB.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
-      const tokenB = accessCookieB.split(";")[0].split("=")[1];
-      const csrfB = csrfCookieB.split(";")[0].split("=")[1];
+      const tokenB = accessCookieB!.split(";")[0].split("=")[1];
+      const refreshTokenB = refreshCookieB!.split(";")[0].split("=")[1];
+      const csrfB = csrfCookieB!.split(";")[0].split("=")[1];
 
-      // 2. password change (on DEVICE A)
+      const meDeviceB = await apiRequest("/api/v1/users/me", {
+        method: "GET",
+        headers: { "x-csrf-token": csrfB },
+        cookies: { access_token: tokenB, csrf_token: csrfB },
+      });
+      expect(meDeviceB.status).toBe(200);
+
+      // 3. Security Event: Password Change on Device A
       const changePass = await apiRequest("/api/v1/users/me", {
         method: "PUT",
         headers: { "x-csrf-token": csrfA },
@@ -2098,86 +2111,254 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       });
       expect(changePass.status).toBe(200);
 
-      // 3. old access token -> 401 (Device A token)
-      const meReq3 = await apiRequest("/api/v1/users/me", {
+      // 4. Old access tokens are now immediately rejected with 401 across all devices
+      const meOldA = await apiRequest("/api/v1/users/me", {
         method: "GET",
         headers: { "x-csrf-token": csrfA },
         cookies: { access_token: tokenA, csrf_token: csrfA },
       });
-      expect(meReq3.status).toBe(401);
+      expect(meOldA.status).toBe(401);
 
-      // Device B old token -> 401
-      const meReq4 = await apiRequest("/api/v1/users/me", {
+      const meOldB = await apiRequest("/api/v1/users/me", {
         method: "GET",
         headers: { "x-csrf-token": csrfB },
         cookies: { access_token: tokenB, csrf_token: csrfB },
       });
-      expect(meReq4.status).toBe(401);
+      expect(meOldB.status).toBe(401);
 
-      // 4. old refresh token -> rejected
-      const refreshReq = await apiRequest("/api/v1/auth/refresh", {
+      // 5. Old refresh tokens are revoked across all devices
+      const refreshA = await apiRequest("/api/v1/auth/refresh", {
         method: "POST",
         headers: { "x-csrf-token": csrfA },
-        cookies: { refresh_token: refreshCookieA.split(";")[0].split("=")[1], csrf_token: csrfA },
+        cookies: { refresh_token: refreshTokenA, csrf_token: csrfA },
       });
-      expect(refreshReq.status).toBe(401);
+      expect(refreshA.status).toBe(401);
 
-      // 5. new login -> valid new access token
-      const loginC = await apiRequest("/api/v1/auth/login", {
+      const refreshB = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "x-csrf-token": csrfB },
+        cookies: { refresh_token: refreshTokenB, csrf_token: csrfB },
+      });
+      expect(refreshB.status).toBe(401);
+
+      // 6. Login with old password fails
+      const loginOldPass = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: "Password123!" },
+      });
+      expect(loginOldPass.status).toBe(401);
+
+      // 7. Login with new password succeeds and receives new authVersion
+      const loginNew = await apiRequest("/api/v1/auth/login", {
         method: "POST",
         body: { email: "admin@rossi.it", password: "NewStrongPassword2026_Secure!" },
       });
-      expect(loginC.status).toBe(200);
-      const accessCookieC = loginC.setCookieHeaders.find((c) => c.startsWith("access_token="));
-      const csrfCookieC = loginC.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
-      const tokenC = accessCookieC.split(";")[0].split("=")[1];
-      const csrfC = csrfCookieC.split(";")[0].split("=")[1];
+      expect(loginNew.status).toBe(200);
+      const accessCookieNew = loginNew.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const csrfCookieNew = loginNew.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+      const tokenNew = accessCookieNew!.split(";")[0].split("=")[1];
+      const csrfNew = csrfCookieNew!.split(";")[0].split("=")[1];
 
-      const meReq5 = await apiRequest("/api/v1/users/me", {
+      const meNew = await apiRequest("/api/v1/users/me", {
         method: "GET",
-        headers: { "x-csrf-token": csrfC },
-        cookies: { access_token: tokenC, csrf_token: csrfC },
+        headers: { "x-csrf-token": csrfNew },
+        cookies: { access_token: tokenNew, csrf_token: csrfNew },
       });
-      expect(meReq5.status).toBe(200);
+      expect(meNew.status).toBe(200);
 
-      // 9. authVersion non modificabile dal client
-      const hackerUpdate = await apiRequest("/api/v1/users/me", {
+      // Restore password back to default
+      await apiRequest("/api/v1/users/me", {
         method: "PUT",
-        headers: { "x-csrf-token": csrfC },
-        cookies: { access_token: tokenC, csrf_token: csrfC },
-        body: { authVersion: 999 },
+        headers: { "x-csrf-token": csrfNew },
+        cookies: { access_token: tokenNew, csrf_token: csrfNew },
+        body: { password: "Password123!", current_password: "NewStrongPassword2026_Secure!" },
       });
-      expect(hackerUpdate.status).toBe(200);
-      
-      // Token C should still work (authVersion wasn't actually changed in DB)
-      const meReq6 = await apiRequest("/api/v1/users/me", {
-        method: "GET",
-        headers: { "x-csrf-token": csrfC },
-        cookies: { access_token: tokenC, csrf_token: csrfC },
+    });
+
+    it("invalidates all device sessions and access tokens upon password reset", async () => {
+      // 1. Login user to get active sessions on Device 1 & Device 2
+      const login1 = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
       });
-      expect(meReq6.status).toBe(200);
-      
-      // 6. authVersion mismatch -> 401
-      // We manually construct a valid token but with wrong authVersion
-      const user = await import("./db").then(m => m.db.findUserByEmail("admin@rossi.it"));
+      const token1 = login1.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const refresh1 = login1.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+      const csrf1 = login1.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      const login2 = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
+      });
+      const token2 = login2.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const refresh2 = login2.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+      const csrf2 = login2.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      // Verify sessions work
+      const me1 = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: token1, csrf_token: csrf1 },
+      });
+      expect(me1.status).toBe(200);
+
+      // 2. Create password reset token in DB
+      const db = (await import("./db")).db;
+      const techUser = (await db.findUserByEmail("tech@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const resetToken = generateSecureToken();
+      await db.createAuthToken({
+        userId: techUser.id,
+        tokenHash: hashToken(resetToken),
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      });
+
+      // 3. Complete password reset
+      const resetRes = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: { token: resetToken, new_password: "TechResetPassword2026!" },
+      });
+      expect(resetRes.status).toBe(200);
+
+      // 4. Old access tokens 1 & 2 return 401
+      const meOld1 = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: token1, csrf_token: csrf1 },
+      });
+      expect(meOld1.status).toBe(401);
+
+      const meOld2 = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: token2, csrf_token: csrf2 },
+      });
+      expect(meOld2.status).toBe(401);
+
+      // 5. Old refresh tokens 1 & 2 are rejected
+      const refreshRes1 = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: refresh1, csrf_token: csrf1 },
+      });
+      expect(refreshRes1.status).toBe(401);
+
+      const refreshRes2 = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: refresh2, csrf_token: csrf2 },
+      });
+      expect(refreshRes2.status).toBe(401);
+
+      // 6. Login with new password works
+      const loginNew = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "TechResetPassword2026!" },
+      });
+      expect(loginNew.status).toBe(200);
+
+      const tokenNew = loginNew.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const csrfNew = loginNew.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      const meNew = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: tokenNew, csrf_token: csrfNew },
+      });
+      expect(meNew.status).toBe(200);
+
+      // Restore password
+      await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrfNew },
+        cookies: { access_token: tokenNew, csrf_token: csrfNew },
+        body: { password: "Password123!", current_password: "TechResetPassword2026!" },
+      });
+    });
+
+    it("verifies explicit legacy JWT behavior (payload.authVersion undefined) before and after security event", async () => {
+      const db = (await import("./db")).db;
       const security = await import("./security");
+      const jwt = (await import("jsonwebtoken")).default;
+
+      // Find user and set authVersion to 0 (initial baseline state)
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+      user.authVersion = 0;
+
+      // Forge a valid legacy JWT (without authVersion claim)
+      const legacyPayload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId,
+        tokenType: "access",
+        jti: "legacy-jti-test",
+        // Notice: authVersion is explicitly omitted/undefined
+      };
+      const legacyToken = jwt.sign(legacyPayload, security.getJwtSecret(), { expiresIn: "15m" });
+
+      // 1. When user.authVersion === 0, legacy token defaults to authVersion 0 (?? 0) and is ACCEPTED
+      const meReq1 = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: legacyToken, csrf_token: "csrf" },
+      });
+      expect(meReq1.status).toBe(200);
+
+      // 2. Increment authVersion (Security event occurred: password change / session revoke)
+      await db.incrementUserAuthVersion(user.id);
+      const updatedUser = (await db.findUserById(user.id))!;
+      expect(updatedUser.authVersion).toBeGreaterThan(0);
+
+      // 3. After security event, legacy token (authVersion 0) is REJECTED with 401
+      const meReq2 = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: legacyToken, csrf_token: "csrf" },
+      });
+      expect(meReq2.status).toBe(401);
+      expect(meReq2.body.detail).toContain("Sessione invalidata per motivi di sicurezza");
+    });
+
+    it("verifies client cannot tamper with or manipulate authVersion directly via profile PUT", async () => {
+      const login = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: "Password123!" },
+      });
+      const token = login.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const csrf = login.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      const db = (await import("./db")).db;
+      const userBefore = (await db.findUserByEmail("admin@rossi.it"))!;
+      const versionBefore = userBefore.authVersion;
+
+      // Attacker sends arbitrary authVersion in body
+      const tamperRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrf },
+        cookies: { access_token: token, csrf_token: csrf },
+        body: { authVersion: 99999, full_name: "Admin Legit Name" },
+      });
+      expect(tamperRes.status).toBe(200);
+
+      const userAfter = (await db.findUserByEmail("admin@rossi.it"))!;
+      expect(userAfter.authVersion).toBe(versionBefore); // authVersion remained unchanged
+
+      // Token still works
+      const meReq = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: token, csrf_token: csrf },
+      });
+      expect(meReq.status).toBe(200);
+    });
+
+    it("verifies forged or mismatched authVersion in JWT payload is rejected with 401", async () => {
+      const db = (await import("./db")).db;
+      const security = await import("./security");
+      const jwt = (await import("jsonwebtoken")).default;
+
+      const user = (await db.findUserByEmail("admin@rossi.it"))!;
+
       const badPayload = {
         sub: user.id,
         email: user.email,
         role: user.role,
         companyId: user.companyId,
         tokenType: "access",
-        jti: "fake-jti",
-        authVersion: 999, // mismatched
+        jti: "bad-version-jti",
+        authVersion: user.authVersion + 42, // Non-matching authVersion
       };
-      const badToken = await import("jsonwebtoken").then(m => m.sign(badPayload, security.getJwtSecret()));
-      
-      const meReq7 = await apiRequest("/api/v1/users/me", {
-        method: "GET",
-        headers: { "x-csrf-token": csrfC },
-        cookies: { access_token: badToken, csrf_token: csrfC },
+      const badToken = jwt.sign(badPayload, security.getJwtSecret(), { expiresIn: "15m" });
+
+      const res = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: badToken, csrf_token: "csrf" },
       });
-      expect(meReq7.status).toBe(401);
-    
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toContain("Sessione invalidata per motivi di sicurezza");
+    });
   });
-});
