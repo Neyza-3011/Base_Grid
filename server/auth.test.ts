@@ -2362,3 +2362,131 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.body.detail).toContain("Sessione invalidata per motivi di sicurezza");
     });
   });
+
+  describe("18. Atomic Password & authVersion Synchronization (P0.4.4-B.2)", () => {
+    it("handles database update failure during password change atomically without corrupting state", async () => {
+      // 1. Login user
+      const login = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: "Password123!" },
+      });
+      expect(login.status).toBe(200);
+      const token = login.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const csrf = login.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      const db = (await import("./db")).db;
+      const userBefore = (await db.findUserByEmail("admin@rossi.it"))!;
+      const hashBefore = userBefore.passwordHash;
+      const versionBefore = userBefore.authVersion;
+
+      // 2. Mock database failure on the atomic primitive
+      const originalPrimitive = db.updatePasswordAndIncrementAuthVersion;
+      (db as any).updatePasswordAndIncrementAuthVersion = async () => {
+        throw new Error("Simulated PostgreSQL connection timeout during atomic UPDATE");
+      };
+
+      try {
+        const failedChange = await apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrf },
+          cookies: { access_token: token, csrf_token: csrf },
+          body: {
+            current_password: "Password123!",
+            password: "UnappliedNewPassword123!",
+          },
+        });
+
+        // Must fail with 500, never 200
+        expect(failedChange.status).toBe(500);
+        expect(failedChange.body.detail).toContain("Impossibile aggiornare la password");
+
+        // 3. Verify state in DB: passwordHash, salt, and authVersion must remain intact
+        const userAfter = (await db.findUserByEmail("admin@rossi.it"))!;
+        expect(userAfter.passwordHash).toBe(hashBefore);
+        expect(userAfter.authVersion).toBe(versionBefore);
+
+        // 4. Old password must STILL be valid in DB
+        (db as any).updatePasswordAndIncrementAuthVersion = originalPrimitive;
+        const loginOld = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "admin@rossi.it", password: "Password123!" },
+        });
+        expect(loginOld.status).toBe(200);
+
+        // 5. New password must NOT be valid
+        const loginNew = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "admin@rossi.it", password: "UnappliedNewPassword123!" },
+        });
+        expect(loginNew.status).toBe(401);
+      } finally {
+        (db as any).updatePasswordAndIncrementAuthVersion = originalPrimitive;
+      }
+    });
+
+    it("handles concurrent password changes: exactly one winning password becomes active", async () => {
+      // 1. Login user
+      const login = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: "Password123!" },
+      });
+      expect(login.status).toBe(200);
+      const token = login.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const csrf = login.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      // 2. Fire two concurrent password change requests with different target passwords
+      const passwordA = "WinningPasswordA_2026!";
+      const passwordB = "WinningPasswordB_2026!";
+
+      const [resA, resB] = await Promise.all([
+        apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrf },
+          cookies: { access_token: token, csrf_token: csrf },
+          body: { current_password: "Password123!", password: passwordA },
+        }),
+        apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrf },
+          cookies: { access_token: token, csrf_token: csrf },
+          body: { current_password: "Password123!", password: passwordB },
+        }),
+      ]);
+
+      // At least one succeeded
+      expect([resA.status, resB.status]).toContain(200);
+
+      // 3. Exactly one password must be functional for login
+      const tryLoginA = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: passwordA },
+      });
+      const tryLoginB = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: passwordB },
+      });
+
+      const successfulLogins = [tryLoginA.status === 200, tryLoginB.status === 200].filter(Boolean);
+      expect(successfulLogins.length).toBe(1);
+
+      // 4. Old password must NOT be valid
+      const tryOld = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "admin@rossi.it", password: "Password123!" },
+      });
+      expect(tryOld.status).toBe(401);
+
+      // 5. Restore default password using the winning password
+      const winningPassword = tryLoginA.status === 200 ? passwordA : passwordB;
+      const winningLogin = tryLoginA.status === 200 ? tryLoginA : tryLoginB;
+      const winningToken = winningLogin.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+      const winningCsrf = winningLogin.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+      await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": winningCsrf },
+        cookies: { access_token: winningToken, csrf_token: winningCsrf },
+        body: { current_password: winningPassword, password: "Password123!" },
+      });
+    });
+  });

@@ -88,29 +88,46 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
 
     const { hash, salt } = hashPassword(password);
-    updates.passwordHash = hash;
-    updates.salt = salt;
+
+    try {
+      // 6. Single atomic DB operation: updates passwordHash, salt, increments authVersion, and updates timestamp
+      const updatedUser = await db.updatePasswordAndIncrementAuthVersion(req.user.id, hash, salt);
+      if (!updatedUser) {
+        res.status(500).json({ detail: "Impossibile aggiornare la password." });
+        return;
+      }
+
+      // Apply any additional profile updates if present (e.g. fullName, phoneNumber, email)
+      if (Object.keys(updates).length > 0) {
+        await db.updateUser(req.user.id, updates);
+      }
+
+      // 7. Clear cookies
+      res.clearCookie("access_token", { path: "/" });
+      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+      res.clearCookie("csrf_token", { path: "/" });
+
+      // 8. Safe response
+      const finalUser = await db.findUserById(req.user.id);
+      res.status(200).json(toSafeUserSession(finalUser || updatedUser));
+      return;
+    } catch (err: any) {
+      res.status(500).json({ detail: "Impossibile aggiornare la password." });
+      return;
+    }
   }
 
   if (phone_number !== undefined) {
     updates.phoneNumber = phone_number;
   }
 
+  // Normal profile update without password change (authVersion MUST NOT change)
   try {
-
     const updatedUser = await db.updateUser(req.user.id, updates);
     if (!updatedUser) {
       res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
       return;
     }
-
-    if (password && typeof password === "string") {
-      await db.incrementUserAuthVersion(req.user.id);
-      res.clearCookie("access_token", { path: "/" });
-      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
-      res.clearCookie("csrf_token", { path: "/" });
-    }
-
 
     res.status(200).json(toSafeUserSession(updatedUser));
   } catch (err: any) {

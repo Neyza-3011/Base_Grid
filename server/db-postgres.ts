@@ -97,6 +97,11 @@ export interface IDatabaseAdapter {
   createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   updateUser(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null>;
   incrementUserAuthVersion(userId: string): Promise<number | null>;
+  updatePasswordAndIncrementAuthVersion(
+    userId: string,
+    passwordHash: string,
+    salt: string,
+  ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
   updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null>;
@@ -354,6 +359,31 @@ export class PostgresAdapter implements IDatabaseAdapter {
       return res.rows[0].authVersion;
     } catch (err) {
       console.error("[PostgresAdapter] Error incrementing authVersion:", err);
+      throw err;
+    }
+  }
+
+  public async updatePasswordAndIncrementAuthVersion(
+    userId: string,
+    passwordHash: string,
+    salt: string,
+  ): Promise<UserRecord | null> {
+    try {
+      const now = new Date().toISOString();
+      const res = await this.pool.query(
+        `UPDATE users
+         SET "passwordHash" = $1,
+             salt = $2,
+             "authVersion" = "authVersion" + 1,
+             "updatedAt" = $3
+         WHERE id = $4
+         RETURNING *`,
+        [passwordHash, salt, now, userId],
+      );
+      if (!res.rows[0]) return null;
+      return mapUserRow(res.rows[0]);
+    } catch (err) {
+      console.error("[PostgresAdapter] Error updating password and incrementing authVersion:", err);
       throw err;
     }
   }
@@ -868,7 +898,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         [now, token.id],
       );
       await client.query(
-        `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+        `UPDATE users SET "passwordHash" = $1, salt = $2, "authVersion" = "authVersion" + 1, "updatedAt" = $3 WHERE id = $4`,
         [newPasswordHash, newSalt, now, token.userId],
       );
 

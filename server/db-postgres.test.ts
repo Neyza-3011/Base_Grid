@@ -502,5 +502,78 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       expect(user?.authVersion).toBe(5);
       expect((company as any)?.authVersion).toBeUndefined();
     });
+
+    it("updatePasswordAndIncrementAuthVersion executes a single parameterized atomic UPDATE and returns mapped user (P0.4.4-B.2)", async () => {
+      const fakeUpdatedUserRow = {
+        id: "usr-pwd-1",
+        email: "atomic@example.com",
+        fullName: "Atomic User",
+        role: "admin",
+        companyId: "comp-1",
+        companyName: "Atomic Co",
+        passwordHash: "new-hash-xyz",
+        salt: "new-salt-123",
+        isActive: true,
+        provider: "local",
+        emailConfirmed: true,
+        phoneNumber: "",
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+        authVersion: 3,
+      };
+
+      mockPool.query.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [fakeUpdatedUserRow],
+      });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const result = await adapter.updatePasswordAndIncrementAuthVersion(
+        "usr-pwd-1",
+        "new-hash-xyz",
+        "new-salt-123"
+      );
+
+      expect(mockPool.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain('UPDATE users');
+      expect(sql).toContain('"passwordHash" = $1');
+      expect(sql).toContain('salt = $2');
+      expect(sql).toContain('"authVersion" = "authVersion" + 1');
+      expect(sql).toContain('"updatedAt" = $3');
+      expect(sql).toContain('WHERE id = $4');
+      expect(sql).toContain('RETURNING *');
+      expect(params).toEqual(["new-hash-xyz", "new-salt-123", expect.any(String), "usr-pwd-1"]);
+
+      expect(result).not.toBeNull();
+      expect(result?.passwordHash).toBe("new-hash-xyz");
+      expect(result?.salt).toBe("new-salt-123");
+      expect(result?.authVersion).toBe(3);
+    });
+
+    it("updatePasswordAndIncrementAuthVersion returns null when user does not exist", async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rowCount: 0,
+        rows: [],
+      });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const result = await adapter.updatePasswordAndIncrementAuthVersion(
+        "usr-nonexistent",
+        "hash",
+        "salt"
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("updatePasswordAndIncrementAuthVersion propagates DB errors on failure", async () => {
+      mockPool.query.mockRejectedValueOnce(new Error("Connection reset by peer"));
+
+      const adapter = new PostgresAdapter(mockPool);
+      await expect(
+        adapter.updatePasswordAndIncrementAuthVersion("usr-pwd-1", "hash", "salt")
+      ).rejects.toThrow("Connection reset by peer");
+    });
   });
 });

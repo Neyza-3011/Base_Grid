@@ -133,6 +133,21 @@ export class DatabaseStore implements IDatabaseAdapter {
     return user.authVersion;
   }
 
+  public async updatePasswordAndIncrementAuthVersion(
+    userId: string,
+    passwordHash: string,
+    salt: string,
+  ): Promise<UserRecord | null> {
+    const user = this.users.get(userId);
+    if (!user) return null;
+    user.passwordHash = passwordHash;
+    user.salt = salt;
+    user.authVersion = (user.authVersion || 0) + 1;
+    user.updatedAt = new Date().toISOString();
+    this.users.set(userId, user);
+    return user;
+  }
+
   public async findUserById(id: string): Promise<UserRecord | null> {
     const user = this.users.get(id);
     return user || null;
@@ -443,6 +458,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     if (user) {
       user.passwordHash = newPasswordHash;
       user.salt = newSalt;
+      user.authVersion = (user.authVersion || 0) + 1;
       user.updatedAt = new Date().toISOString();
       this.users.set(user.id, user);
     }
