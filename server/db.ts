@@ -45,7 +45,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(masterCompanyId, masterCompany);
-
+ 
     const { hash: saHash, salt: saSalt } = hashPassword(config.SUPERADMIN_PASSWORD);
     const superAdminUser: UserRecord = {
       id: "usr-superadmin-001",
@@ -62,6 +62,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       phoneNumber: "+39 02 1234567",
       createdAt: now,
       updatedAt: now,
+      authVersion: 0,
     };
     this.users.set(superAdminUser.id, superAdminUser);
 
@@ -80,7 +81,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(demoCompanyId, demoCompany);
-
+ 
     const { hash: admHash, salt: admSalt } = hashPassword("Password123!");
     const adminUser: UserRecord = {
       id: "usr-rossi-admin",
@@ -97,6 +98,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       phoneNumber: "+39 333 1234567",
       createdAt: now,
       updatedAt: now,
+      authVersion: 0,
     };
     this.users.set(adminUser.id, adminUser);
 
@@ -116,8 +118,19 @@ export class DatabaseStore implements IDatabaseAdapter {
       phoneNumber: "+39 333 7654321",
       createdAt: now,
       updatedAt: now,
+      authVersion: 0,
     };
     this.users.set(techUser.id, techUser);
+  }
+
+  
+  public async incrementUserAuthVersion(userId: string): Promise<number | null> {
+    const user = this.users.get(userId);
+    if (!user) return null;
+    user.authVersion = (user.authVersion || 0) + 1;
+    user.updatedAt = new Date().toISOString();
+    this.users.set(userId, user);
+    return user.authVersion;
   }
 
   public async findUserById(id: string): Promise<UserRecord | null> {
@@ -158,7 +171,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(companyId, newCompany);
-
+ 
     const { hash, salt } = hashPassword(params.password);
     const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
 
@@ -177,6 +190,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       phoneNumber: params.phoneNumber || "",
       createdAt: now,
       updatedAt: now,
+      authVersion: 0,
     };
     this.users.set(userId, newUser);
 
@@ -209,7 +223,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(companyId, newCompany);
-
+ 
     const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now().toString());
     const userId = `usr-g-${Date.now()}`;
 
@@ -228,6 +242,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       phoneNumber: "",
       createdAt: now,
       updatedAt: now,
+      authVersion: 0,
     };
     this.users.set(userId, newUser);
 

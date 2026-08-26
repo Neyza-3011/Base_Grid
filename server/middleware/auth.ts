@@ -37,10 +37,18 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+
   if (!user.isActive) {
     res.status(401).json({ detail: "Account disattivato." });
     return;
   }
+
+  const tokenAuthVersion = payload.authVersion ?? 0;
+  if (tokenAuthVersion !== user.authVersion) {
+    res.status(401).json({ detail: "Sessione invalidata per motivi di sicurezza. Effettua nuovamente l'accesso." });
+    return;
+  }
+
 
   const company = await db.findCompanyById(user.companyId);
   if (!company) {
@@ -65,13 +73,18 @@ export async function optionalAuthenticate(req: Request, res: Response, next: Ne
   const payload = verifyAccessToken(token);
   if (payload && payload.sub) {
     const user = await db.findUserById(payload.sub);
+
     if (user && user.isActive) {
-      req.user = user;
-      const company = await db.findCompanyById(user.companyId);
-      if (company) {
-        req.company = company;
+      const tokenAuthVersion = payload.authVersion ?? 0;
+      if (tokenAuthVersion === user.authVersion) {
+        req.user = user;
+        const company = await db.findCompanyById(user.companyId);
+        if (company) {
+          req.company = company;
+        }
       }
     }
+
   }
   next();
 }

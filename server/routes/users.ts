@@ -97,6 +97,7 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
   }
 
   try {
+
     const updatedUser = await db.updateUser(req.user.id, updates);
     if (!updatedUser) {
       res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
@@ -104,10 +105,12 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
 
     if (password && typeof password === "string") {
+      await db.incrementUserAuthVersion(req.user.id);
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/api/v1/auth" });
       res.clearCookie("csrf_token", { path: "/" });
     }
+
 
     res.status(200).json(toSafeUserSession(updatedUser));
   } catch (err: any) {

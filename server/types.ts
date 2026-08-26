@@ -15,6 +15,7 @@ export interface UserRecord {
   phoneNumber?: string;
   createdAt: string;
   updatedAt: string;
+  authVersion: number;
 }
 
 export interface CompanyRecord {
@@ -29,6 +30,7 @@ export interface CompanyRecord {
   featurePdfExport: boolean;
   createdAt: string;
   updatedAt: string;
+
 }
 
 export interface ReportRecord {
@@ -63,6 +65,7 @@ export interface JwtPayload {
   familyId?: string; // token rotation lineage family ID
   iat?: number;
   exp?: number;
+  authVersion?: number;
 }
 
 export interface SafeUserSession {

@@ -178,6 +178,7 @@ export function generateTokens(
     role: user.role,
     companyId: user.companyId,
     tokenType: "access",
+    authVersion: user.authVersion,
     jti: accessJti,
   };
 
@@ -187,6 +188,7 @@ export function generateTokens(
     role: user.role,
     companyId: user.companyId,
     tokenType: "refresh",
+    authVersion: user.authVersion,
     jti: refreshJti,
     familyId: familyId,
   };
