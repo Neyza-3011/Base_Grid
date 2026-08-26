@@ -33,7 +33,7 @@ describe("Production Startup Sequence", () => {
       await new Promise<void>((resolve) => {
         const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
         const child = spawn(tsxBin, ["server.ts"], {
-          env: { ...requiredEnv, PORT: "10007" },
+          env: { ...requiredEnv, PORT: "10007", NITRO_PORT: "10017" },
         });
 
         let output = "";
@@ -58,7 +58,7 @@ describe("Production Startup Sequence", () => {
     await new Promise<void>((resolve) => {
       const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
       const child = spawn(tsxBin, ["server.ts"], {
-        env: { ...requiredEnv, PORT: "10008" },
+        env: { ...requiredEnv, PORT: "10008", NITRO_PORT: "10018" },
       });
 
       let output = "";
