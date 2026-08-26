@@ -404,4 +404,103 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(validReport?.companyId).toBe("comp-A");
     expect(crossTenantReport).toBeNull();
   });
+
+  describe("authVersion PostgreSQL Implementation & Security (P0.4.4-B.1)", () => {
+    it("incrementUserAuthVersion calls this.pool.query with atomic UPDATE and RETURNING", async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ authVersion: 1 }],
+      });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const newVersion = await adapter.incrementUserAuthVersion("usr-123");
+
+      expect(mockPool.query).toHaveBeenCalledTimes(1);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toBe(
+        'UPDATE users SET "authVersion" = "authVersion" + 1, "updatedAt" = $1 WHERE id = $2 RETURNING "authVersion"'
+      );
+      expect(params[1]).toBe("usr-123");
+      expect(newVersion).toBe(1);
+    });
+
+    it("increments authVersion consecutively (0 -> 1 -> 2)", async () => {
+      mockPool.query
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ authVersion: 1 }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ authVersion: 2 }] });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const v1 = await adapter.incrementUserAuthVersion("usr-abc");
+      const v2 = await adapter.incrementUserAuthVersion("usr-abc");
+
+      expect(v1).toBe(1);
+      expect(v2).toBe(2);
+    });
+
+    it("returns null when incrementing authVersion for a nonexistent user", async () => {
+      mockPool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const result = await adapter.incrementUserAuthVersion("usr-nonexistent");
+
+      expect(result).toBeNull();
+    });
+
+    it("ensures users table schema and migration include authVersion, but companies does not", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.initDatabase();
+
+      const queryArg = mockPool.query.mock.calls[0][0];
+      // User table has authVersion
+      expect(queryArg).toContain('"authVersion" INTEGER NOT NULL DEFAULT 0');
+      expect(queryArg).toContain('ALTER TABLE users ADD COLUMN IF NOT EXISTS "authVersion" INTEGER NOT NULL DEFAULT 0;');
+      // Companies table does not have authVersion
+      expect(queryArg).not.toContain('ALTER TABLE companies ADD COLUMN IF NOT EXISTS "authVersion"');
+    });
+
+    it("mapUserRow correctly maps authVersion while mapCompanyRow excludes authVersion", async () => {
+      const fakeUserRow = {
+        id: "usr-456",
+        email: "tech@example.com",
+        fullName: "Tech User",
+        role: "technician",
+        companyId: "comp-456",
+        companyName: "Tech Co",
+        passwordHash: "hash",
+        salt: "salt",
+        isActive: true,
+        provider: "local",
+        emailConfirmed: true,
+        phoneNumber: "",
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+        authVersion: 5,
+      };
+
+      const fakeCompanyRow = {
+        id: "comp-456",
+        name: "Tech Co",
+        vatNumber: "IT123",
+        address: "Via Tech",
+        defaultHourlyRate: "60",
+        reportFooterNotes: "Notes",
+        stripeSubscriptionStatus: "Active",
+        maxUsers: "10",
+        featurePdfExport: true,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+      };
+
+      mockPool.query
+        .mockResolvedValueOnce({ rows: [fakeUserRow] })
+        .mockResolvedValueOnce({ rows: [fakeCompanyRow] });
+
+      const adapter = new PostgresAdapter(mockPool);
+      const user = await adapter.findUserById("usr-456");
+      const company = await adapter.findCompanyById("comp-456");
+
+      expect(user?.authVersion).toBe(5);
+      expect((company as any)?.authVersion).toBeUndefined();
+    });
+  });
 });

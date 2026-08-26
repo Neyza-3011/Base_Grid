@@ -24,6 +24,7 @@ function mapUserRow(row: any): UserRecord {
     phoneNumber: row.phoneNumber || "",
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+    authVersion: Number(row.authVersion) || 0,
   };
 }
 
@@ -40,7 +41,6 @@ function mapCompanyRow(row: any): CompanyRecord {
     featurePdfExport: Boolean(row.featurePdfExport),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
-    authVersion: Number(row.authVersion) || 0,
   };
 }
 
@@ -396,7 +396,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
           featurePdfExport: true,
           createdAt: now,
           updatedAt: now,
-          authVersion: 0,
         };
 
         await client.query(
@@ -503,7 +502,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
           featurePdfExport: true,
           createdAt: now,
           updatedAt: now,
-          authVersion: 0,
         };
 
         await client.query(
