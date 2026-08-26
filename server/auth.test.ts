@@ -1842,3 +1842,149 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(updatedUser?.companyId).toBe(compA.id);
     });
   });
+
+  describe("14. Password Change from /me (PUT /api/v1/users/me)", async () => {
+    it("successfully changes password when current password is correct and revokes existing sessions", async () => {
+      // 1. Establish an active session with refresh token
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      expect(loginRes.status).toBe(200);
+      const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const refreshCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
+      const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+      
+      const accessToken = accessCookie!.split(";")[0].split("=")[1];
+      const refreshToken = refreshCookie!.split(";")[0].split("=")[1];
+      const csrfToken = csrfCookie!.split(";")[0].split("=")[1];
+
+      // 2. Change password via /me
+      const changeRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrfToken },
+        cookies: { access_token: accessToken, csrf_token: csrfToken },
+        body: {
+          password: "NewStrongPassword2026!",
+          current_password: "Password123!",
+        },
+      });
+
+      expect(changeRes.status).toBe(200);
+      
+      // Should clear cookies
+      expect(changeRes.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
+      expect(changeRes.setCookieHeaders.some((c) => c.startsWith("refresh_token=;"))).toBe(true);
+
+      // Verify old refresh token is revoked
+      const r1Record = await tokenStore.getTokenRecord(refreshToken);
+      expect(r1Record?.status).toBe("revoked");
+
+      // Verify login with old password fails
+      const oldLoginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      expect(oldLoginRes.status).toBe(401);
+
+      // Verify login with new password succeeds
+      const newLoginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "NewStrongPassword2026!",
+        },
+      });
+      expect(newLoginRes.status).toBe(200);
+    });
+
+    it("rejects password change if current_password is missing or incorrect", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
+      });
+      const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+      const accessToken = accessCookie!.split(";")[0].split("=")[1];
+      const csrfToken = csrfCookie!.split(";")[0].split("=")[1];
+
+      // Missing current_password
+      const missingRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrfToken },
+        cookies: { access_token: accessToken, csrf_token: csrfToken },
+        body: { password: "NewStrongPassword2026!" },
+      });
+      expect(missingRes.status).toBe(400);
+
+      // Incorrect current_password
+      const wrongRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrfToken },
+        cookies: { access_token: accessToken, csrf_token: csrfToken },
+        body: { password: "NewStrongPassword2026!", current_password: "WrongPassword!" },
+      });
+      expect(wrongRes.status).toBe(401);
+    });
+
+    it("fails closed with 503 if tokenStore is unavailable during password change", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
+      });
+      const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+      const accessToken = accessCookie!.split(";")[0].split("=")[1];
+      const csrfToken = csrfCookie!.split(";")[0].split("=")[1];
+
+      tokenStore.setAvailability(false);
+      try {
+        const changeRes = await apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrfToken },
+          cookies: { access_token: accessToken, csrf_token: csrfToken },
+          body: { password: "NewStrongPassword2026!", current_password: "Password123!" },
+        });
+
+        expect(changeRes.status).toBe(503);
+      } finally {
+        tokenStore.setAvailability(true);
+      }
+
+      // Password should remain unchanged
+      const newLoginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
+      });
+      expect(newLoginRes.status).toBe(200);
+    });
+    
+    it("never leaks sensitive fields in response", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: "tech@rossi.it", password: "Password123!" },
+      });
+      const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+      const accessToken = accessCookie!.split(";")[0].split("=")[1];
+      const csrfToken = csrfCookie!.split(";")[0].split("=")[1];
+
+      const changeRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrfToken },
+        cookies: { access_token: accessToken, csrf_token: csrfToken },
+        body: { password: "NewStrongPassword2026_Secure!", current_password: "Password123!" },
+      });
+
+      expect(changeRes.status).toBe(200);
+      expect(changeRes.body.passwordHash).toBeUndefined();
+      expect(changeRes.body.salt).toBeUndefined();
+      expect(changeRes.body.token).toBeUndefined();
+    });
+  });

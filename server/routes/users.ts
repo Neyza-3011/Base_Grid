@@ -1,7 +1,8 @@
 import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
-import { hashPassword, isValidEmail, normalizeEmail, toSafeUserSession } from "../security";
+import { hashPassword, isValidEmail, normalizeEmail, toSafeUserSession, verifyPassword, validatePasswordPolicy } from "../security";
+import { tokenStore } from "../token-store";
 
 export const usersRouter = Router();
 
@@ -27,7 +28,7 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     return;
   }
 
-  const { full_name, email, password, phone_number } = req.body;
+  const { full_name, email, password, current_password, phone_number } = req.body;
   const updates: any = {};
 
   if (full_name && typeof full_name === "string") {
@@ -52,10 +53,33 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
   }
 
   if (password && typeof password === "string") {
-    if (password.length < 8) {
-      res.status(400).json({ detail: "La nuova password deve avere almeno 8 caratteri." });
+    if (!current_password || typeof current_password !== "string") {
+      res.status(400).json({ detail: "La password corrente è obbligatoria per impostare una nuova password." });
       return;
     }
+
+    const currentUser = await db.findUserById(req.user.id);
+    if (!currentUser || !currentUser.passwordHash || !currentUser.salt) {
+      res.status(401).json({ detail: "Utente non trovato o configurazione non valida." });
+      return;
+    }
+
+    if (!verifyPassword(current_password, currentUser.passwordHash, currentUser.salt)) {
+      res.status(401).json({ detail: "Password corrente non corretta." });
+      return;
+    }
+
+    const passValidation = validatePasswordPolicy(password);
+    if (!passValidation.valid) {
+      res.status(400).json({ detail: passValidation.message });
+      return;
+    }
+
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({ detail: "Servizio di sicurezza temporaneamente non disponibile per la revoca delle sessioni." });
+      return;
+    }
+
     const { hash, salt } = hashPassword(password);
     updates.passwordHash = hash;
     updates.salt = salt;
@@ -72,6 +96,17 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
       return;
     }
 
+    if (password && typeof password === "string") {
+      try {
+        await tokenStore.revokeAllUserTokens(req.user.id);
+      } catch (err) {
+        // Fallback catch, though we checked isAvailable()
+      }
+      res.clearCookie("access_token", { path: "/" });
+      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+      res.clearCookie("csrf_token", { path: "/" });
+    }
+
     res.status(200).json(toSafeUserSession(updatedUser));
   } catch (err: any) {
     if (err.code === "23505" || err.message?.includes("already in use") || err.message?.includes("already registered")) {
@@ -81,3 +116,4 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
   }
 });
+
