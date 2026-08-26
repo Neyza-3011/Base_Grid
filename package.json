@@ -6,7 +6,7 @@
   ],
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "NODE_ENV=production npm run build --workspace=frontend && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs",
+    "build": "cross-env NODE_ENV=production npm run build --workspace=frontend && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "npm run lint --workspace=frontend"
   },
@@ -26,6 +26,7 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "cookie-parser": "^1.4.7",
+    "cross-env": "^10.1.0",
     "esbuild": "^0.23.1",
     "jsonwebtoken": "^9.0.3",
     "supertest": "^7.2.2",

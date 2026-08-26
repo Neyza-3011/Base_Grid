@@ -8,190 +8,190 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as BillingRouteImport } from "./routes/billing";
-import { Route as DashboardRouteImport } from "./routes/dashboard";
-import { Route as ResetPasswordRouteImport } from "./routes/reset-password";
-import { Route as VerifyEmailRouteImport } from "./routes/verify-email";
-import { Route as WizardRouteImport } from "./routes/wizard";
-import { Route as AdminSandboxRouteImport } from "./routes/admin/sandbox";
-import { Route as AdminSuperDashboardRouteImport } from "./routes/admin/super-dashboard";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as BillingRouteImport } from './routes/billing'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as WizardRouteImport } from './routes/wizard'
+import { Route as AdminSandboxRouteImport } from './routes/admin/sandbox'
+import { Route as AdminSuperDashboardRouteImport } from './routes/admin/super-dashboard'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const BillingRoute = BillingRouteImport.update({
-  id: "/billing",
-  path: "/billing",
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
-  id: "/dashboard",
-  path: "/dashboard",
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: "/reset-password",
-  path: "/reset-password",
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: "/verify-email",
-  path: "/verify-email",
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const WizardRoute = WizardRouteImport.update({
-  id: "/wizard",
-  path: "/wizard",
+  id: '/wizard',
+  path: '/wizard',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AdminSandboxRoute = AdminSandboxRouteImport.update({
-  id: "/admin/sandbox",
-  path: "/admin/sandbox",
+  id: '/admin/sandbox',
+  path: '/admin/sandbox',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AdminSuperDashboardRoute = AdminSuperDashboardRouteImport.update({
-  id: "/admin/super-dashboard",
-  path: "/admin/super-dashboard",
+  id: '/admin/super-dashboard',
+  path: '/admin/super-dashboard',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/billing": typeof BillingRoute;
-  "/dashboard": typeof DashboardRoute;
-  "/reset-password": typeof ResetPasswordRoute;
-  "/verify-email": typeof VerifyEmailRoute;
-  "/wizard": typeof WizardRoute;
-  "/admin/sandbox": typeof AdminSandboxRoute;
-  "/admin/super-dashboard": typeof AdminSuperDashboardRoute;
+  '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/dashboard': typeof DashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/wizard': typeof WizardRoute
+  '/admin/sandbox': typeof AdminSandboxRoute
+  '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/billing": typeof BillingRoute;
-  "/dashboard": typeof DashboardRoute;
-  "/reset-password": typeof ResetPasswordRoute;
-  "/verify-email": typeof VerifyEmailRoute;
-  "/wizard": typeof WizardRoute;
-  "/admin/sandbox": typeof AdminSandboxRoute;
-  "/admin/super-dashboard": typeof AdminSuperDashboardRoute;
+  '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/dashboard': typeof DashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/wizard': typeof WizardRoute
+  '/admin/sandbox': typeof AdminSandboxRoute
+  '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/billing": typeof BillingRoute;
-  "/dashboard": typeof DashboardRoute;
-  "/reset-password": typeof ResetPasswordRoute;
-  "/verify-email": typeof VerifyEmailRoute;
-  "/wizard": typeof WizardRoute;
-  "/admin/sandbox": typeof AdminSandboxRoute;
-  "/admin/super-dashboard": typeof AdminSuperDashboardRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
+  '/dashboard': typeof DashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/verify-email': typeof VerifyEmailRoute
+  '/wizard': typeof WizardRoute
+  '/admin/sandbox': typeof AdminSandboxRoute
+  '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | "/"
-    | "/billing"
-    | "/dashboard"
-    | "/reset-password"
-    | "/verify-email"
-    | "/wizard"
-    | "/admin/sandbox"
-    | "/admin/super-dashboard";
-  fileRoutesByTo: FileRoutesByTo;
+    | '/'
+    | '/billing'
+    | '/dashboard'
+    | '/reset-password'
+    | '/verify-email'
+    | '/wizard'
+    | '/admin/sandbox'
+    | '/admin/super-dashboard'
+  fileRoutesByTo: FileRoutesByTo
   to:
-    | "/"
-    | "/billing"
-    | "/dashboard"
-    | "/reset-password"
-    | "/verify-email"
-    | "/wizard"
-    | "/admin/sandbox"
-    | "/admin/super-dashboard";
+    | '/'
+    | '/billing'
+    | '/dashboard'
+    | '/reset-password'
+    | '/verify-email'
+    | '/wizard'
+    | '/admin/sandbox'
+    | '/admin/super-dashboard'
   id:
-    | "__root__"
-    | "/"
-    | "/billing"
-    | "/dashboard"
-    | "/reset-password"
-    | "/verify-email"
-    | "/wizard"
-    | "/admin/sandbox"
-    | "/admin/super-dashboard";
-  fileRoutesById: FileRoutesById;
+    | '__root__'
+    | '/'
+    | '/billing'
+    | '/dashboard'
+    | '/reset-password'
+    | '/verify-email'
+    | '/wizard'
+    | '/admin/sandbox'
+    | '/admin/super-dashboard'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  BillingRoute: typeof BillingRoute;
-  DashboardRoute: typeof DashboardRoute;
-  ResetPasswordRoute: typeof ResetPasswordRoute;
-  VerifyEmailRoute: typeof VerifyEmailRoute;
-  WizardRoute: typeof WizardRoute;
-  AdminSandboxRoute: typeof AdminSandboxRoute;
-  AdminSuperDashboardRoute: typeof AdminSuperDashboardRoute;
+  IndexRoute: typeof IndexRoute
+  BillingRoute: typeof BillingRoute
+  DashboardRoute: typeof DashboardRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
+  WizardRoute: typeof WizardRoute
+  AdminSandboxRoute: typeof AdminSandboxRoute
+  AdminSuperDashboardRoute: typeof AdminSuperDashboardRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/billing": {
-      id: "/billing";
-      path: "/billing";
-      fullPath: "/billing";
-      preLoaderRoute: typeof BillingRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/dashboard": {
-      id: "/dashboard";
-      path: "/dashboard";
-      fullPath: "/dashboard";
-      preLoaderRoute: typeof DashboardRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/reset-password": {
-      id: "/reset-password";
-      path: "/reset-password";
-      fullPath: "/reset-password";
-      preLoaderRoute: typeof ResetPasswordRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/verify-email": {
-      id: "/verify-email";
-      path: "/verify-email";
-      fullPath: "/verify-email";
-      preLoaderRoute: typeof VerifyEmailRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/wizard": {
-      id: "/wizard";
-      path: "/wizard";
-      fullPath: "/wizard";
-      preLoaderRoute: typeof WizardRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/admin/sandbox": {
-      id: "/admin/sandbox";
-      path: "/admin/sandbox";
-      fullPath: "/admin/sandbox";
-      preLoaderRoute: typeof AdminSandboxRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/admin/super-dashboard": {
-      id: "/admin/super-dashboard";
-      path: "/admin/super-dashboard";
-      fullPath: "/admin/super-dashboard";
-      preLoaderRoute: typeof AdminSuperDashboardRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing': {
+      id: '/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof BillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wizard': {
+      id: '/wizard'
+      path: '/wizard'
+      fullPath: '/wizard'
+      preLoaderRoute: typeof WizardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/sandbox': {
+      id: '/admin/sandbox'
+      path: '/admin/sandbox'
+      fullPath: '/admin/sandbox'
+      preLoaderRoute: typeof AdminSandboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/super-dashboard': {
+      id: '/admin/super-dashboard'
+      path: '/admin/super-dashboard'
+      fullPath: '/admin/super-dashboard'
+      preLoaderRoute: typeof AdminSuperDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,17 +204,17 @@ const rootRouteChildren: RootRouteChildren = {
   WizardRoute: WizardRoute,
   AdminSandboxRoute: AdminSandboxRoute,
   AdminSuperDashboardRoute: AdminSuperDashboardRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { startInstance } from "./start.ts";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

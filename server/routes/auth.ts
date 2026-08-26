@@ -303,9 +303,14 @@ authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => 
     // 3. Revoke all active sessions and refresh tokens for this user in tokenStore (Redis)
     // If Redis fails or is unavailable, this throws StoreUnavailableError -> caught -> 503
     // DB has NOT been touched, so password is NOT updated and token remains valid!
+
     await tokenStore.revokeAllUserTokens(tokenRecord.userId);
 
-    // 4. Update user's password, increment authVersion, and consume reset token atomically in DB
+    // Note: authVersion is atomically incremented inside resetPasswordWithToken
+    // to invalidate existing access tokens globally.
+
+    // 4. Update user's password and consume reset token in DB
+
     const { hash: newPasswordHash, salt: newSalt } = hashPassword(newPassword);
     const result = await db.resetPasswordWithToken(tokenHash, newPasswordHash, newSalt);
 

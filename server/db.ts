@@ -137,15 +137,22 @@ export class DatabaseStore implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber">>,
   ): Promise<UserRecord | null> {
     const user = this.users.get(userId);
     if (!user) return null;
+
     user.passwordHash = passwordHash;
     user.salt = salt;
     user.authVersion = (user.authVersion || 0) + 1;
     user.updatedAt = new Date().toISOString();
+
+    if (profileUpdates?.fullName !== undefined) user.fullName = profileUpdates.fullName;
+    if (profileUpdates?.email !== undefined) user.email = profileUpdates.email;
+    if (profileUpdates?.phoneNumber !== undefined) user.phoneNumber = profileUpdates.phoneNumber;
+
     this.users.set(userId, user);
-    return user;
+    return { ...user };
   }
 
   public async findUserById(id: string): Promise<UserRecord | null> {

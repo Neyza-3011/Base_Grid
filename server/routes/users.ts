@@ -88,45 +88,50 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
 
     const { hash, salt } = hashPassword(password);
-
-    try {
-      // 6. Single atomic DB operation: updates passwordHash, salt, increments authVersion, and updates timestamp
-      const updatedUser = await db.updatePasswordAndIncrementAuthVersion(req.user.id, hash, salt);
-      if (!updatedUser) {
-        res.status(500).json({ detail: "Impossibile aggiornare la password." });
-        return;
-      }
-
-      // Apply any additional profile updates if present (e.g. fullName, phoneNumber, email)
-      if (Object.keys(updates).length > 0) {
-        await db.updateUser(req.user.id, updates);
-      }
-
-      // 7. Clear cookies
-      res.clearCookie("access_token", { path: "/" });
-      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
-      res.clearCookie("csrf_token", { path: "/" });
-
-      // 8. Safe response
-      const finalUser = await db.findUserById(req.user.id);
-      res.status(200).json(toSafeUserSession(finalUser || updatedUser));
-      return;
-    } catch (err: any) {
-      res.status(500).json({ detail: "Impossibile aggiornare la password." });
-      return;
-    }
+    updates.passwordHash = hash;
+    updates.salt = salt;
   }
 
   if (phone_number !== undefined) {
     updates.phoneNumber = phone_number;
   }
 
-  // Normal profile update without password change (authVersion MUST NOT change)
   try {
-    const updatedUser = await db.updateUser(req.user.id, updates);
-    if (!updatedUser) {
-      res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
-      return;
+    let updatedUser;
+
+    if (password && typeof password === "string") {
+      // Atomic: password + authVersion + any profile fields in a single DB operation
+      const profileUpdates: Partial<Pick<import("./types").UserRecord, "fullName" | "email" | "phoneNumber">> = {};
+      if (updates.fullName !== undefined) profileUpdates.fullName = updates.fullName;
+      if (updates.email !== undefined) profileUpdates.email = updates.email;
+      if (updates.phoneNumber !== undefined) profileUpdates.phoneNumber = updates.phoneNumber;
+
+      updatedUser = await db.updatePasswordAndIncrementAuthVersion(
+        req.user.id,
+        updates.passwordHash,
+        updates.salt,
+        Object.keys(profileUpdates).length > 0 ? profileUpdates : undefined,
+      );
+
+      if (!updatedUser) {
+        res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
+        return;
+      }
+
+      res.clearCookie("access_token", { path: "/" });
+      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+      res.clearCookie("csrf_token", { path: "/" });
+    } else {
+      // Profile-only update: no password change, no authVersion increment
+      if (Object.keys(updates).length === 0) {
+        res.status(200).json(toSafeUserSession(req.user));
+        return;
+      }
+      updatedUser = await db.updateUser(req.user.id, updates);
+      if (!updatedUser) {
+        res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
+        return;
+      }
     }
 
     res.status(200).json(toSafeUserSession(updatedUser));

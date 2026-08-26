@@ -101,6 +101,7 @@ export interface IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber">>,
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
@@ -367,19 +368,39 @@ export class PostgresAdapter implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber">>,
   ): Promise<UserRecord | null> {
     try {
       const now = new Date().toISOString();
-      const res = await this.pool.query(
-        `UPDATE users
-         SET "passwordHash" = $1,
-             salt = $2,
-             "authVersion" = "authVersion" + 1,
-             "updatedAt" = $3
-         WHERE id = $4
-         RETURNING *`,
-        [passwordHash, salt, now, userId],
-      );
+      const setClauses = [
+        '"passwordHash" = $1',
+        'salt = $2',
+        '"authVersion" = "authVersion" + 1',
+        '"updatedAt" = $3',
+      ];
+      const params: any[] = [passwordHash, salt, now];
+      let paramIndex = 4;
+
+      if (profileUpdates?.fullName !== undefined) {
+        setClauses.push(`"fullName" = $${paramIndex}`);
+        params.push(profileUpdates.fullName);
+        paramIndex++;
+      }
+      if (profileUpdates?.email !== undefined) {
+        setClauses.push(`email = $${paramIndex}`);
+        params.push(profileUpdates.email);
+        paramIndex++;
+      }
+      if (profileUpdates?.phoneNumber !== undefined) {
+        setClauses.push(`"phoneNumber" = $${paramIndex}`);
+        params.push(profileUpdates.phoneNumber);
+        paramIndex++;
+      }
+
+      params.push(userId);
+      const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${paramIndex} RETURNING *`;
+
+      const res = await this.pool.query(sql, params);
       if (!res.rows[0]) return null;
       return mapUserRow(res.rows[0]);
     } catch (err) {
