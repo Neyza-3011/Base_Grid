@@ -1,3 +1,4 @@
+import { rateLimiter } from "./rate-limiter";
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import http from "http";
 import jwt from "jsonwebtoken";
@@ -80,6 +81,8 @@ async function apiRequest(
 }
 
 describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async () => {
+  beforeEach(() => { (rateLimiter as any).localFallback.clear(); });
+
   describe("1. Registration (/api/v1/auth/register)", async () => {
     it("creates new user & company and sets HttpOnly cookies without leaking token in JSON body", async () => {
       const res = await apiRequest("/api/v1/auth/register", {

@@ -10,12 +10,16 @@ import { reportsRouter } from "./routes/reports";
 import { verifyCsrf } from "./middleware/auth";
 import { assertValidJwtSecret } from "./security";
 import { config } from "./config";
+import { generalApiLimiter } from "./rate-limiter";
 
 export function createApp(): Express {
   // Validate JWT Secret configuration on application initialization / startup
   assertValidJwtSecret();
 
   const app = express();
+  
+  // Trust the first proxy to safely use req.ip for rate limiting in production (e.g. Render/Cloud Run)
+  app.set("trust proxy", 1);
 
   // Basic security and parsing middlewares
   app.use(
@@ -31,7 +35,7 @@ export function createApp(): Express {
   // Global CSRF verification middleware for state-changing requests
   app.use(verifyCsrf);
 
-  // Health check
+  // Health check - should not be rate-limited by general API limiter
   app.get("/health", (_req: Request, res: Response) => {
     res.json({
       status: "healthy",
@@ -39,6 +43,9 @@ export function createApp(): Express {
       service: "BaseGrid Server-Authoritative Backend",
     });
   });
+
+  // Apply general API rate limiter to all /api routes
+  app.use("/api", generalApiLimiter);
 
   // API V1 Routes
   app.use("/api/v1/auth", authRouter);

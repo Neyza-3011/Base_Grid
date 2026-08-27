@@ -18,6 +18,14 @@ import { tokenStore, StoreUnavailableError } from "../token-store";
 import { authenticate } from "../middleware/auth";
 import { emailService } from "../email-service";
 import { config } from "../config";
+import { 
+  loginLimiter, 
+  registerLimiter, 
+  refreshLimiter, 
+  forgotPasswordLimiter, 
+  resetPasswordLimiter, 
+  googleAuthLimiter 
+} from "../rate-limiter";
 
 export const authRouter = Router();
 
@@ -29,7 +37,7 @@ const cookieSettings = getCookieSettings(isProduction);
  * Creates a new user & company, creates persistent email verification token, sends verification email,
  * issues HttpOnly session & refresh cookies with rotation registration.
  */
-authRouter.post("/register", async (req: any, res: any): Promise<void> => {
+authRouter.post("/register", registerLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const { email, password, full_name, company_name, phone_number } = req.body;
 
@@ -208,7 +216,7 @@ authRouter.post("/resend-verification", async (req: any, res: any): Promise<void
  * POST /api/v1/auth/forgot-password
  * Initiates password reset flow. Responds indistinguishably to prevent user enumeration.
  */
-authRouter.post("/forgot-password", async (req: any, res: any): Promise<void> => {
+authRouter.post("/forgot-password", forgotPasswordLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== "string") {
@@ -258,7 +266,7 @@ authRouter.post("/forgot-password", async (req: any, res: any): Promise<void> =>
  * Completes password reset using single-use hashed reset token.
  * Updates password and revokes all existing refresh tokens/sessions across devices.
  */
-authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => {
+authRouter.post("/reset-password", resetPasswordLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const { token } = req.body;
     const newPassword = req.body.new_password || req.body.newPassword;
@@ -350,7 +358,7 @@ authRouter.post("/reset-password", async (req: any, res: any): Promise<void> => 
  * POST /api/v1/auth/login
  * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
  */
-authRouter.post("/login", async (req: any, res: any): Promise<void> => {
+authRouter.post("/login", loginLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -426,7 +434,7 @@ authRouter.get("/session", authenticate, async (req: any, res: any): Promise<voi
  * POST /api/v1/auth/refresh
  * Single-Use Refresh Token rotation with atomic consumption, replay attack detection, and fail-closed storage handling.
  */
-authRouter.post("/refresh", async (req: any, res: any): Promise<void> => {
+authRouter.post("/refresh", refreshLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
@@ -525,7 +533,7 @@ authRouter.post("/logout", async (req: any, res: any): Promise<void> => {
  * POST /api/v1/auth/google
  * Server-authoritative Google OAuth authentication with token store registration.
  */
-authRouter.post("/google", async (req: any, res: any): Promise<void> => {
+authRouter.post("/google", googleAuthLimiter, async (req: any, res: any): Promise<void> => {
   try {
     const { email, fullName, companyName } = req.body;
 
