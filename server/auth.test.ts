@@ -1857,6 +1857,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         },
       });
       expect(loginRes.status).toBe(200);
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const refreshCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
@@ -1912,6 +1913,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -1941,6 +1943,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -1973,6 +1976,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -1996,6 +2000,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -2030,6 +2035,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -2064,6 +2070,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie!.split(";")[0].split("=")[1];
@@ -2121,6 +2128,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         method: "POST",
         body: { email: "tech@rossi.it", password: "Password123!" },
       });
+      console.log("LOGIN RES:", loginRes.status, loginRes.body);
       const accessCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="));
       const csrfCookie = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
       const accessToken = accessCookie.split(";")[0].split("=")[1];

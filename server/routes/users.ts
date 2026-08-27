@@ -31,11 +31,19 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
   const { full_name, email, password, current_password, phone_number } = req.body;
   const updates: any = {};
 
-  if (full_name && typeof full_name === "string") {
+  if (full_name !== undefined) {
+    if (typeof full_name !== "string" || full_name.trim().length < 2 || full_name.trim().length > 100) {
+      res.status(400).json({ detail: "Nome non valido. Deve essere tra 2 e 100 caratteri." });
+      return;
+    }
     updates.fullName = full_name.trim();
   }
 
-  if (email && typeof email === "string") {
+  if (email !== undefined) {
+    if (typeof email !== "string") {
+      res.status(400).json({ detail: "Formato email non valido." });
+      return;
+    }
     const normalized = normalizeEmail(email);
     if (!isValidEmail(normalized)) {
       res.status(400).json({ detail: "Formato email non valido." });
@@ -52,7 +60,11 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
   }
 
-  if (password && typeof password === "string") {
+  if (password !== undefined) {
+    if (typeof password !== "string") {
+      res.status(400).json({ detail: "Password non valida." });
+      return;
+    }
     if (!current_password || typeof current_password !== "string") {
       res.status(400).json({ detail: "La password corrente è obbligatoria per impostare una nuova password." });
       return;
@@ -93,7 +105,11 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
   }
 
   if (phone_number !== undefined) {
-    updates.phoneNumber = phone_number;
+    if (typeof phone_number !== "string" || phone_number.trim().length > 20) {
+      res.status(400).json({ detail: "Numero di telefono non valido." });
+      return;
+    }
+    updates.phoneNumber = phone_number.trim();
   }
 
   try {
@@ -101,7 +117,7 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
 
     if (password && typeof password === "string") {
       // Atomic: password + authVersion + any profile fields in a single DB operation
-      const profileUpdates: Partial<Pick<import("./types").UserRecord, "fullName" | "email" | "phoneNumber">> = {};
+      const profileUpdates: Partial<Pick<import("../types").UserRecord, "fullName" | "email" | "phoneNumber">> = {};
       if (updates.fullName !== undefined) profileUpdates.fullName = updates.fullName;
       if (updates.email !== undefined) profileUpdates.email = updates.email;
       if (updates.phoneNumber !== undefined) profileUpdates.phoneNumber = updates.phoneNumber;
@@ -117,7 +133,6 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
         res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
         return;
       }
-
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/api/v1/auth" });
       res.clearCookie("csrf_token", { path: "/" });
@@ -143,4 +158,3 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
   }
 });
-

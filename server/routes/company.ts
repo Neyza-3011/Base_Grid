@@ -57,16 +57,58 @@ companyRouter.put(
     } = req.body;
 
     const updates: any = {};
-    if (name !== undefined) updates.name = String(name).trim();
-    if (vat_number !== undefined) updates.vatNumber = String(vat_number).trim();
-    if (address !== undefined) updates.address = String(address).trim();
-    if (default_hourly_rate !== undefined) updates.defaultHourlyRate = Number(default_hourly_rate) || 0;
-    if (report_footer_notes !== undefined) updates.reportFooterNotes = String(report_footer_notes);
+
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100) {
+        res.status(400).json({ detail: "Nome azienda non valido." });
+        return;
+      }
+      updates.name = name.trim();
+    }
+
+    if (vat_number !== undefined) {
+      if (typeof vat_number !== "string" || vat_number.trim().length > 50) {
+        res.status(400).json({ detail: "Partita IVA non valida." });
+        return;
+      }
+      updates.vatNumber = vat_number.trim();
+    }
+
+    if (address !== undefined) {
+      if (typeof address !== "string" || address.trim().length > 255) {
+        res.status(400).json({ detail: "Indirizzo non valido." });
+        return;
+      }
+      updates.address = address.trim();
+    }
+
+    if (default_hourly_rate !== undefined) {
+      const rate = Number(default_hourly_rate);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 10000) {
+        res.status(400).json({ detail: "Tariffa oraria non valida." });
+        return;
+      }
+      updates.defaultHourlyRate = rate;
+    }
+
+    if (report_footer_notes !== undefined) {
+      if (typeof report_footer_notes !== "string" || report_footer_notes.trim().length > 1000) {
+         res.status(400).json({ detail: "Note a piè di pagina troppo lunghe." });
+         return;
+      }
+      updates.reportFooterNotes = report_footer_notes.trim();
+    }
+
     if (stripe_subscription_status !== undefined && req.user.role === "superadmin") {
-      updates.stripeSubscriptionStatus = String(stripe_subscription_status);
+      if (typeof stripe_subscription_status !== "string" || stripe_subscription_status.trim().length > 50) {
+         res.status(400).json({ detail: "Stato abbonamento non valido." });
+         return;
+      }
+      updates.stripeSubscriptionStatus = stripe_subscription_status.trim();
     }
 
     const updated = await db.updateCompany(req.user.companyId, updates);
+
     if (!updated) {
       res.status(500).json({ detail: "Impossibile aggiornare i dati aziendali." });
       return;
