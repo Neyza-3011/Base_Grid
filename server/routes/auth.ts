@@ -20,6 +20,7 @@ import { emailService } from "../email-service";
 import { config } from "../config";
 import { 
   loginLimiter, 
+  loginAccountLimiter,
   registerLimiter, 
   refreshLimiter, 
   forgotPasswordLimiter, 
@@ -358,7 +359,7 @@ authRouter.post("/reset-password", resetPasswordLimiter, async (req: any, res: a
  * POST /api/v1/auth/login
  * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
  */
-authRouter.post("/login", loginLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/login", [loginLimiter, loginAccountLimiter], async (req: any, res: any): Promise<void> => {
   try {
     const { email, password } = req.body;
 

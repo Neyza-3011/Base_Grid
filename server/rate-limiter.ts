@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { config } from "./config";
+import crypto from "crypto";
 
 export interface RateLimiterConfig {
   points: number;
@@ -17,7 +18,7 @@ class RateLimiter {
   constructor() {
     if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       const options = {
-        lazyConnect: true,
+        lazyConnect: false,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
       };
@@ -123,6 +124,17 @@ class RateLimiter {
       next();
     };
   }
+  public async getRedisClient(): Promise<Redis | null> {
+    if (this.redisClient) {
+      try {
+        if (this.redisClient.status === "wait") {
+          await this.redisClient.connect().catch(() => {});
+        }
+      } catch (err) {}
+    }
+    return this.redisClient;
+  }
+
   public close() {
     if (this.redisClient) {
       this.redisClient.quit();
@@ -132,12 +144,32 @@ class RateLimiter {
 
 export const rateLimiter = new RateLimiter();
 
+// Optional helper class for distributed testing in the same process
+export class TestRateLimiter extends RateLimiter {}
+
+export function getEmailHashKey(req: Request): string {
+  const email = req.body?.email;
+  if (!email || typeof email !== "string") {
+    return rateLimiter["getClientIp"](req);
+  }
+  const normalized = email.toLowerCase().trim();
+  // Hash email to avoid leaking PII in Redis keys
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
+
 export const loginLimiter = rateLimiter.middleware({
   points: 10,
   duration: 15 * 60, // 15 minutes
   keyPrefix: "rl:login",
   errorMessage: "Troppi tentativi di accesso. Riprova tra 15 minuti.",
 });
+
+export const loginAccountLimiter = rateLimiter.middleware({
+  points: 10,
+  duration: 15 * 60, // 15 minutes per account
+  keyPrefix: "rl:login:acct",
+  errorMessage: "Troppi tentativi di accesso per questo account. Riprova tra 15 minuti.",
+}, getEmailHashKey);
 
 export const registerLimiter = rateLimiter.middleware({
   points: 5,
@@ -151,7 +183,7 @@ export const refreshLimiter = rateLimiter.middleware({
   duration: 60, // 1 minute
   keyPrefix: "rl:refresh",
   errorMessage: "Troppi tentativi di refresh. Riprova tra un minuto.",
-  failClosed: false, // Don't aggressively fail closed if it's just refreshing, let the app degrade gracefully or maybe fail closed? Better safe. Let's keep default true.
+  failClosed: true, // MUST fail closed for security (refresh is sensitive and tokenStore is already fail-closed)
 });
 
 export const forgotPasswordLimiter = rateLimiter.middleware({

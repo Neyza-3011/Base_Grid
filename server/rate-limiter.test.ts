@@ -86,4 +86,60 @@ describe("Rate Limiter Middleware", () => {
       expect(res.status).toBe(200);
     }
   });
+
+  it("5. refresh Redis unavailable - should fail closed in production", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const { refreshLimiter } = await import("./rate-limiter");
+    app.post("/refresh", refreshLimiter, (req, res) => { res.status(200).send("OK"); });
+    
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = null; // simulate offline
+    
+    try {
+      const res = await request(app).post("/refresh").set("X-Test-RateLimit", "enable");
+      expect(res.status).toBe(503);
+      expect(res.body.detail).toContain("Servizio temporaneamente non disponibile");
+    } finally {
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
+  it("6. general API fail-open - should fail open if Redis is offline in production", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const { generalApiLimiter } = await import("./rate-limiter");
+    app.get("/api", generalApiLimiter, (req, res) => { res.status(200).send("OK"); });
+    
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = null;
+    
+    try {
+      const res = await request(app).get("/api").set("X-Test-RateLimit", "enable");
+      // Since it's failOpen (failClosed: false), it should proceed and return 200
+      expect(res.status).toBe(200);
+    } finally {
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
+  it("11. trusted proxy behavior - uses X-Forwarded-For when trust proxy is set", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 1, duration: 60 });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+
+    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "123.123.123.123");
+    expect(res1.status).toBe(200);
+    
+    // Using same IP should block
+    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "123.123.123.123");
+    expect(res2.status).toBe(429);
+  });
 });

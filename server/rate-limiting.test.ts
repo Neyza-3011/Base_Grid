@@ -56,4 +56,26 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
     const healthRes = await request(app).get("/health");
     expect(healthRes.status).toBe(200);
   });
+
+  it("should return 429 when login email/account limit is exceeded independently of IP", async () => {
+    // 10 requests from different IPs (spoofted via X-Forwarded-For) but same email
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", `192.168.2.${i}`)
+        .send({ email: "target@rossi.it", password: "wrong" });
+      expect(res.status).not.toBe(429);
+    }
+    
+    // 11th request from another IP but SAME email should be blocked by account limiter
+    const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", `192.168.2.11`)
+        .send({ email: "target@rossi.it", password: "wrong" });
+        
+    expect(res.status).toBe(429);
+    expect(res.body.detail).toContain("account");
+  });
 });
