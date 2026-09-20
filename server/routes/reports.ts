@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { isValidCalendarDate, isValidTime, validateSignatureBase64 } from "../validation";
+import { asyncHandler } from "../async-handler";
 
 export const reportsRouter = Router();
 reportsRouter.use(authenticate);
@@ -14,7 +15,7 @@ function isValidId(id: any): boolean {
  * GET /api/v1/reports
  * Returns reports strictly belonging to the authenticated user's company (tenant isolation).
  */
-reportsRouter.get("/", async (req: any, res: any): Promise<void> => {
+reportsRouter.get("/", asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -46,13 +47,13 @@ reportsRouter.get("/", async (req: any, res: any): Promise<void> => {
     created_at: r.createdAt,
   }));
   res.status(200).json(responseData);
-});
+}));
 
 /**
  * POST /api/v1/reports
  * Creates a report linked strictly to the user's company (tenant isolation).
  */
-reportsRouter.post("/", async (req: any, res: any): Promise<void> => {
+reportsRouter.post("/", asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -231,13 +232,13 @@ reportsRouter.post("/", async (req: any, res: any): Promise<void> => {
     notes: newReport.notes,
     created_at: newReport.createdAt,
   });
-});
+}));
 
 /**
  * DELETE /api/v1/reports/:id
  * Deletes a report strictly if it belongs to the user's company.
  */
-reportsRouter.delete("/:id", async (req: any, res: any): Promise<void> => {
+reportsRouter.delete("/:id", asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -254,13 +255,13 @@ reportsRouter.delete("/:id", async (req: any, res: any): Promise<void> => {
   }
 
   res.status(200).json({ message: "Rapportino eliminato con successo." });
-});
+}));
 
 /**
  * GET /api/v1/reports/:id/pdf
  * Generates/returns PDF preview info
  */
-reportsRouter.get("/:id/pdf", async (req: any, res: any): Promise<void> => {
+reportsRouter.get("/:id/pdf", asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -278,4 +279,4 @@ reportsRouter.get("/:id/pdf", async (req: any, res: any): Promise<void> => {
 
   res.setHeader("Content-Type", "application/pdf");
   res.send(Buffer.from("%PDF-1.4 Mock BaseGrid PDF Document per Rapportino " + reportId));
-});
+}));

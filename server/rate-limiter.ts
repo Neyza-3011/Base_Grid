@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { config } from "./config";
 import crypto from "crypto";
+import { asyncHandler } from "./async-handler";
 
 export interface RateLimiterConfig {
   points: number;
@@ -45,7 +46,7 @@ class RateLimiter {
   public middleware(configOpts: RateLimiterConfig, keyGenerator?: (req: Request) => string) {
     const { points, duration, failClosed = true } = configOpts;
 
-    return async (req: Request, res: Response, next: NextFunction) => {
+    return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
       // Bypass rate limiting in test environment by default to avoid breaking existing test suites,
       // unless specifically testing the rate limiter (signaled by a custom header).
       const isTestEnv = config.NODE_ENV === "test" || process.env.NODE_ENV === "test" || process.env.VITEST === "true";
@@ -122,7 +123,7 @@ class RateLimiter {
       }
 
       next();
-    };
+    });
   }
   public async getRedisClient(): Promise<Redis | null> {
     if (this.redisClient) {

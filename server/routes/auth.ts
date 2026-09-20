@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { asyncHandler } from "../async-handler";
 import {
   generateCsrfToken,
   generateSecureToken,
@@ -38,7 +39,7 @@ const cookieSettings = getCookieSettings(isProduction);
  * Creates a new user & company, creates persistent email verification token, sends verification email,
  * issues HttpOnly session & refresh cookies with rotation registration.
  */
-authRouter.post("/register", registerLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email, password, full_name, company_name, phone_number } = req.body;
 
@@ -131,13 +132,13 @@ authRouter.post("/register", registerLimiter, async (req: any, res: any): Promis
     }
     res.status(500).json({ detail: "Errore interno durante la registrazione." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/verify-email
  * Verifies user's email address using single-use hashed verification token.
  */
-authRouter.post("/verify-email", async (req: any, res: any): Promise<void> => {
+authRouter.post("/verify-email", asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { token } = req.body;
 
@@ -171,13 +172,13 @@ authRouter.post("/verify-email", async (req: any, res: any): Promise<void> => {
   } catch (error) {
     res.status(500).json({ detail: "Errore durante la verifica dell'email." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/resend-verification
  * Resends verification email with new single-use token. Responds identically to prevent email enumeration.
  */
-authRouter.post("/resend-verification", async (req: any, res: any): Promise<void> => {
+authRouter.post("/resend-verification", asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
     if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
@@ -215,13 +216,13 @@ authRouter.post("/resend-verification", async (req: any, res: any): Promise<void
   } catch (error) {
     res.status(500).json({ detail: "Errore durante l'invio dell'email di verifica." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/forgot-password
  * Initiates password reset flow. Responds indistinguishably to prevent user enumeration.
  */
-authRouter.post("/forgot-password", forgotPasswordLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/forgot-password", forgotPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== "string") {
@@ -264,14 +265,14 @@ authRouter.post("/forgot-password", forgotPasswordLimiter, async (req: any, res:
   } catch (error) {
     res.status(500).json({ detail: "Errore durante la richiesta di reimpostazione password." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/reset-password
  * Completes password reset using single-use hashed reset token.
  * Updates password and revokes all existing refresh tokens/sessions across devices.
  */
-authRouter.post("/reset-password", resetPasswordLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { token } = req.body;
     const newPassword = req.body.new_password || req.body.newPassword;
@@ -357,13 +358,13 @@ authRouter.post("/reset-password", resetPasswordLimiter, async (req: any, res: a
     }
     res.status(500).json({ detail: "Errore durante la reimpostazione della password." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/login
  * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
  */
-authRouter.post("/login", [loginLimiter, loginAccountLimiter], async (req: any, res: any): Promise<void> => {
+authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -414,13 +415,13 @@ authRouter.post("/login", [loginLimiter, loginAccountLimiter], async (req: any, 
     }
     res.status(500).json({ detail: "Errore interno del server durante il login." });
   }
-});
+}));
 
 /**
  * GET /api/v1/auth/session
  * Server-authoritative session identification using verified access_token cookie.
  */
-authRouter.get("/session", authenticate, async (req: any, res: any): Promise<void> => {
+authRouter.get("/session", authenticate, asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Sessione non valida." });
     return;
@@ -433,13 +434,13 @@ authRouter.get("/session", authenticate, async (req: any, res: any): Promise<voi
   }
 
   res.status(200).json(toSafeUserSession(req.user));
-});
+}));
 
 /**
  * POST /api/v1/auth/refresh
  * Single-Use Refresh Token rotation with atomic consumption, replay attack detection, and fail-closed storage handling.
  */
-authRouter.post("/refresh", refreshLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
@@ -511,13 +512,13 @@ authRouter.post("/refresh", refreshLimiter, async (req: any, res: any): Promise<
     }
     res.status(500).json({ detail: "Errore durante il rinnovo della sessione." });
   }
-});
+}));
 
 /**
  * POST /api/v1/auth/logout
  * Atomically revokes refresh token in persistent store and clears HttpOnly cookies.
  */
-authRouter.post("/logout", async (req: any, res: any): Promise<void> => {
+authRouter.post("/logout", asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refresh_token;
     if (refreshToken && tokenStore.isAvailable()) {
@@ -532,13 +533,13 @@ authRouter.post("/logout", async (req: any, res: any): Promise<void> => {
   res.clearCookie("csrf_token", { path: "/" });
 
   res.status(200).json({ message: "Logout effettuato con successo." });
-});
+}));
 
 /**
  * POST /api/v1/auth/google
  * Server-authoritative Google OAuth authentication with token store registration.
  */
-authRouter.post("/google", googleAuthLimiter, async (req: any, res: any): Promise<void> => {
+authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email, fullName, companyName } = req.body;
 
@@ -581,18 +582,18 @@ authRouter.post("/google", googleAuthLimiter, async (req: any, res: any): Promis
     }
     res.status(500).json({ detail: "Errore durante l'autenticazione Google." });
   }
-});
+}));
 
 /**
  * GET /api/v1/auth/csrf-token
  * Issues/returns current CSRF token cookie for frontend clients.
  */
-authRouter.get("/csrf-token", async (req: any, res: any): Promise<void> => {
+authRouter.get("/csrf-token", asyncHandler(async (req: any, res: any): Promise<void> => {
   let token = req.cookies?.csrf_token;
   if (!token) {
     token = generateCsrfToken();
     res.cookie("csrf_token", token, cookieSettings.csrfCookie);
   }
   res.status(200).json({ csrfToken: token });
-});
+}));
 

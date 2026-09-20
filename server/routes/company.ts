@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth";
 import { db } from "../db";
+import { asyncHandler } from "../async-handler";
 
 export const companyRouter = Router();
 
@@ -8,7 +9,7 @@ export const companyRouter = Router();
  * GET /api/v1/company/settings
  * Multi-tenant company settings read
  */
-companyRouter.get("/settings", authenticate, async (req: any, res: any): Promise<void> => {
+companyRouter.get("/settings", authenticate, asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -31,7 +32,7 @@ companyRouter.get("/settings", authenticate, async (req: any, res: any): Promise
     max_users: company.maxUsers,
     feature_pdf_export: company.featurePdfExport,
   });
-});
+}));
 
 /**
  * PUT /api/v1/company/settings
@@ -41,7 +42,7 @@ companyRouter.put(
   "/settings",
   authenticate,
   requireRole(["admin", "superadmin"]),
-  async (req: any, res: any): Promise<void> => {
+  asyncHandler(async (req: any, res: any): Promise<void> => {
     if (!req.user) {
       res.status(401).json({ detail: "Non autenticato." });
       return;
@@ -123,5 +124,5 @@ companyRouter.put(
       report_footer_notes: updated.reportFooterNotes,
       stripe_subscription_status: updated.stripeSubscriptionStatus,
     });
-  },
+  }),
 );

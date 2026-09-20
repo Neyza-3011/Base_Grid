@@ -3,6 +3,7 @@ import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { hashPassword, isValidEmail, normalizeEmail, toSafeUserSession, verifyPassword, validatePasswordPolicy } from "../security";
 import { tokenStore } from "../token-store";
+import { asyncHandler } from "../async-handler";
 
 export const usersRouter = Router();
 
@@ -22,7 +23,7 @@ usersRouter.get("/me", authenticate, (req: any, res: any): void => {
  * PUT /api/v1/users/me
  * Updates current authenticated user profile
  */
-usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> => {
+usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ detail: "Non autenticato." });
     return;
@@ -157,4 +158,4 @@ usersRouter.put("/me", authenticate, async (req: any, res: any): Promise<void> =
     }
     res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
   }
-});
+}));

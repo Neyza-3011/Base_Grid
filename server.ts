@@ -6,6 +6,7 @@ import httpProxy from "http-proxy";
 import { createApp } from "./server/app";
 import { db } from "./server/db";
 import { tokenStore } from "./server/token-store";
+import { asyncHandler } from "./server/async-handler";
 
 
 // Dynamically import Vite if not in production
@@ -46,7 +47,7 @@ async function startServer() {
     app.use(vite.middlewares);
 
     // SSR handler for all frontend routes not handled by Express/API
-    app.use(async (req, res, next) => {
+    app.use(asyncHandler(async (req, res, next) => {
       // Never intercept /api/* or /health if somehow reached
       if (req.path.startsWith("/api") || req.path === "/health") {
         return next();
@@ -160,7 +161,7 @@ async function startServer() {
           res.end();
         }
       }
-    });
+    }));
   } else {
     // In production, start the Nitro server on a different port and proxy to it
     const { spawn } = await import("child_process");

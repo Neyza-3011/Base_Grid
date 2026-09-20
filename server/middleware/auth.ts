@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../security";
 import { db } from "../db";
 import { CompanyRecord, UserRecord, UserRole } from "../types";
+import { asyncHandler } from "../async-handler";
 
 // Extend Express Request interface to include authenticated user and company
 declare global {
@@ -18,7 +19,7 @@ declare global {
  * Strictly server-authoritative. Reads access_token from HttpOnly cookie,
  * verifies signature, claims, user existence and active status.
  */
-export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+export const authenticate = asyncHandler(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const token = req.cookies?.access_token;
   if (!token) {
     res.status(401).json({ detail: "Non autenticato o sessione scaduta." });
@@ -59,12 +60,12 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   req.user = user;
   req.company = company;
   next();
-}
+});
 
 /**
  * Optional authentication: Populates req.user if valid token present, but doesn't block.
  */
-export async function optionalAuthenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+export const optionalAuthenticate = asyncHandler(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const token = req.cookies?.access_token;
   if (!token) {
     return next();
@@ -87,7 +88,7 @@ export async function optionalAuthenticate(req: Request, res: Response, next: Ne
 
   }
   next();
-}
+});
 
 /**
  * Authorization Middleware: Enforce minimum required role(s)
