@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
-import { isValidCalendarDate, isValidTime } from "../validation";
+import { isValidCalendarDate, isValidTime, validateSignatureBase64 } from "../validation";
 
 export const reportsRouter = Router();
 reportsRouter.use(authenticate);
@@ -177,35 +177,23 @@ reportsRouter.post("/", async (req: any, res: any): Promise<void> => {
         res.status(400).json({ detail: "Nome materiale non valido o vuoto (massimo 255 caratteri)." });
         return;
       }
-      if (m.quantity === undefined || m.quantity === null) {
-        res.status(400).json({ detail: "Quantità materiale obbligatoria." });
-        return;
-      }
-      const q = typeof m.quantity === "number" ? m.quantity : (typeof m.quantity === "string" && m.quantity.trim() !== "" ? Number(m.quantity) : NaN);
-      if (!Number.isFinite(q) || q < 0) {
+      if (typeof m.quantity !== "number" || !Number.isFinite(m.quantity) || m.quantity < 0) {
         res.status(400).json({ detail: "Quantità materiale non valida (deve essere un numero finito >= 0)." });
         return;
       }
       safeMaterials.push({
         name: m.name.trim(),
-        quantity: q,
+        quantity: m.quantity,
       });
     }
   }
 
-  // signature_base64: optional string, max 500KB, Data URL format required
+  // signature_base64: optional string, max 500KB, valid Data URL image format required
   let safeSignature: string | undefined = undefined;
   if (signature_base64 !== undefined && signature_base64 !== null) {
-    if (typeof signature_base64 !== "string") {
-      res.status(400).json({ detail: "La firma deve essere una stringa nel formato Data URL." });
-      return;
-    }
-    if (signature_base64.length > 500000) {
-      res.status(413).json({ detail: "Firma troppo grande (massimo 500KB)." });
-      return;
-    }
-    if (!signature_base64.startsWith("data:image/")) {
-      res.status(400).json({ detail: "Formato firma non valido. Deve essere un Data URL (es. data:image/png;base64,...)." });
+    const sigValidation = validateSignatureBase64(signature_base64);
+    if (!sigValidation.valid) {
+      res.status(sigValidation.status).json({ detail: sigValidation.error });
       return;
     }
     safeSignature = signature_base64;

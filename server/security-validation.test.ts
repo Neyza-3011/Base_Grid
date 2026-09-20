@@ -593,6 +593,297 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     expect(res.body.materials_used[0]).toEqual({ name: "Cavo FG16 3x2.5", quantity: 25 });
   });
 
+  // =========================================================================
+  // P0.4.4-E.2 Dedicated Strict Materials Quantity & Signature Image Validation Tests
+  // =========================================================================
+
+  describe("P0.4.4-E.2: Materials Used Quantity Strict Type Validation", () => {
+    it("should accept valid numeric quantity (positive float 2.5) -> 201", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Quantità Valida",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: 2.5 }]
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.materials_used[0].quantity).toBe(2.5);
+    });
+
+    it("should accept quantity = 0 -> 201", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Quantità Zero",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: 0 }]
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.materials_used[0].quantity).toBe(0);
+    });
+
+    it("should reject numeric string '5' -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: "5" }]
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("Quantità materiale non valida");
+    });
+
+    it("should reject negative quantity -1 -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: -1 }]
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("Quantità materiale non valida");
+    });
+
+    it("should reject Infinity quantity -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: 1e999 }]
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("should reject NaN quantity -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: "NaN" }]
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("should reject null quantity -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: null }]
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("should reject boolean quantity (true/false) -> 400", async () => {
+      const resTrue = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: true }]
+        });
+      expect(resTrue.status).toBe(400);
+
+      const resFalse = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          materials_used: [{ name: "Cavo FG16", quantity: false }]
+        });
+      expect(resFalse.status).toBe(400);
+    });
+  });
+
+  describe("P0.4.4-E.2: Signature Base64 Image MIME & Binary Validation", () => {
+    it("should accept valid existing PNG Base64 Data URL -> 201", async () => {
+      const validPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Signature PNG",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: validPng,
+        });
+      expect(res.status).toBe(201);
+      const persisted = await db.getReportById(adminCompanyId, res.body.id);
+      expect(persisted).not.toBeNull();
+      expect(persisted!.signatureBase64).toBe(validPng);
+    });
+
+    it("should accept valid JPEG Base64 Data URL -> 201", async () => {
+      const validJpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Signature JPEG",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: validJpeg,
+        });
+      expect(res.status).toBe(201);
+    });
+
+    it("should accept valid WebP Base64 Data URL -> 201", async () => {
+      const validWebp = "data:image/webp;base64,UklGRkAAAABXRUJQVlA4IDQAAADwAQCdASoBAAEAAQAcJaACdLoAAP7/2QAA";
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Signature WebP",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: validWebp,
+        });
+      expect(res.status).toBe(201);
+    });
+
+    it("should reject data:image/png;base64,NOT_BASE64 -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: "data:image/png;base64,NOT_BASE64",
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("should reject empty Base64 payload -> 400", async () => {
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: "data:image/png;base64,",
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("vuoto");
+    });
+
+    it("should reject raw Base64 without Data URL prefix -> 400", async () => {
+      const rawBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: rawBase64,
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("Data URL");
+    });
+
+    it("should reject disallowed MIME (text/html, application/pdf) -> 400", async () => {
+      const htmlDataUrl = "data:text/html;base64,PGgxPkhlbGxvPC9oMT4=";
+      const resHtml = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: htmlDataUrl,
+        });
+      expect(resHtml.status).toBe(400);
+      expect(resHtml.body.detail).toContain("non consentito");
+
+      const pdfDataUrl = "data:application/pdf;base64,JVBERi0xLjQK";
+      const resPdf = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: pdfDataUrl,
+        });
+      expect(resPdf.status).toBe(400);
+      expect(resPdf.body.detail).toContain("non consentito");
+    });
+
+    it("should reject valid MIME with payload incompatible with binary format (magic bytes mismatch) -> 400", async () => {
+      // Base64 of '{}' is 'e30=', declaring image/png but containing ASCII JSON instead of PNG magic bytes
+      const fakePng = "data:image/png;base64,e30=";
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: fakePng,
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("image/png");
+    });
+
+    it("should reject signature exceeding length limit (>500KB) -> 413", async () => {
+      const oversizedSig = "data:image/png;base64," + "A".repeat(500001);
+      const res = await request(app)
+        .post("/api/v1/reports")
+        .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+        .send({
+          client_name: "Client Test",
+          date: "2026-08-27",
+          time: "10:00",
+          work_hours: 2,
+          signature_base64: oversizedSig,
+        });
+      expect(res.status).toBe(413);
+    });
+  });
+
   it("should enforce limit constraints on query params", async () => {
     const res = await request(app)
       .get("/api/v1/reports?limit=9999999")
