@@ -12,11 +12,15 @@ export interface RateLimiterConfig {
   failClosed?: boolean; // Default to true for critical endpoints
 }
 
-class RateLimiter {
+export class RateLimiter {
   private redisClient: Redis | null = null;
   private localFallback = new Map<string, { count: number; expiresAt: number }>();
 
-  constructor() {
+  constructor(customRedisClient?: Redis | null) {
+    if (customRedisClient !== undefined) {
+      this.redisClient = customRedisClient;
+      return;
+    }
     if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       const options = {
         lazyConnect: false,
@@ -33,7 +37,8 @@ class RateLimiter {
         });
       }
     } else {
-      if (config.NODE_ENV === "production") {
+      const isProduction = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+      if (isProduction) {
         throw new Error("CRITICAL SECURITY ERROR: Distributed Rate Limiting requires REDIS_URL in production.");
       }
     }
@@ -87,7 +92,8 @@ class RateLimiter {
           }
         } else {
           // Fallback logic
-          if (config.NODE_ENV === "production") {
+          const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+          if (isProd) {
             if (failClosed) {
               res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-1)." });
               return;
@@ -138,7 +144,17 @@ class RateLimiter {
 
   public close() {
     if (this.redisClient) {
-      this.redisClient.quit();
+      try {
+        if (this.redisClient.status === "ready" || this.redisClient.status === "connect") {
+          this.redisClient.quit().catch(() => {});
+        } else {
+          this.redisClient.disconnect();
+        }
+      } catch {
+        try {
+          this.redisClient.disconnect();
+        } catch {}
+      }
     }
   }
 }

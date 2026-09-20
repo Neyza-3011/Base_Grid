@@ -166,8 +166,10 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
     return 'OK'
   `;
 
-  constructor(redisUrlOrOptions?: string | RedisOptions) {
-    if (typeof redisUrlOrOptions === "string") {
+  constructor(redisUrlOrOptions?: string | RedisOptions | Redis) {
+    if (redisUrlOrOptions && typeof (redisUrlOrOptions as any).eval === "function") {
+      this.client = redisUrlOrOptions as Redis;
+    } else if (typeof redisUrlOrOptions === "string") {
       this.client = new Redis(redisUrlOrOptions, {
         lazyConnect: true,
         maxRetriesPerRequest: 1,
@@ -175,7 +177,7 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
       });
     } else if (redisUrlOrOptions) {
       this.client = new Redis({
-        ...redisUrlOrOptions,
+        ...(redisUrlOrOptions as RedisOptions),
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
@@ -189,7 +191,8 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
           enableOfflineQueue: false,
         });
       } else {
-        if (config.NODE_ENV === "production") {
+        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+        if (isProd) {
           throw new Error("CRITICAL SECURITY ERROR: REDIS_URL is required in production for distributed token revocation.");
         }
         const host = config.REDIS_HOST;
@@ -205,8 +208,8 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
     }
 
     // Attach silent error listener to prevent uncaught exception process crashes
-    this.client.on("error", (err) => {
-      console.error("[RedisError] Unexpected error on Redis connection:", err.message || err);
+    this.client.on?.("error", (err: any) => {
+      console.error("[RedisError] Unexpected error on Redis connection:", err?.message || err);
     });
   }
 
@@ -400,7 +403,17 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
   }
 
   public async close(): Promise<void> {
-    await this.client.quit();
+    try {
+      if (this.client.status === "ready" || this.client.status === "connect") {
+        await this.client.quit();
+      } else {
+        this.client.disconnect();
+      }
+    } catch {
+      try {
+        this.client.disconnect();
+      } catch {}
+    }
   }
 }
 
@@ -593,7 +606,8 @@ export class RefreshTokenStore {
     } else if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       this.adapter = new RedisTokenStorageAdapter();
     } else {
-      if (config.NODE_ENV === "production") {
+      const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+      if (isProd) {
         throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");
       }
       // Fallback local memory storage for development / testing when Redis is not provided
