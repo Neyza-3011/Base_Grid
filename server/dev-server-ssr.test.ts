@@ -45,6 +45,11 @@ describe("Development Server SSR Integration", () => {
       // 2. GET / returns HTTP 200 and contains BaseGrid landing page, NOT "Cannot GET /"
       const resRoot = await fetch(`http://127.0.0.1:${testPort}/`);
       expect(resRoot.status).toBe(200);
+      expect(resRoot.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(resRoot.headers.get("x-frame-options")).toBe("DENY");
+      expect(resRoot.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+      expect(resRoot.headers.get("permissions-policy")).toBe("camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+      expect(resRoot.headers.get("strict-transport-security")).toBeNull(); // No HSTS in development
       const htmlRoot = await resRoot.text();
       expect(htmlRoot).not.toContain("Cannot GET /");
       expect(htmlRoot).toContain("BaseGrid");
@@ -58,12 +63,16 @@ describe("Development Server SSR Integration", () => {
       // 4. /api/... and /health continue to be handled by backend Express
       const resHealth = await fetch(`http://127.0.0.1:${testPort}/health`);
       expect(resHealth.status).toBe(200);
+      expect(resHealth.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(resHealth.headers.get("x-frame-options")).toBe("DENY");
       const healthJson = await resHealth.json();
       expect(healthJson.status).toBe("healthy");
       expect(healthJson.service).toBe("BaseGrid Server-Authoritative Backend");
 
       const resApi = await fetch(`http://127.0.0.1:${testPort}/api/v1/reports`);
       expect(resApi.status).toBe(401);
+      expect(resApi.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(resApi.headers.get("x-frame-options")).toBe("DENY");
       const apiJson = await resApi.json();
       expect(apiJson.detail).toContain("Non autenticato");
 

@@ -8,6 +8,7 @@ import { companyRouter } from "./routes/company";
 import { adminRouter } from "./routes/admin";
 import { reportsRouter } from "./routes/reports";
 import { verifyCsrf } from "./middleware/auth";
+import { securityHeaders } from "./middleware/security-headers";
 import { assertValidJwtSecret } from "./security";
 import { config } from "./config";
 import { generalApiLimiter } from "./rate-limiter";
@@ -18,8 +19,14 @@ export function createApp(): Express {
 
   const app = express();
   
+  // Disable X-Powered-By header to avoid framework disclosure
+  app.disable("x-powered-by");
+
   // Trust the first proxy to safely use req.ip for rate limiting in production (e.g. Render/Cloud Run)
   app.set("trust proxy", 1);
+
+  // Centralized HTTP Security Headers middleware (applied to API, health, and frontend routes)
+  app.use(securityHeaders);
 
   // Basic security and parsing middlewares
   app.use(
