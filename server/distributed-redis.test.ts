@@ -7,12 +7,14 @@ import {
   RefreshTokenStore, 
   StoreUnavailableError 
 } from "./token-store";
-import { config } from "./config";
 
 const requireRealRedis = process.env.REQUIRE_REAL_REDIS_TESTS === "true";
 
-describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
-  let redisAvailable = false;
+describe.skipIf(!requireRealRedis)("P0.4.4-H2 — Distributed Redis Production Verification", () => {
+  const uniqueRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const runPrefix = `h2test:${uniqueRunId}`;
+  const createdTokens: string[] = [];
+
   let limiterInstanceA: RateLimiter;
   let limiterInstanceB: RateLimiter;
   let tokenAdapterA: RedisTokenStorageAdapter;
@@ -24,43 +26,50 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
     tokenAdapterA = new RedisTokenStorageAdapter();
     tokenAdapterB = new RedisTokenStorageAdapter();
 
-    try {
-      const isPingOkA = await tokenAdapterA.ping(1000);
-      const isPingOkB = await tokenAdapterB.ping(1000);
-      if (isPingOkA && isPingOkB) {
-        redisAvailable = true;
-      }
-    } catch {
-      redisAvailable = false;
-    }
+    const isPingOkA = await tokenAdapterA.ping(1500).catch(() => false);
+    const isPingOkB = await tokenAdapterB.ping(1500).catch(() => false);
+    const redisAvailable = isPingOkA && isPingOkB;
 
-    if (requireRealRedis && !redisAvailable) {
-      throw new Error("Real Redis is required for distributed tests but is not available.");
+    if (!redisAvailable) {
+      throw new Error("Real Redis is required for P0.4.4-H2 distributed tests");
     }
   });
 
   afterAll(async () => {
-    if (redisAvailable) {
-      const client = await limiterInstanceA.getRedisClient();
+    try {
+      const client = await limiterInstanceA?.getRedisClient();
       if (client && client.status === "ready") {
-        await client.del("ratelimit:dist-cross-test:192.168.1.50");
-        await client.del("ratelimit:concurrent-cross-test:192.168.1.51");
-        await client.del("ratelimit:ttl-cross-test:192.168.1.52");
-        const acctKeys = await client.keys("ratelimit:rl:test:acct:*");
-        if (acctKeys.length > 0) {
-          await client.del(...acctKeys);
+        // Safe granular cleanup: only remove keys with our unique runPrefix.
+        // NEVER use FLUSHDB, FLUSHALL, or adapter.reset().
+        const rlKeys = await client.keys(`ratelimit:${runPrefix}:*`);
+        if (rlKeys.length > 0) {
+          await client.del(...rlKeys);
+        }
+        const famKeys = await client.keys(`family:${runPrefix}:*`);
+        if (famKeys.length > 0) {
+          await client.del(...famKeys);
+        }
+        const usrKeys = await client.keys(`user_tokens:${runPrefix}:*`);
+        if (usrKeys.length > 0) {
+          await client.del(...usrKeys);
+        }
+        for (const rawToken of createdTokens) {
+          const hash = RefreshTokenStore.hashToken(rawToken);
+          await client.del(`token:${hash}`);
         }
       }
-      await tokenAdapterA.reset();
+    } catch (err) {
+      console.error("[TestCleanup] Error cleaning scoped Redis test keys:", err);
+    } finally {
+      limiterInstanceA?.close();
+      limiterInstanceB?.close();
+      await tokenAdapterA?.close();
+      await tokenAdapterB?.close();
     }
-    limiterInstanceA?.close();
-    limiterInstanceB?.close();
-    await tokenAdapterA?.close();
-    await tokenAdapterB?.close();
   });
 
   describe("1. Distributed Rate Limiting Across Instances (Redis Real/Distributed)", () => {
-    it.skipIf(!redisAvailable)("shares rate limit counters between multiple application instances via Redis Lua", async () => {
+    it("shares rate limit counters between multiple application instances via Redis Lua", async () => {
       const appA = express();
       const appB = express();
       appA.set("trust proxy", 1);
@@ -71,7 +80,7 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       const rlConfig: RateLimiterConfig = {
         points: 2,
         duration: 60,
-        keyPrefix: "dist-cross-test",
+        keyPrefix: `${runPrefix}:dist-cross-test`,
         failClosed: true,
       };
 
@@ -101,7 +110,7 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       expect(res4.body.detail).toBeDefined();
     });
 
-    it.skipIf(!redisAvailable)("enforces atomic INCR + EXPIRE on concurrent cross-instance requests", async () => {
+    it("enforces atomic INCR + EXPIRE on concurrent cross-instance requests", async () => {
       const appA = express();
       const appB = express();
       appA.set("trust proxy", 1);
@@ -110,7 +119,7 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       const rlConfig: RateLimiterConfig = {
         points: 4,
         duration: 30,
-        keyPrefix: "concurrent-cross-test",
+        keyPrefix: `${runPrefix}:concurrent-cross-test`,
         failClosed: true,
       };
 
@@ -139,44 +148,45 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       expect(blockedCount).toBe(4);
     });
 
-    it.skipIf(!redisAvailable)("hashes sensitive email data before using as Redis key (No PII leak in Redis)", async () => {
+    it("hashes sensitive email data before using as Redis key (No PII leak in Redis)", async () => {
       const app = express();
       app.use(express.json());
 
       const rlConfig: RateLimiterConfig = {
         points: 2,
         duration: 60,
-        keyPrefix: "rl:test:acct",
+        keyPrefix: `${runPrefix}:acct`,
       };
 
       app.post("/test-login", limiterInstanceA.middleware(rlConfig, getEmailHashKey), (req, res) => res.send("OK"));
 
-      const rawEmail = "security-audit-user@basegrid-enterprise.com";
+      const rawEmail = `security-audit-${uniqueRunId}@basegrid-enterprise.com`;
       await request(app)
         .post("/test-login")
         .set("X-Test-RateLimit", "enable")
         .send({ email: rawEmail });
 
       const client = await limiterInstanceA.getRedisClient();
-      const keys = await client!.keys("ratelimit:rl:test:acct:*");
+      const keys = await client!.keys(`ratelimit:${runPrefix}:acct:*`);
       expect(keys.length).toBeGreaterThan(0);
 
       // Verify that the key NEVER contains the raw plain email
       for (const k of keys) {
         expect(k).not.toContain(rawEmail);
-        expect(k).not.toContain("security-audit-user");
+        expect(k).not.toContain(`security-audit-${uniqueRunId}`);
       }
     });
   });
 
   describe("2. Distributed Refresh-Token Security & Replay Detection (Cross-Instance)", () => {
-    it.skipIf(!redisAvailable)("registers token on Instance A and atomically consumes on Instance B", async () => {
+    it("registers token on Instance A and atomically consumes on Instance B", async () => {
       const storeA = new RefreshTokenStore(tokenAdapterA);
       const storeB = new RefreshTokenStore(tokenAdapterB);
 
-      const rawToken1 = "dist_token_secret_xyz_1";
-      const familyId = "fam_dist_123";
-      const userId = "usr_dist_456";
+      const rawToken1 = `dist_token_${runPrefix}_1`;
+      const familyId = `${runPrefix}:fam_dist_123`;
+      const userId = `${runPrefix}:usr_dist_456`;
+      createdTokens.push(rawToken1);
 
       // Register token on Instance A
       await storeA.registerToken({
@@ -207,14 +217,15 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       expect(recA?.status).toBe("consumed");
     });
 
-    it.skipIf(!redisAvailable)("detects cross-instance replay attack and revokes entire lineage family in Redis Lua", async () => {
+    it("detects cross-instance replay attack and revokes entire lineage family in Redis Lua", async () => {
       const storeA = new RefreshTokenStore(tokenAdapterA);
       const storeB = new RefreshTokenStore(tokenAdapterB);
 
-      const token1 = "token_lineage_initial";
-      const token2Rotated = "token_lineage_rotated_v2";
-      const familyId = "fam_lineage_safe";
-      const userId = "usr_lineage_victim";
+      const token1 = `dist_token_${runPrefix}_lin_1`;
+      const token2Rotated = `dist_token_${runPrefix}_lin_2`;
+      const familyId = `${runPrefix}:fam_lineage_safe`;
+      const userId = `${runPrefix}:usr_lineage_victim`;
+      createdTokens.push(token1, token2Rotated);
 
       // 1. Instance A registers initial token
       await storeA.registerToken({
@@ -252,26 +263,29 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       }
     });
 
-    it.skipIf(!redisAvailable)("propagates user-level revocation across all instances (password reset / logout-all)", async () => {
+    it("propagates user-level revocation across all instances (password reset / logout-all)", async () => {
       const storeA = new RefreshTokenStore(tokenAdapterA);
       const storeB = new RefreshTokenStore(tokenAdapterB);
 
-      const userTarget = "usr_target_pwd_reset";
-      const tokenA = "token_device_phone";
-      const tokenB = "token_device_laptop";
+      const userTarget = `${runPrefix}:usr_target_pwd_reset`;
+      const tokenA = `dist_token_${runPrefix}_dev_a`;
+      const tokenB = `dist_token_${runPrefix}_dev_b`;
+      const familyA = `${runPrefix}:fam_dev_a`;
+      const familyB = `${runPrefix}:fam_dev_b`;
+      createdTokens.push(tokenA, tokenB);
 
       await storeA.registerToken({
         token: tokenA,
         jti: "jti_phone",
         userId: userTarget,
-        familyId: "fam_phone",
+        familyId: familyA,
       });
 
       await storeB.registerToken({
         token: tokenB,
         jti: "jti_laptop",
         userId: userTarget,
-        familyId: "fam_laptop",
+        familyId: familyB,
       });
 
       // User triggers password reset on Instance A
@@ -298,8 +312,7 @@ describe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
       const origEnv = process.env.NODE_ENV;
       try {
         process.env.NODE_ENV = "production";
-        // Attempting to instantiate RateLimiter when no Redis is configured
-        // (passing null as redisClient forces redis-disabled state)
+        // Passing null as redisClient forces Redis to be unavailable
         const limiter = new RateLimiter(null);
         
         const app = express();
