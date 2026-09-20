@@ -298,6 +298,8 @@ export async function addReport(newReportData: {
 
   // Send POST to backend API with HttpOnly session cookie
   try {
+    const timeHHmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const initialStatus = newReportData.status === "draft" ? "draft" : "submitted";
     await fetch("/api/v1/reports", {
       method: "POST",
       credentials: "include",
@@ -305,10 +307,12 @@ export async function addReport(newReportData: {
       body: JSON.stringify({
         client_name: newReportData.clientName,
         work_hours: newReportData.hours,
+        travel_hours: newReportData.travelHours || 0,
         date: now.toISOString().split("T")[0],
+        time: timeHHmm,
         notes: newReportData.notes,
         materials_used: newReportData.materials,
-        status: newReportData.status || "submitted",
+        status: initialStatus,
       }),
     }).catch(() => {});
   } catch {

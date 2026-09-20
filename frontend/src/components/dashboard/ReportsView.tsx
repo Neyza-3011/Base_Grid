@@ -28,7 +28,7 @@ export function ReportsView() {
   const [newTechnician, setNewTechnician] = useState("Marco Rossi");
   const [newHours, setNewHours] = useState("4.0");
   const [newTravelHours, setNewTravelHours] = useState("0.5");
-  const [newStatus, setNewStatus] = useState<"draft" | "submitted" | "approved">("approved");
+  const [newStatus, setNewStatus] = useState<"draft" | "submitted">("submitted");
   const [newNotes, setNewNotes] = useState("");
   const [newMaterialName, setNewMaterialName] = useState("Cavo FG16 3x2.5");
   const [newMaterialQty, setNewMaterialQty] = useState("10");
@@ -443,12 +443,9 @@ export function ReportsView() {
                 <label className="text-xs font-semibold text-white/70">Stato Rapportino</label>
                 <select
                   value={newStatus}
-                  onChange={(e) =>
-                    setNewStatus(e.target.value as "draft" | "submitted" | "approved")
-                  }
+                  onChange={(e) => setNewStatus(e.target.value as "draft" | "submitted")}
                   className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-sm text-white"
                 >
-                  <option value="approved">Approvato (Pronto per Fattura)</option>
                   <option value="submitted">Inviato (In attesa)</option>
                   <option value="draft">Bozza</option>
                 </select>

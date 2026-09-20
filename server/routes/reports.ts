@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
+import { isValidCalendarDate, isValidTime } from "../validation";
 
 export const reportsRouter = Router();
 reportsRouter.use(authenticate);
@@ -71,64 +72,143 @@ reportsRouter.post("/", async (req: any, res: any): Promise<void> => {
     signature_base64,
   } = req.body;
 
-  const workHours = Number(work_hours);
+  // work_hours: required, finite, >= 0, <= 1000
+  if (work_hours === undefined || work_hours === null) {
+    res.status(400).json({ detail: "Ore di lavoro obbligatorie." });
+    return;
+  }
+  const workHours = typeof work_hours === "number" ? work_hours : (typeof work_hours === "string" && work_hours.trim() !== "" ? Number(work_hours) : NaN);
   if (!Number.isFinite(workHours) || workHours < 0 || workHours > 1000) {
-     res.status(400).json({ detail: "Ore di lavoro non valide." }); return;
+    res.status(400).json({ detail: "Ore di lavoro non valide (devono essere un numero compreso tra 0 e 1000)." });
+    return;
   }
-  const travelHours = Number(travel_hours);
-  if (!Number.isFinite(travelHours) || travelHours < 0 || travelHours > 1000) {
-     res.status(400).json({ detail: "Ore di viaggio non valide." }); return;
+
+  // travel_hours: optional, finite, >= 0, <= 1000, defaults to 0
+  let travelHours = 0;
+  if (travel_hours !== undefined && travel_hours !== null) {
+    const parsedTravel = typeof travel_hours === "number" ? travel_hours : (typeof travel_hours === "string" && travel_hours.trim() !== "" ? Number(travel_hours) : NaN);
+    if (!Number.isFinite(parsedTravel) || parsedTravel < 0 || parsedTravel > 1000) {
+      res.status(400).json({ detail: "Ore di viaggio non valide (devono essere un numero compreso tra 0 e 1000)." });
+      return;
+    }
+    travelHours = parsedTravel;
   }
-  if (!client_name || typeof client_name !== "string" || client_name.trim().length < 1 || client_name.trim().length > 255) {
-      res.status(400).json({ detail: "Nome cliente non valido." }); return;
+
+  // client_name: required non-empty string, max 255 chars
+  if (typeof client_name !== "string" || client_name.trim().length === 0 || client_name.trim().length > 255) {
+    res.status(400).json({ detail: "Nome cliente non valido o mancante (massimo 255 caratteri)." });
+    return;
   }
   const clientName = client_name.trim();
-  const clientAddress = typeof client_address === "string" ? client_address.trim().substring(0, 500) : "";
-  const clientCity = typeof client_city === "string" ? client_city.trim().substring(0, 100) : "";
 
-  // date validation (YYYY-MM-DD)
-  if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-     res.status(400).json({ detail: "Data non valida. Formato richiesto: YYYY-MM-DD." }); return;
+  // client_address: optional string, max 500 chars
+  let clientAddress = "";
+  if (client_address !== undefined && client_address !== null) {
+    if (typeof client_address !== "string" || client_address.length > 500) {
+      res.status(400).json({ detail: "Indirizzo cliente non valido (massimo 500 caratteri)." });
+      return;
+    }
+    clientAddress = client_address.trim();
   }
-  // time validation (HH:mm)
-  if (!time || typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
-     res.status(400).json({ detail: "Ora non valida. Formato richiesto: HH:mm." }); return;
+
+  // client_city: optional string, max 100 chars
+  let clientCity = "";
+  if (client_city !== undefined && client_city !== null) {
+    if (typeof client_city !== "string" || client_city.length > 100) {
+      res.status(400).json({ detail: "Città cliente non valida (massimo 100 caratteri)." });
+      return;
+    }
+    clientCity = client_city.trim();
+  }
+
+  // date validation (real calendar date YYYY-MM-DD)
+  if (!isValidCalendarDate(date)) {
+    res.status(400).json({ detail: "Data non valida o inesistente nel calendario. Formato richiesto: YYYY-MM-DD." });
+    return;
+  }
+
+  // time validation (real time HH:mm in 00:00-23:59)
+  if (!isValidTime(time)) {
+    res.status(400).json({ detail: "Ora non valida o inesistente. Formato richiesto: HH:mm (00:00 - 23:59)." });
+    return;
   }
   
-  // status validation
-  const allowedStatuses = ["draft", "submitted", "approved"];
-  if (status !== undefined && !allowedStatuses.includes(status)) {
-     res.status(400).json({ detail: "Status non valido." }); return;
+  // status validation:
+  // "approved" represents a subsequent authorized action and CANNOT be set at creation by client.
+  if (status === "approved") {
+    res.status(400).json({ detail: "Lo stato 'approved' non è consentito alla creazione del rapportino." });
+    return;
   }
-  const finalStatus = allowedStatuses.includes(status) ? status : "submitted";
+  if (status !== undefined && status !== "draft" && status !== "submitted") {
+    res.status(400).json({ detail: "Stato non valido. Valori consentiti alla creazione: draft, submitted." });
+    return;
+  }
+  const finalStatus: "draft" | "submitted" = status === "draft" ? "draft" : "submitted";
 
-  // notes
-  const safeNotes = typeof notes === "string" ? notes.substring(0, 2000) : "";
+  // notes: optional string, max 2000 chars
+  let safeNotes = "";
+  if (notes !== undefined && notes !== null) {
+    if (typeof notes !== "string" || notes.length > 2000) {
+      res.status(400).json({ detail: "Note non valide (massimo 2000 caratteri)." });
+      return;
+    }
+    safeNotes = notes;
+  }
   
-  // materials
-  let safeMaterials: { name: string; quantity: number }[] = [];
-  if (Array.isArray(materials_used)) {
-      safeMaterials = materials_used
-          .filter(m => m && typeof m.name === "string" && (typeof m.quantity === "number" || typeof m.quantity === "string"))
-          .map(m => {
-              const q = Number(m.quantity);
-              return {
-                  name: m.name.substring(0, 255),
-                  quantity: Number.isFinite(q) && q >= 0 ? q : 0
-              };
-          });
+  // materials_used: if present, must be an array of { name, quantity } with strict validation
+  const safeMaterials: { name: string; quantity: number }[] = [];
+  if (materials_used !== undefined && materials_used !== null) {
+    if (!Array.isArray(materials_used)) {
+      res.status(400).json({ detail: "materials_used deve essere un array." });
+      return;
+    }
+    for (const m of materials_used) {
+      if (!m || typeof m !== "object" || Array.isArray(m)) {
+        res.status(400).json({ detail: "Elemento materiale non valido (deve essere un oggetto)." });
+        return;
+      }
+      // Check for unexpected/sensitive fields
+      const keys = Object.keys(m);
+      if (keys.some((k) => k !== "name" && k !== "quantity")) {
+        res.status(400).json({ detail: "Campi non supportati nell'oggetto materiale (sono ammessi solo 'name' e 'quantity')." });
+        return;
+      }
+      if (typeof m.name !== "string" || m.name.trim().length === 0 || m.name.trim().length > 255) {
+        res.status(400).json({ detail: "Nome materiale non valido o vuoto (massimo 255 caratteri)." });
+        return;
+      }
+      if (m.quantity === undefined || m.quantity === null) {
+        res.status(400).json({ detail: "Quantità materiale obbligatoria." });
+        return;
+      }
+      const q = typeof m.quantity === "number" ? m.quantity : (typeof m.quantity === "string" && m.quantity.trim() !== "" ? Number(m.quantity) : NaN);
+      if (!Number.isFinite(q) || q < 0) {
+        res.status(400).json({ detail: "Quantità materiale non valida (deve essere un numero finito >= 0)." });
+        return;
+      }
+      safeMaterials.push({
+        name: m.name.trim(),
+        quantity: q,
+      });
+    }
   }
 
-  // base64
-  let safeSignature = signature_base64;
-  if (safeSignature !== undefined) {
-      if (typeof safeSignature !== "string" || safeSignature.length > 500000) { // Limit to 500KB
-          res.status(413).json({ detail: "Firma troppo grande o non valida." }); return;
-      }
-      if (!safeSignature.startsWith("data:image/")) {
-          // just optional validation, base64 strings usually start with data:image/png;base64,...
-          safeSignature = "";
-      }
+  // signature_base64: optional string, max 500KB, Data URL format required
+  let safeSignature: string | undefined = undefined;
+  if (signature_base64 !== undefined && signature_base64 !== null) {
+    if (typeof signature_base64 !== "string") {
+      res.status(400).json({ detail: "La firma deve essere una stringa nel formato Data URL." });
+      return;
+    }
+    if (signature_base64.length > 500000) {
+      res.status(413).json({ detail: "Firma troppo grande (massimo 500KB)." });
+      return;
+    }
+    if (!signature_base64.startsWith("data:image/")) {
+      res.status(400).json({ detail: "Formato firma non valido. Deve essere un Data URL (es. data:image/png;base64,...)." });
+      return;
+    }
+    safeSignature = signature_base64;
   }
 
   const newReport = await db.createReport(req.user.companyId, {

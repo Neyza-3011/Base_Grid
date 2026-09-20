@@ -234,7 +234,7 @@ function Wizard() {
                   clientAddress: clientParts[1]?.trim() || "Cantiere Principale",
                   hours: hours,
                   materials: items.map((i) => ({ name: i.name, quantity: i.qty })),
-                  status: "approved",
+                  status: "submitted",
                   notes: "Rapportino creato da procedura guidata con firma cliente.",
                 });
                 toast.success("Rapportino creato e inviato!", {
