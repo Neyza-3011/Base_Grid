@@ -33,6 +33,7 @@ export type ConsumeResult =
 export interface ITokenStorageAdapter {
   isAvailable(): boolean;
   setAvailability(isAvailable: boolean): void;
+  ping(timeoutMs?: number): Promise<boolean>;
   registerToken(params: {
     tokenHash: string;
     jti: string;
@@ -225,6 +226,26 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
     this.isExplicitlyDisabled = !isAvailable;
   }
 
+  public async ping(timeoutMs = 2000): Promise<boolean> {
+    if (this.isExplicitlyDisabled) return false;
+    try {
+      let timer: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Redis ping timed out")), timeoutMs);
+      });
+
+      const pingPromise = this.client.ping();
+      try {
+        const res = await Promise.race([pingPromise, timeoutPromise]);
+        return res === "PONG";
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch {
+      return false;
+    }
+  }
+
   public async registerToken(params: {
     tokenHash: string;
     jti: string;
@@ -400,6 +421,10 @@ export class DistributedStorageEngine implements ITokenStorageAdapter {
 
   public setAvailability(isAvailable: boolean): void {
     this.available = isAvailable;
+  }
+
+  public async ping(_timeoutMs = 2000): Promise<boolean> {
+    return this.available;
   }
 
   public async registerToken(params: {
@@ -594,6 +619,10 @@ export class RefreshTokenStore {
 
   public setAvailability(isAvailable: boolean): void {
     this.adapter.setAvailability(isAvailable);
+  }
+
+  public async ping(timeoutMs = 2000): Promise<boolean> {
+    return this.adapter.ping(timeoutMs);
   }
 
   public async reset(): Promise<void> {

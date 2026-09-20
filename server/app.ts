@@ -12,6 +12,9 @@ import { securityHeaders } from "./middleware/security-headers";
 import { assertValidJwtSecret } from "./security";
 import { config } from "./config";
 import { generalApiLimiter } from "./rate-limiter";
+import { db } from "./db";
+import { tokenStore } from "./token-store";
+import { asyncHandler } from "./async-handler";
 
 export function createApp(): Express {
   // Validate JWT Secret configuration on application initialization / startup
@@ -42,7 +45,7 @@ export function createApp(): Express {
   // Global CSRF verification middleware for state-changing requests
   app.use(verifyCsrf);
 
-  // Health check - should not be rate-limited by general API limiter
+  // Liveness check (process alive) - does NOT require DB or Redis
   app.get("/health", (_req: Request, res: Response) => {
     res.json({
       status: "healthy",
@@ -50,6 +53,37 @@ export function createApp(): Express {
       service: "BaseGrid Server-Authoritative Backend",
     });
   });
+
+  // Readiness check (PostgreSQL + Redis available) - fails closed (503) if any critical dependency is down
+  app.get(
+    "/ready",
+    asyncHandler(async (_req: Request, res: Response) => {
+      const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
+
+      // In production, DATABASE_URL and REDIS_URL/REDIS_HOST are strictly required
+      if (isProd) {
+        if (!config.DATABASE_URL || (!config.REDIS_URL && config.REDIS_HOST === "127.0.0.1")) {
+          res.status(503).json({ status: "not_ready" });
+          return;
+        }
+      }
+
+      try {
+        const [dbOk, redisOk] = await Promise.all([
+          db.ping(2000).catch(() => false),
+          tokenStore.ping(2000).catch(() => false),
+        ]);
+
+        if (dbOk && redisOk) {
+          res.status(200).json({ status: "ready" });
+        } else {
+          res.status(503).json({ status: "not_ready" });
+        }
+      } catch {
+        res.status(503).json({ status: "not_ready" });
+      }
+    }),
+  );
 
   // Apply general API rate limiter to all /api routes
   app.use("/api", generalApiLimiter);

@@ -128,6 +128,7 @@ export interface IDatabaseAdapter {
     newSalt: string,
   ): Promise<{ success: boolean; userId?: string; error?: string }>;
   revokeActiveAuthTokens(userId: string, type: AuthTokenType): Promise<void>;
+  ping(timeoutMs?: number): Promise<boolean>;
   initDatabase?(): Promise<void>;
   seedInitialData?(): void;
   close?(): Promise<void>;
@@ -166,6 +167,25 @@ export class PostgresAdapter implements IDatabaseAdapter {
     this.pool.on("error", (err) => {
       console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err.message || err);
     });
+  }
+
+  public async ping(timeoutMs = 2000): Promise<boolean> {
+    try {
+      let timer: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Database ping timed out")), timeoutMs);
+      });
+
+      const queryPromise = this.pool.query("SELECT 1");
+      try {
+        await Promise.race([queryPromise, timeoutPromise]);
+        return true;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch {
+      return false;
+    }
   }
 
   public async close(): Promise<void> {

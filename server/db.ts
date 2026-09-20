@@ -482,6 +482,16 @@ export class DatabaseStore implements IDatabaseAdapter {
       }
     }
   }
+
+  private isExplicitlyDisabled = false;
+
+  public setAvailability(isAvailable: boolean): void {
+    this.isExplicitlyDisabled = !isAvailable;
+  }
+
+  public async ping(_timeoutMs = 2000): Promise<boolean> {
+    return !this.isExplicitlyDisabled;
+  }
 }
 
 /**
