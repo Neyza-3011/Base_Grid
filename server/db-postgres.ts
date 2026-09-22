@@ -305,14 +305,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
       DECLARE
         v_deltype TEXT;
       BEGIN
-        -- 1. users.companyId -> companies.id ON DELETE CASCADE
+        -- 1. users("companyId") -> companies(id) ON DELETE CASCADE (exact single-column match)
         SELECT c.confdeltype::text INTO v_deltype
         FROM pg_constraint c
-        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        JOIN pg_attribute a1 ON a1.attrelid = c.conrelid AND a1.attname = 'companyId'
+        JOIN pg_attribute a2 ON a2.attrelid = c.confrelid AND a2.attname = 'id'
         WHERE c.conrelid = 'users'::regclass 
           AND c.confrelid = 'companies'::regclass
           AND c.contype = 'f'
-          AND a.attname = 'companyId'
+          AND c.conkey = ARRAY[a1.attnum]
+          AND c.confkey = ARRAY[a2.attnum]
         LIMIT 1;
 
         IF v_deltype IS NULL THEN
@@ -323,15 +325,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
           RAISE EXCEPTION 'Foreign key on users("companyId") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
-        -- 2. reports.companyId -> companies.id ON DELETE CASCADE
+        -- 2. reports("companyId") -> companies(id) ON DELETE CASCADE (exact single-column match)
         v_deltype := NULL;
         SELECT c.confdeltype::text INTO v_deltype
         FROM pg_constraint c
-        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        JOIN pg_attribute a1 ON a1.attrelid = c.conrelid AND a1.attname = 'companyId'
+        JOIN pg_attribute a2 ON a2.attrelid = c.confrelid AND a2.attname = 'id'
         WHERE c.conrelid = 'reports'::regclass 
           AND c.confrelid = 'companies'::regclass
           AND c.contype = 'f'
-          AND a.attname = 'companyId'
+          AND c.conkey = ARRAY[a1.attnum]
+          AND c.confkey = ARRAY[a2.attnum]
         LIMIT 1;
 
         IF v_deltype IS NULL THEN
@@ -342,15 +346,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
           RAISE EXCEPTION 'Foreign key on reports("companyId") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
-        -- 3. auth_tokens.userId -> users.id ON DELETE CASCADE
+        -- 3. auth_tokens("userId") -> users(id) ON DELETE CASCADE (exact single-column match)
         v_deltype := NULL;
         SELECT c.confdeltype::text INTO v_deltype
         FROM pg_constraint c
-        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        JOIN pg_attribute a1 ON a1.attrelid = c.conrelid AND a1.attname = 'userId'
+        JOIN pg_attribute a2 ON a2.attrelid = c.confrelid AND a2.attname = 'id'
         WHERE c.conrelid = 'auth_tokens'::regclass 
           AND c.confrelid = 'users'::regclass
           AND c.contype = 'f'
-          AND a.attname = 'userId'
+          AND c.conkey = ARRAY[a1.attnum]
+          AND c.confkey = ARRAY[a2.attnum]
         LIMIT 1;
 
         IF v_deltype IS NULL THEN
@@ -361,19 +367,24 @@ export class PostgresAdapter implements IDatabaseAdapter {
           RAISE EXCEPTION 'Foreign key on auth_tokens("userId") -> users(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
-        -- Unique constraints (PostgreSQL automatically provisions btree indexes for UNIQUE constraints)
+        -- 4. UNIQUE users(email) (exact single-column match)
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint c
-          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-          WHERE c.conrelid = 'users'::regclass AND c.contype = 'u' AND a.attname = 'email'
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'email'
+          WHERE c.conrelid = 'users'::regclass 
+            AND c.contype = 'u' 
+            AND c.conkey = ARRAY[a.attnum]
         ) THEN
           ALTER TABLE users ADD CONSTRAINT uq_users_email UNIQUE (email);
         END IF;
 
+        -- 5. UNIQUE auth_tokens("tokenHash") (exact single-column match)
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint c
-          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-          WHERE c.conrelid = 'auth_tokens'::regclass AND c.contype = 'u' AND a.attname = 'tokenHash'
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'tokenHash'
+          WHERE c.conrelid = 'auth_tokens'::regclass 
+            AND c.contype = 'u' 
+            AND c.conkey = ARRAY[a.attnum]
         ) THEN
           ALTER TABLE auth_tokens ADD CONSTRAINT uq_auth_tokens_token_hash UNIQUE ("tokenHash");
         END IF;

@@ -646,7 +646,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
   });
 
   describe("P0.4.4-I2 — PostgreSQL Integrity Constraints & Foreign Keys (Mock Suite)", () => {
-    it("defines foreign keys with ON DELETE CASCADE, column checks, and UNIQUE constraints in schema DDL", async () => {
+    it("defines foreign keys with ON DELETE CASCADE, exact single-column checks (conkey, confkey), and exact single-column UNIQUE constraints in schema DDL", async () => {
       const adapter = new PostgresAdapter(mockPool);
       await adapter.initDatabase();
 
@@ -654,17 +654,38 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       // Foreign keys with ON DELETE CASCADE in table definitions
       expect(ddl).toContain('"companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE');
       expect(ddl).toContain('"userId" VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE');
-      // Unique constraints
+      // Unique constraints in table definitions
       expect(ddl).toContain("email VARCHAR(255) UNIQUE NOT NULL");
       expect(ddl).toContain('"tokenHash" VARCHAR(255) NOT NULL UNIQUE');
-      // Migration DO $$ block checks confdeltype and exact column relationships
+
+      // Migration DO $$ block: exact single-column FK matching via conkey and confkey
+      expect(ddl).toContain("c.conkey = ARRAY[a1.attnum]");
+      expect(ddl).toContain("c.confkey = ARRAY[a2.attnum]");
+      expect(ddl).toContain("a1.attrelid = c.conrelid AND a1.attname = 'companyId'");
+      expect(ddl).toContain("a2.attrelid = c.confrelid AND a2.attname = 'id'");
+      expect(ddl).toContain("a1.attrelid = c.conrelid AND a1.attname = 'userId'");
       expect(ddl).toContain("c.confdeltype::text INTO v_deltype");
-      expect(ddl).toContain("a.attname = 'companyId'");
-      expect(ddl).toContain("a.attname = 'userId'");
+      expect(ddl).toContain("c.contype = 'f'");
+      expect(ddl).toContain("c.conrelid = 'users'::regclass");
+      expect(ddl).toContain("c.confrelid = 'companies'::regclass");
+      expect(ddl).toContain("c.conrelid = 'reports'::regclass");
+      expect(ddl).toContain("c.conrelid = 'auth_tokens'::regclass");
+      expect(ddl).toContain("c.confrelid = 'users'::regclass");
+
+      // Non-CASCADE detection raises exception
       expect(ddl).toContain("ELSIF v_deltype <> 'c' THEN");
       expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on users(\"companyId\") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.'");
       expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on reports(\"companyId\") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.'");
       expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on auth_tokens(\"userId\") -> users(id) exists with non-CASCADE delete action (%). Manual migration required.'");
+
+      // Exact single-column matching for UNIQUE constraints via conkey = ARRAY[a.attnum]
+      expect(ddl).toContain("c.conrelid = 'users'::regclass");
+      expect(ddl).toContain("c.contype = 'u'");
+      expect(ddl).toContain("c.conkey = ARRAY[a.attnum]");
+      expect(ddl).toContain("a.attrelid = c.conrelid AND a.attname = 'email'");
+      expect(ddl).toContain("c.conrelid = 'auth_tokens'::regclass");
+      expect(ddl).toContain("a.attrelid = c.conrelid AND a.attname = 'tokenHash'");
+
       // Migration DO $$ block adds constraints idempotently
       expect(ddl).toContain("ADD CONSTRAINT fk_users_company");
       expect(ddl).toContain('FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE');
@@ -672,10 +693,12 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       expect(ddl).toContain("ADD CONSTRAINT fk_auth_tokens_user");
       expect(ddl).toContain("ADD CONSTRAINT uq_users_email UNIQUE (email)");
       expect(ddl).toContain('ADD CONSTRAINT uq_auth_tokens_token_hash UNIQUE ("tokenHash")');
+
       // Indispensable indexes
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId")');
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId")');
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type ON auth_tokens("userId", type)');
+
       // Redundant indexes on UNIQUE columns are eliminated
       expect(ddl).not.toContain("CREATE INDEX IF NOT EXISTS idx_users_email");
       expect(ddl).not.toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash");
@@ -797,6 +820,29 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
           expiresAt: new Date().toISOString(),
         })
       ).rejects.toThrow(/violates unique constraint/i);
+    });
+
+    it("ensures composite foreign key containing companyId is not accepted as valid exact FK", async () => {
+      // Test the logic that a composite foreign key with conkey length > 1 will not match c.conkey = ARRAY[a1.attnum]
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.initDatabase();
+
+      const ddl = mockPool.query.mock.calls[0][0];
+      // conkey MUST equal single-element ARRAY[a1.attnum], so composite FKs are excluded
+      expect(ddl).toContain("c.conkey = ARRAY[a1.attnum]");
+      expect(ddl).toContain("c.confkey = ARRAY[a2.attnum]");
+      expect(ddl).not.toContain("a.attnum = ANY(c.conkey)");
+    });
+
+    it("ensures composite UNIQUE constraint containing email or tokenHash is not accepted as valid exact UNIQUE", async () => {
+      // Test the logic that a composite unique constraint with conkey length > 1 will not match c.conkey = ARRAY[a.attnum]
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.initDatabase();
+
+      const ddl = mockPool.query.mock.calls[0][0];
+      // conkey MUST equal single-element ARRAY[a.attnum], so composite UNIQUE constraints like UNIQUE(email, x) are excluded
+      expect(ddl).toContain("c.conkey = ARRAY[a.attnum]");
+      expect(ddl).not.toContain("a.attnum = ANY(c.conkey)");
     });
   });
 
