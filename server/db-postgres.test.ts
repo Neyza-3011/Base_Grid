@@ -640,4 +640,142 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       }
     });
   });
+
+  describe("P0.4.4-I2 — PostgreSQL Integrity Constraints & Foreign Keys", () => {
+    it("defines foreign keys with ON DELETE CASCADE and UNIQUE constraints in schema DDL", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.initDatabase();
+
+      const ddl = mockPool.query.mock.calls[0][0];
+      // Foreign keys with ON DELETE CASCADE
+      expect(ddl).toContain('"companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE');
+      expect(ddl).toContain('"userId" VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE');
+      // Unique constraints
+      expect(ddl).toContain("email VARCHAR(255) UNIQUE NOT NULL");
+      expect(ddl).toContain('"tokenHash" VARCHAR(255) NOT NULL UNIQUE');
+      // Migration DO $$ block constraints
+      expect(ddl).toContain("ADD CONSTRAINT fk_users_company");
+      expect(ddl).toContain('FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE');
+      expect(ddl).toContain("ADD CONSTRAINT fk_reports_company");
+      expect(ddl).toContain("ADD CONSTRAINT fk_auth_tokens_user");
+      expect(ddl).toContain("ADD CONSTRAINT uq_users_email UNIQUE (email)");
+      expect(ddl).toContain('ADD CONSTRAINT uq_auth_tokens_token_hash UNIQUE ("tokenHash")');
+      // Indispensable indexes
+      expect(ddl).toContain("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+      expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId")');
+      expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId")');
+      expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON auth_tokens("tokenHash")');
+      expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type ON auth_tokens("userId", type)');
+    });
+
+    it("rejects user creation with nonexistent companyId (foreign key constraint violation)", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+
+      mockClient.query.mockImplementation((sql: string) => {
+        if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
+        if (sql.includes("SELECT id FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+        if (sql.includes("INSERT INTO users")) {
+          const fkErr: any = new Error('insert or update on table "users" violates foreign key constraint "fk_users_company"');
+          fkErr.code = "23503";
+          return Promise.reject(fkErr);
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        adapter.createUser({
+          email: "user_orphan@example.com",
+          fullName: "Orphan User",
+          companyId: "comp-nonexistent-999",
+        })
+      ).rejects.toThrow(/violates foreign key constraint/i);
+    });
+
+    it("rejects report creation with nonexistent companyId (foreign key constraint violation)", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+
+      mockPool.query.mockImplementation((sql: string) => {
+        if (sql.includes("INSERT INTO reports")) {
+          const fkErr: any = new Error('insert or update on table "reports" violates foreign key constraint "fk_reports_company"');
+          fkErr.code = "23503";
+          return Promise.reject(fkErr);
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        adapter.createReport("comp-nonexistent-999", {
+          client: { name: "Orphan Client" },
+        })
+      ).rejects.toThrow(/violates foreign key constraint/i);
+    });
+
+    it("rejects auth token creation with nonexistent userId (foreign key constraint violation)", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+
+      mockPool.query.mockImplementation((sql: string) => {
+        if (sql.includes("INSERT INTO auth_tokens")) {
+          const fkErr: any = new Error('insert or update on table "auth_tokens" violates foreign key constraint "fk_auth_tokens_user"');
+          fkErr.code = "23503";
+          return Promise.reject(fkErr);
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        adapter.createAuthToken({
+          userId: "usr-nonexistent-999",
+          tokenHash: "token_hash_orphan",
+          type: "email_verification",
+          expiresAt: new Date().toISOString(),
+        })
+      ).rejects.toThrow(/violates foreign key constraint/i);
+    });
+
+    it("rejects duplicate user email at database level (unique constraint violation)", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+
+      mockClient.query.mockImplementation((sql: string) => {
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return Promise.resolve({ rows: [] });
+        if (sql.includes("SELECT id FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+        if (sql.includes("INSERT INTO companies")) return Promise.resolve({ rows: [] });
+        if (sql.includes("INSERT INTO users")) {
+          const uqErr: any = new Error('duplicate key value violates unique constraint "uq_users_email"');
+          uqErr.code = "23505";
+          return Promise.reject(uqErr);
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        adapter.createUser({
+          email: "duplicate@example.com",
+          fullName: "Duplicate User",
+          companyName: "Duplicate Co",
+        })
+      ).rejects.toThrow("Email already registered");
+    });
+
+    it("rejects duplicate auth token tokenHash at database level (unique constraint violation)", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+
+      mockPool.query.mockImplementation((sql: string) => {
+        if (sql.includes("INSERT INTO auth_tokens")) {
+          const uqErr: any = new Error('duplicate key value violates unique constraint "uq_auth_tokens_token_hash"');
+          uqErr.code = "23505";
+          return Promise.reject(uqErr);
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        adapter.createAuthToken({
+          userId: "usr-valid-123",
+          tokenHash: "already_existing_hash",
+          type: "password_reset",
+          expiresAt: new Date().toISOString(),
+        })
+      ).rejects.toThrow(/violates unique constraint/i);
+    });
+  });
 });

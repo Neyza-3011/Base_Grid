@@ -300,6 +300,59 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS "consumedAt" TIMESTAMP WITH TIME ZONE;
 
+      -- Non-destructive foreign keys and unique constraints for existing databases
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conrelid = 'users'::regclass 
+            AND contype = 'f' 
+            AND confrelid = 'companies'::regclass
+        ) THEN
+          ALTER TABLE users 
+            ADD CONSTRAINT fk_users_company 
+            FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conrelid = 'reports'::regclass 
+            AND contype = 'f' 
+            AND confrelid = 'companies'::regclass
+        ) THEN
+          ALTER TABLE reports 
+            ADD CONSTRAINT fk_reports_company 
+            FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conrelid = 'auth_tokens'::regclass 
+            AND contype = 'f' 
+            AND confrelid = 'users'::regclass
+        ) THEN
+          ALTER TABLE auth_tokens 
+            ADD CONSTRAINT fk_auth_tokens_user 
+            FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint c
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+          WHERE c.conrelid = 'users'::regclass AND c.contype = 'u' AND a.attname = 'email'
+        ) THEN
+          ALTER TABLE users ADD CONSTRAINT uq_users_email UNIQUE (email);
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint c
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+          WHERE c.conrelid = 'auth_tokens'::regclass AND c.contype = 'u' AND a.attname = 'tokenHash'
+        ) THEN
+          ALTER TABLE auth_tokens ADD CONSTRAINT uq_auth_tokens_token_hash UNIQUE ("tokenHash");
+        END IF;
+      END $$;
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
       CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId");
@@ -454,39 +507,56 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
 
         const now = new Date().toISOString();
-        const companyId = `comp-${randomUUID()}`;
+        const companyId = params.companyId || `comp-${randomUUID()}`;
 
-        const newCompany: CompanyRecord = {
-          id: companyId,
-          name: (params.companyName || "Azienda Senza Nome").trim(),
-          vatNumber: "",
-          address: "",
-          defaultHourlyRate: 45,
-          reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
-          stripeSubscriptionStatus: "Attivo (Piano Base)",
-          maxUsers: 5,
-          featurePdfExport: true,
-          createdAt: now,
-          updatedAt: now,
-        };
+        let newCompany: CompanyRecord;
+        if (!params.companyId) {
+          newCompany = {
+            id: companyId,
+            name: (params.companyName || "Azienda Senza Nome").trim(),
+            vatNumber: "",
+            address: "",
+            defaultHourlyRate: 45,
+            reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
+            stripeSubscriptionStatus: "Attivo (Piano Base)",
+            maxUsers: 5,
+            featurePdfExport: true,
+            createdAt: now,
+            updatedAt: now,
+          };
 
-        await client.query(
-          `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            newCompany.id,
-            newCompany.name,
-            newCompany.vatNumber,
-            newCompany.address,
-            newCompany.defaultHourlyRate,
-            newCompany.reportFooterNotes,
-            newCompany.stripeSubscriptionStatus,
-            newCompany.maxUsers,
-            newCompany.featurePdfExport,
-            newCompany.createdAt,
-            newCompany.updatedAt,
-          ],
-        );
+          await client.query(
+            `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              newCompany.id,
+              newCompany.name,
+              newCompany.vatNumber,
+              newCompany.address,
+              newCompany.defaultHourlyRate,
+              newCompany.reportFooterNotes,
+              newCompany.stripeSubscriptionStatus,
+              newCompany.maxUsers,
+              newCompany.featurePdfExport,
+              newCompany.createdAt,
+              newCompany.updatedAt,
+            ],
+          );
+        } else {
+          newCompany = {
+            id: companyId,
+            name: (params.companyName || "").trim(),
+            vatNumber: "",
+            address: "",
+            defaultHourlyRate: 45,
+            reportFooterNotes: "",
+            stripeSubscriptionStatus: "",
+            maxUsers: 5,
+            featurePdfExport: true,
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
 
         const { hash, salt } = hashPassword(params.password || randomUUID());
         const userId = `usr-${randomUUID()}`;
@@ -661,12 +731,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     await this.pool.query(
       `UPDATE users 
-       SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "passwordHash" = $5, salt = $6, "isActive" = $7, "emailConfirmed" = $8, "phoneNumber" = $9, "updatedAt" = $10 
-       WHERE id = $11`,
+       SET email = $1, "fullName" = $2, role = $3, "companyId" = $4, "companyName" = $5, "passwordHash" = $6, salt = $7, "isActive" = $8, "emailConfirmed" = $9, "phoneNumber" = $10, "updatedAt" = $11 
+       WHERE id = $12`,
       [
         updated.email,
         updated.fullName,
         updated.role,
+        updated.companyId,
         updated.companyName,
         updated.passwordHash,
         updated.salt,
