@@ -846,10 +846,388 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
   });
 
+  describe("P0.4.4-I3 — PostgreSQL Transactions, Atomicity & Race Conditions (Mock Suite)", () => {
+    let mockTxClient: any;
+    let queryLog: string[];
+
+    beforeEach(() => {
+      queryLog = [];
+      mockTxClient = {
+        query: vi.fn(async (sql: string, params?: any[]) => {
+          queryLog.push(typeof sql === "string" ? sql : "QUERY");
+          if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+            return { rowCount: 0, rows: [] };
+          }
+          return { rowCount: 1, rows: [{ id: "mock-row", authVersion: 1 }] };
+        }),
+        release: vi.fn(),
+      };
+      mockPool.connect.mockResolvedValue(mockTxClient);
+    });
+
+    describe("1. withTransaction() robustness", () => {
+      it("executes BEGIN before callback, COMMIT on success, and releases client", async () => {
+        const adapter = new PostgresAdapter(mockPool);
+        const result = await adapter.withTransaction(async (client) => {
+          expect(queryLog).toEqual(["BEGIN"]);
+          await client.query("SELECT 42");
+          return "success_val";
+        });
+
+        expect(result).toBe("success_val");
+        expect(queryLog).toEqual(["BEGIN", "SELECT 42", "COMMIT"]);
+        expect(mockTxClient.release).toHaveBeenCalledTimes(1);
+      });
+
+      it("executes ROLLBACK when callback throws and propagates original error", async () => {
+        const adapter = new PostgresAdapter(mockPool);
+        const customErr = new Error("Business logic exception");
+
+        await expect(
+          adapter.withTransaction(async (client) => {
+            await client.query("UPDATE something");
+            throw customErr;
+          }),
+        ).rejects.toThrow("Business logic exception");
+
+        expect(queryLog).toEqual(["BEGIN", "UPDATE something", "ROLLBACK"]);
+        expect(mockTxClient.release).toHaveBeenCalledTimes(1);
+      });
+
+      it("executes ROLLBACK and releases client if COMMIT fails, propagating commit error", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "COMMIT") {
+            const commitErr: any = new Error("Serialization failure / Commit conflict");
+            commitErr.code = "40001";
+            throw commitErr;
+          }
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(
+          adapter.withTransaction(async (client) => {
+            await client.query("INSERT INTO foo VALUES (1)");
+          }),
+        ).rejects.toThrow("Serialization failure / Commit conflict");
+
+        expect(queryLog).toContain("BEGIN");
+        expect(queryLog).toContain("COMMIT");
+        expect(queryLog).toContain("ROLLBACK");
+        expect(mockTxClient.release).toHaveBeenCalledTimes(1);
+      });
+
+      it("guarantees client release even if ROLLBACK fails, without masking original error", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "FAIL_QUERY") throw new Error("Original operational failure");
+          if (sql === "ROLLBACK") throw new Error("Connection broken during rollback");
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(
+          adapter.withTransaction(async (client) => {
+            await client.query("FAIL_QUERY");
+          }),
+        ).rejects.toThrow("Original operational failure");
+
+        expect(queryLog).toEqual(["BEGIN", "FAIL_QUERY", "ROLLBACK"]);
+        expect(mockTxClient.release).toHaveBeenCalledTimes(1);
+      });
+
+      it("does not attempt ROLLBACK if BEGIN fails before transaction starts", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN") throw new Error("Connection refused on BEGIN");
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(
+          adapter.withTransaction(async () => {
+            return "never_reached";
+          }),
+        ).rejects.toThrow("Connection refused on BEGIN");
+
+        expect(queryLog).toEqual(["BEGIN"]);
+        expect(queryLog).not.toContain("ROLLBACK");
+        expect(mockTxClient.release).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe("2. Atomicity of createUser()", () => {
+      it("executes BEGIN -> company insert -> user insert -> COMMIT on success", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "COMMIT") return { rowCount: 0, rows: [] };
+          if (sql.includes("SELECT id FROM users WHERE email")) return { rowCount: 0, rows: [] };
+          if (sql.includes("INSERT INTO companies")) return { rowCount: 1, rows: [] };
+          if (sql.includes("INSERT INTO users")) return { rowCount: 1, rows: [] };
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        const res = await adapter.createUser({
+          email: "atomic@example.com",
+          fullName: "Atomic User",
+          password: "SecurePassword1!",
+          companyName: "Atomic Co Srl",
+        });
+
+        expect(res.user.email).toBe("atomic@example.com");
+        expect(res.company.name).toBe("Atomic Co Srl");
+
+        // Verify sequence
+        const beginIdx = queryLog.findIndex((q) => q === "BEGIN");
+        const compIdx = queryLog.findIndex((q) => q.includes("INSERT INTO companies"));
+        const userIdx = queryLog.findIndex((q) => q.includes("INSERT INTO users"));
+        const commitIdx = queryLog.findIndex((q) => q === "COMMIT");
+
+        expect(beginIdx).toBeLessThan(compIdx);
+        expect(compIdx).toBeLessThan(userIdx);
+        expect(userIdx).toBeLessThan(commitIdx);
+        expect(queryLog).not.toContain("ROLLBACK");
+      });
+
+      it("rolls back company insert if user insert fails, leaving no partial state", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "ROLLBACK") return { rowCount: 0, rows: [] };
+          if (sql.includes("SELECT id FROM users WHERE email")) return { rowCount: 0, rows: [] };
+          if (sql.includes("INSERT INTO companies")) return { rowCount: 1, rows: [] };
+          if (sql.includes("INSERT INTO users")) {
+            throw new Error("DB Error during user insert");
+          }
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(
+          adapter.createUser({
+            email: "rollback-test@example.com",
+            fullName: "Rollback User",
+            password: "Password123!",
+            companyName: "Orphaned Co",
+          }),
+        ).rejects.toThrow("DB Error during user insert");
+
+        // Verify sequence: BEGIN -> company insert -> user insert -> ROLLBACK
+        const beginIdx = queryLog.findIndex((q) => q === "BEGIN");
+        const compIdx = queryLog.findIndex((q) => q.includes("INSERT INTO companies"));
+        const userIdx = queryLog.findIndex((q) => q.includes("INSERT INTO users"));
+        const rollbackIdx = queryLog.findIndex((q) => q === "ROLLBACK");
+
+        expect(beginIdx).toBeLessThan(compIdx);
+        expect(compIdx).toBeLessThan(userIdx);
+        expect(userIdx).toBeLessThan(rollbackIdx);
+        expect(queryLog).not.toContain("COMMIT");
+        expect(mockTxClient.release).toHaveBeenCalled();
+      });
+    });
+
+    describe("3. Concurrency on duplicate registrations", () => {
+      it("translates PostgreSQL unique violation 23505 on users.email to 'Email already registered' with rollback", async () => {
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "ROLLBACK") return { rowCount: 0, rows: [] };
+          // Initial SELECT check passes (simulating concurrent request that hasn't committed yet)
+          if (sql.includes("SELECT id FROM users WHERE email")) return { rowCount: 0, rows: [] };
+          if (sql.includes("INSERT INTO companies")) return { rowCount: 1, rows: [] };
+          if (sql.includes("INSERT INTO users")) {
+            const uqErr: any = new Error('duplicate key value violates unique constraint "uq_users_email"');
+            uqErr.code = "23505";
+            uqErr.detail = 'Key (email)=(race@example.com) already exists.';
+            throw uqErr;
+          }
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(
+          adapter.createUser({
+            email: "race@example.com",
+            fullName: "Race User",
+            password: "Password123!",
+            companyName: "Race Company",
+          }),
+        ).rejects.toThrow("Email already registered");
+
+        expect(queryLog).toContain("BEGIN");
+        expect(queryLog).toContain("ROLLBACK");
+        expect(queryLog).not.toContain("COMMIT");
+        expect(mockTxClient.release).toHaveBeenCalled();
+      });
+    });
+
+    describe("4. Token atomicity & concurrency", () => {
+      it("verifyEmailWithToken uses FOR UPDATE row-level lock and commits inside transaction", async () => {
+        const fakeToken = {
+          id: "tok-verify-1",
+          userId: "usr-verify-1",
+          tokenHash: "token_hash_verify",
+          type: "email_verification",
+          consumed: false,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+        };
+
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "COMMIT") return { rowCount: 0, rows: [] };
+          if (sql.includes("SELECT * FROM auth_tokens") && sql.includes("FOR UPDATE")) {
+            return { rowCount: 1, rows: [fakeToken] };
+          }
+          if (sql.includes("UPDATE auth_tokens SET consumed = true")) return { rowCount: 1, rows: [] };
+          if (sql.includes("UPDATE users SET \"emailConfirmed\" = true")) return { rowCount: 1, rows: [] };
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        const res = await adapter.verifyEmailWithToken("token_hash_verify");
+
+        expect(res.success).toBe(true);
+        expect(res.userId).toBe("usr-verify-1");
+
+        expect(queryLog[0]).toBe("BEGIN");
+        const selectForUpdate = queryLog.find((q) => q.includes("FOR UPDATE"));
+        expect(selectForUpdate).toBeDefined();
+        expect(queryLog[queryLog.length - 1]).toBe("COMMIT");
+      });
+
+      it("resetPasswordWithToken uses FOR UPDATE lock and atomically increments authVersion in SQL", async () => {
+        const fakeResetToken = {
+          id: "tok-reset-1",
+          userId: "usr-reset-1",
+          tokenHash: "token_hash_reset",
+          type: "password_reset",
+          consumed: false,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+        };
+
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "COMMIT") return { rowCount: 0, rows: [] };
+          if (sql.includes("SELECT * FROM auth_tokens") && sql.includes("FOR UPDATE")) {
+            return { rowCount: 1, rows: [fakeResetToken] };
+          }
+          if (sql.includes("UPDATE auth_tokens SET consumed = true")) return { rowCount: 1, rows: [] };
+          if (sql.includes("UPDATE users SET \"passwordHash\" = $1")) {
+            return { rowCount: 1, rows: [] };
+          }
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        const res = await adapter.resetPasswordWithToken("token_hash_reset", "newHash", "newSalt");
+
+        expect(res.success).toBe(true);
+        expect(res.userId).toBe("usr-reset-1");
+
+        const updateUsersSql = queryLog.find((q) => q.includes('UPDATE users SET "passwordHash" = $1'));
+        expect(updateUsersSql).toBeDefined();
+        expect(updateUsersSql).toContain('"authVersion" = "authVersion" + 1');
+        expect(queryLog[queryLog.length - 1]).toBe("COMMIT");
+      });
+
+      it("rolls back token transaction if an error occurs after row lock before commit", async () => {
+        const fakeToken = {
+          id: "tok-err-1",
+          userId: "usr-err-1",
+          tokenHash: "hash_err",
+          type: "email_verification",
+          consumed: false,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+        };
+
+        mockTxClient.query.mockImplementation(async (sql: string) => {
+          queryLog.push(sql);
+          if (sql === "BEGIN" || sql === "ROLLBACK") return { rowCount: 0, rows: [] };
+          if (sql.includes("FOR UPDATE")) return { rowCount: 1, rows: [fakeToken] };
+          if (sql.includes("UPDATE auth_tokens")) throw new Error("Disk full or connection severed");
+          return { rowCount: 0, rows: [] };
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        await expect(adapter.verifyEmailWithToken("hash_err")).rejects.toThrow("Disk full or connection severed");
+
+        expect(queryLog).toContain("BEGIN");
+        expect(queryLog).toContain("ROLLBACK");
+        expect(queryLog).not.toContain("COMMIT");
+      });
+
+      it("consumeAuthToken atomically updates single-use token and returns false for concurrent consumer", async () => {
+        mockPool.query
+          .mockResolvedValueOnce({ rowCount: 1, rows: [] }) // winner
+          .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // loser
+
+        const adapter = new PostgresAdapter(mockPool);
+        const winner = await adapter.consumeAuthToken("single_use_hash", "password_reset");
+        const loser = await adapter.consumeAuthToken("single_use_hash", "password_reset");
+
+        expect(winner).toBe(true);
+        expect(loser).toBe(false);
+
+        expect(mockPool.query).toHaveBeenCalledWith(
+          expect.stringContaining("UPDATE auth_tokens SET consumed = true"),
+          expect.arrayContaining(["single_use_hash", "password_reset"]),
+        );
+      });
+    });
+
+    describe("5. authVersion atomic SQL increments", () => {
+      it("incrementUserAuthVersion updates via SQL expression without application-side read-modify-write", async () => {
+        mockPool.query.mockResolvedValueOnce({
+          rowCount: 1,
+          rows: [{ authVersion: 3 }],
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        const res = await adapter.incrementUserAuthVersion("usr-123");
+
+        expect(res).toBe(3);
+        const [sql] = mockPool.query.mock.calls[0];
+        expect(sql).toContain('"authVersion" = "authVersion" + 1');
+        expect(sql).toContain('RETURNING "authVersion"');
+      });
+
+      it("updatePasswordAndIncrementAuthVersion updates authVersion atomically via SQL expression", async () => {
+        mockPool.query.mockResolvedValueOnce({
+          rows: [
+            {
+              id: "usr-456",
+              email: "updated@example.com",
+              fullName: "Updated",
+              role: "technician",
+              companyId: "comp-1",
+              companyName: "Co 1",
+              passwordHash: "newH",
+              salt: "newS",
+              isActive: true,
+              provider: "local",
+              emailConfirmed: true,
+              phoneNumber: "",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              authVersion: 5,
+            },
+          ],
+        });
+
+        const adapter = new PostgresAdapter(mockPool);
+        const updated = await adapter.updatePasswordAndIncrementAuthVersion("usr-456", "newH", "newS");
+
+        expect(updated?.authVersion).toBe(5);
+        const [sql] = mockPool.query.mock.calls[0];
+        expect(sql).toContain('"authVersion" = "authVersion" + 1');
+      });
+    });
+  });
+
   const requireRealPostgres = process.env.REQUIRE_REAL_POSTGRES_TESTS === "true";
   const realPostgresDescribe = requireRealPostgres ? describe : describe.skip;
 
-  realPostgresDescribe("P0.4.4-I2 — Real PostgreSQL Constraints & Cascade Suite (Optional)", () => {
+  realPostgresDescribe("P0.4.4-I2/I3 — Real PostgreSQL Constraints, Transactions & Concurrency Suite (Optional)", () => {
     let realPool: any = null;
     let realAdapter: PostgresAdapter | null = null;
     const runId = randomUUID().slice(0, 8);
@@ -879,7 +1257,8 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       try {
         // Safe granular cleanup: strictly delete records created by this runId
         await realPool.query("DELETE FROM companies WHERE id = $1", [testCompanyId]);
-        await realPool.query("DELETE FROM users WHERE email = $1", [testUserEmail]);
+        await realPool.query("DELETE FROM companies WHERE name LIKE $1", [`%${runId}%`]);
+        await realPool.query("DELETE FROM users WHERE email LIKE $1", [`%${runId}%`]);
         await realPool.query('DELETE FROM auth_tokens WHERE "tokenHash" LIKE $1', [`%${runId}%`]);
       } catch {
         // ignore cleanup errors
@@ -1016,6 +1395,101 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
       const tokenCheck = await realPool.query('SELECT id FROM auth_tokens WHERE "tokenHash" = $1', [tokenHash]);
       expect(tokenCheck.rowCount).toBe(0);
+    });
+
+    it("rolls back company creation when user insertion fails within transaction", async () => {
+      const rollbackCompanyId = `comp-rb-${runId}`;
+      const rollbackUserId = `usr-rb-${runId}`;
+      const rollbackEmail = `rb-${runId}@example.com`;
+
+      try {
+        await realAdapter!.withTransaction(async (client) => {
+          await client.query(
+            'INSERT INTO companies (id, name, "createdAt", "updatedAt") VALUES ($1, $2, NOW(), NOW())',
+            [rollbackCompanyId, `Rollback Co ${runId}`]
+          );
+          // Deliberately violate NOT NULL constraint on fullName
+          await client.query(
+            'INSERT INTO users (id, email, "fullName", "companyId") VALUES ($1, $2, NULL, $3)',
+            [rollbackUserId, rollbackEmail, rollbackCompanyId]
+          );
+        });
+        expect.unreachable("Transaction should have failed");
+      } catch (err: any) {
+        expect(err).toBeDefined();
+      }
+
+      const companyCheck = await realPool.query('SELECT id FROM companies WHERE id = $1', [rollbackCompanyId]);
+      expect(companyCheck.rowCount).toBe(0);
+      const userCheck = await realPool.query('SELECT id FROM users WHERE id = $1', [rollbackUserId]);
+      expect(userCheck.rowCount).toBe(0);
+    });
+
+    it("handles two concurrent registrations for the exact same email atomically with UNIQUE constraint", async () => {
+      const concurrentEmail = `conc-reg-${runId}@example.com`;
+      const [res1, res2] = await Promise.allSettled([
+        realAdapter!.createUser({
+          email: concurrentEmail,
+          fullName: "User A",
+          password: "Password123!",
+          companyName: `Company A ${runId}`,
+        }),
+        realAdapter!.createUser({
+          email: concurrentEmail,
+          fullName: "User B",
+          password: "Password123!",
+          companyName: `Company B ${runId}`,
+        }),
+      ]);
+
+      const fulfilled = [res1, res2].filter((r) => r.status === "fulfilled");
+      const rejected = [res1, res2].filter((r) => r.status === "rejected");
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason.message).toContain("Email already registered");
+
+      const userRes = await realPool.query('SELECT id, "companyId" FROM users WHERE email = $1', [concurrentEmail]);
+      expect(userRes.rowCount).toBe(1);
+      const winningCompanyId = userRes.rows[0].companyId;
+      const companyRes = await realPool.query('SELECT id FROM companies WHERE id = $1', [winningCompanyId]);
+      expect(companyRes.rowCount).toBe(1);
+
+      await realPool.query('DELETE FROM companies WHERE id = $1', [winningCompanyId]);
+    });
+
+    it("allows only one of two concurrent consumeAuthToken calls to succeed on the same single-use token", async () => {
+      const concurrentTokenHash = `conc-tok-${runId}`;
+      await realAdapter!.createAuthToken({
+        userId: testUserId,
+        tokenHash: concurrentTokenHash,
+        type: "password_reset",
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+      });
+
+      const [resA, resB] = await Promise.all([
+        realAdapter!.consumeAuthToken(concurrentTokenHash, "password_reset"),
+        realAdapter!.consumeAuthToken(concurrentTokenHash, "password_reset"),
+      ]);
+
+      expect([resA, resB].sort()).toEqual([false, true]);
+
+      const tokenRes = await realPool.query('SELECT consumed FROM auth_tokens WHERE "tokenHash" = $1', [concurrentTokenHash]);
+      expect(tokenRes.rows[0].consumed).toBe(true);
+    });
+
+    it("handles concurrent authVersion increments atomically without lost updates", async () => {
+      const results = await Promise.all([
+        realAdapter!.incrementUserAuthVersion(testUserId),
+        realAdapter!.incrementUserAuthVersion(testUserId),
+        realAdapter!.incrementUserAuthVersion(testUserId),
+      ]);
+
+      expect(results).toHaveLength(3);
+      results.forEach((v) => expect(typeof v).toBe("number"));
+
+      const userRes = await realPool.query('SELECT "authVersion" FROM users WHERE id = $1', [testUserId]);
+      expect(userRes.rows[0].authVersion).toBe(3);
     });
   });
 });

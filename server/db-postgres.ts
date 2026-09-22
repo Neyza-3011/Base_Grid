@@ -441,20 +441,28 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   public async withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
+    let txStarted = false;
     try {
       await client.query("BEGIN");
+      txStarted = true;
       const result = await callback(client);
       await client.query("COMMIT");
       return result;
     } catch (e) {
-      try {
-        await client.query("ROLLBACK");
-      } catch (rollbackErr) {
-        console.error("[PostgresTransaction] ROLLBACK failed:", rollbackErr);
+      if (txStarted) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackErr) {
+          console.error("[PostgresTransaction] ROLLBACK failed:", rollbackErr);
+        }
       }
       throw e;
     } finally {
-      client.release();
+      try {
+        client.release();
+      } catch (releaseErr) {
+        console.error("[PostgresTransaction] client.release failed:", releaseErr);
+      }
     }
   }
 
