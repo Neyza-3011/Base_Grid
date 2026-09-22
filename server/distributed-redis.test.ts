@@ -10,7 +10,9 @@ import {
 
 const requireRealRedis = process.env.REQUIRE_REAL_REDIS_TESTS === "true";
 
-describe.skipIf(!requireRealRedis)("P0.4.4-H2 — Distributed Redis Production Verification", () => {
+const suiteDescribe = requireRealRedis ? describe : describe.skip;
+
+suiteDescribe("P0.4.4-H2 — Distributed Redis Production Verification", () => {
   const uniqueRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const runPrefix = `h2test:${uniqueRunId}`;
   const createdTokens: string[] = [];
@@ -21,6 +23,10 @@ describe.skipIf(!requireRealRedis)("P0.4.4-H2 — Distributed Redis Production V
   let tokenAdapterB: RedisTokenStorageAdapter;
 
   beforeAll(async () => {
+    if (!requireRealRedis) {
+      return;
+    }
+
     limiterInstanceA = new RateLimiter();
     limiterInstanceB = new RateLimiter();
     tokenAdapterA = new RedisTokenStorageAdapter();
@@ -36,6 +42,9 @@ describe.skipIf(!requireRealRedis)("P0.4.4-H2 — Distributed Redis Production V
   });
 
   afterAll(async () => {
+    if (!requireRealRedis) {
+      return;
+    }
     try {
       const client = await limiterInstanceA?.getRedisClient();
       if (client && client.status === "ready") {
@@ -370,7 +379,7 @@ describe.skipIf(!requireRealRedis)("P0.4.4-H2 — Distributed Redis Production V
       })).rejects.toThrow(StoreUnavailableError);
     });
 
-    it("resumes normal operations seamlessly after Redis recovers without corrupted state", async () => {
+    it("rejects operations while adapter is explicitly disabled and resumes after re-enable", async () => {
       const adapter = new RedisTokenStorageAdapter();
       
       // Simulate outage
