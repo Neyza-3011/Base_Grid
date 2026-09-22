@@ -503,4 +503,141 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       expect((company as any)?.authVersion).toBeUndefined();
     });
   });
+
+  describe("P0.4.4-I1 — PostgreSQL ID Integrity & Collision Resistance", () => {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    it("generates collision-resistant UUIDs for concurrent user and company registrations", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      const N = 50;
+
+      // Mock transaction query behavior for multiple calls
+      mockClient.query.mockImplementation((sql: string, params?: any[]) => {
+        if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
+        if (sql.includes("SELECT id FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+        if (sql.includes("INSERT INTO companies") || sql.includes("INSERT INTO users")) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const promises = Array.from({ length: N }, (_, i) =>
+        adapter.createUser({
+          email: `user_${i}@example.com`,
+          fullName: `User ${i}`,
+          password: `Password_${i}!`,
+          companyName: `Company ${i}`,
+        })
+      );
+
+      const results = await Promise.all(promises);
+
+      const userIds = results.map((r) => r.user.id);
+      const companyIds = results.map((r) => r.company.id);
+
+      // Verify collision resistance: all IDs must be unique
+      expect(new Set(userIds).size).toBe(N);
+      expect(new Set(companyIds).size).toBe(N);
+
+      // Verify format adheres to collision-resistant UUID (comp-<uuid> and usr-<uuid>)
+      for (const uid of userIds) {
+        expect(uid.startsWith("usr-")).toBe(true);
+        const rawUuid = uid.replace("usr-", "");
+        expect(rawUuid).toMatch(UUID_REGEX);
+      }
+
+      for (const cid of companyIds) {
+        expect(cid.startsWith("comp-")).toBe(true);
+        const rawUuid = cid.replace("comp-", "");
+        expect(rawUuid).toMatch(UUID_REGEX);
+      }
+    });
+
+    it("generates collision-resistant UUIDs for concurrent Google user creations", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      const N = 50;
+
+      mockClient.query.mockImplementation((sql: string, params?: any[]) => {
+        if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
+        if (sql.includes("SELECT * FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+        if (sql.includes("INSERT INTO companies") || sql.includes("INSERT INTO users")) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const promises = Array.from({ length: N }, (_, i) =>
+        adapter.createGoogleUser({
+          email: `google_${i}@example.com`,
+          fullName: `Google User ${i}`,
+          companyName: `Google Company ${i}`,
+        })
+      );
+
+      const results = await Promise.all(promises);
+
+      const userIds = results.map((r) => r.user.id);
+      const companyIds = results.map((r) => r.company.id);
+
+      expect(new Set(userIds).size).toBe(N);
+      expect(new Set(companyIds).size).toBe(N);
+
+      for (const uid of userIds) {
+        expect(uid.startsWith("usr-g-")).toBe(true);
+        const rawUuid = uid.replace("usr-g-", "");
+        expect(rawUuid).toMatch(UUID_REGEX);
+      }
+    });
+
+    it("generates collision-resistant UUIDs for concurrent auto-generated report IDs", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      const N = 50;
+
+      mockPool.query.mockResolvedValue({ rows: [] });
+
+      const promises = Array.from({ length: N }, () =>
+        adapter.createReport("comp-test", {
+          client: { name: "Test Client" },
+        })
+      );
+
+      const reports = await Promise.all(promises);
+      const reportIds = reports.map((r) => r.id);
+
+      expect(new Set(reportIds).size).toBe(N);
+
+      for (const rid of reportIds) {
+        expect(rid.startsWith("REP-")).toBe(true);
+        const rawUuid = rid.replace("REP-", "");
+        expect(rawUuid).toMatch(UUID_REGEX);
+      }
+    });
+
+    it("generates collision-resistant UUIDs for concurrent auth token creation", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      const N = 50;
+
+      mockPool.query.mockResolvedValue({ rows: [] });
+
+      const promises = Array.from({ length: N }, (_, i) =>
+        adapter.createAuthToken({
+          userId: `usr-${i}`,
+          tokenHash: `hash-${i}`,
+          type: "email_verification",
+          expiresAt: new Date().toISOString(),
+        })
+      );
+
+      const tokens = await Promise.all(promises);
+      const tokenIds = tokens.map((t) => t.id);
+
+      expect(new Set(tokenIds).size).toBe(N);
+
+      for (const tid of tokenIds) {
+        expect(tid.startsWith("tok-")).toBe(true);
+        const rawUuid = tid.replace("tok-", "");
+        expect(rawUuid).toMatch(UUID_REGEX);
+      }
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from "pg";
+import { randomUUID } from "crypto";
 import { config } from "./config";
 import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { tokenStore } from "./token-store";
@@ -453,7 +454,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
 
         const now = new Date().toISOString();
-        const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const companyId = `comp-${randomUUID()}`;
 
         const newCompany: CompanyRecord = {
           id: companyId,
@@ -487,8 +488,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
           ],
         );
 
-        const { hash, salt } = hashPassword(params.password || Math.random().toString());
-        const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const { hash, salt } = hashPassword(params.password || randomUUID());
+        const userId = `usr-${randomUUID()}`;
 
         const newUser: UserRecord = {
           id: userId,
@@ -558,7 +559,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
 
         const now = new Date().toISOString();
-        const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const companyId = `comp-${randomUUID()}`;
         const companyName = params.companyName || `${params.fullName} Team`;
 
         const newCompany: CompanyRecord = {
@@ -593,8 +594,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
           ],
         );
 
-        const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now());
-        const userId = `usr-g-${Date.now()}`;
+        const { hash, salt } = hashPassword(randomUUID());
+        const userId = `usr-g-${randomUUID()}`;
 
         const newUser: UserRecord = {
           id: userId,
@@ -735,7 +736,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
     const now = new Date().toISOString();
-    const id = data.id || `REP-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const id = data.id || `REP-${randomUUID()}`;
 
     const newReport: ReportRecord = {
       id,
@@ -822,7 +823,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     type: AuthTokenType;
     expiresAt: string;
   }): Promise<AuthTokenRecord> {
-    const id = `tok-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const id = `tok-${randomUUID()}`;
     const now = new Date().toISOString();
     const tokenRecord: AuthTokenRecord = {
       id,

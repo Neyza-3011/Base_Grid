@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
@@ -177,7 +178,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     }
 
     const now = new Date().toISOString();
-    const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const companyId = `comp-${randomUUID()}`;
 
     const newCompany: CompanyRecord = {
       id: companyId,
@@ -195,7 +196,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.companies.set(companyId, newCompany);
  
     const { hash, salt } = hashPassword(params.password);
-    const userId = `usr-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const userId = `usr-${randomUUID()}`;
 
     const newUser: UserRecord = {
       id: userId,
@@ -228,7 +229,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     }
 
     const now = new Date().toISOString();
-    const companyId = `comp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const companyId = `comp-${randomUUID()}`;
     const companyName = params.companyName || `${params.fullName} Team`;
 
     const newCompany: CompanyRecord = {
@@ -246,8 +247,8 @@ export class DatabaseStore implements IDatabaseAdapter {
     };
     this.companies.set(companyId, newCompany);
  
-    const { hash, salt } = hashPassword(Math.random().toString(36) + Date.now().toString());
-    const userId = `usr-g-${Date.now()}`;
+    const { hash, salt } = hashPassword(randomUUID());
+    const userId = `usr-g-${randomUUID()}`;
 
     const newUser: UserRecord = {
       id: userId,
@@ -317,7 +318,7 @@ export class DatabaseStore implements IDatabaseAdapter {
 
   public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
     const now = new Date().toISOString();
-    const id = data.id || `REP-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const id = data.id || `REP-${randomUUID()}`;
 
     const newReport: ReportRecord = {
       id,
@@ -383,7 +384,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     type: AuthTokenType;
     expiresAt: string;
   }): Promise<AuthTokenRecord> {
-    const id = `tok-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const id = `tok-${randomUUID()}`;
     const now = new Date().toISOString();
     const tokenRecord: AuthTokenRecord = {
       id,
