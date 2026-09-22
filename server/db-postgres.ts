@@ -302,40 +302,66 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       -- Non-destructive foreign keys and unique constraints for existing databases
       DO $$
+      DECLARE
+        v_deltype TEXT;
       BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint 
-          WHERE conrelid = 'users'::regclass 
-            AND contype = 'f' 
-            AND confrelid = 'companies'::regclass
-        ) THEN
+        -- 1. users.companyId -> companies.id ON DELETE CASCADE
+        SELECT c.confdeltype::text INTO v_deltype
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        WHERE c.conrelid = 'users'::regclass 
+          AND c.confrelid = 'companies'::regclass
+          AND c.contype = 'f'
+          AND a.attname = 'companyId'
+        LIMIT 1;
+
+        IF v_deltype IS NULL THEN
           ALTER TABLE users 
             ADD CONSTRAINT fk_users_company 
             FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE;
+        ELSIF v_deltype <> 'c' THEN
+          RAISE EXCEPTION 'Foreign key on users("companyId") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint 
-          WHERE conrelid = 'reports'::regclass 
-            AND contype = 'f' 
-            AND confrelid = 'companies'::regclass
-        ) THEN
+        -- 2. reports.companyId -> companies.id ON DELETE CASCADE
+        v_deltype := NULL;
+        SELECT c.confdeltype::text INTO v_deltype
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        WHERE c.conrelid = 'reports'::regclass 
+          AND c.confrelid = 'companies'::regclass
+          AND c.contype = 'f'
+          AND a.attname = 'companyId'
+        LIMIT 1;
+
+        IF v_deltype IS NULL THEN
           ALTER TABLE reports 
             ADD CONSTRAINT fk_reports_company 
             FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE;
+        ELSIF v_deltype <> 'c' THEN
+          RAISE EXCEPTION 'Foreign key on reports("companyId") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint 
-          WHERE conrelid = 'auth_tokens'::regclass 
-            AND contype = 'f' 
-            AND confrelid = 'users'::regclass
-        ) THEN
+        -- 3. auth_tokens.userId -> users.id ON DELETE CASCADE
+        v_deltype := NULL;
+        SELECT c.confdeltype::text INTO v_deltype
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+        WHERE c.conrelid = 'auth_tokens'::regclass 
+          AND c.confrelid = 'users'::regclass
+          AND c.contype = 'f'
+          AND a.attname = 'userId'
+        LIMIT 1;
+
+        IF v_deltype IS NULL THEN
           ALTER TABLE auth_tokens 
             ADD CONSTRAINT fk_auth_tokens_user 
             FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE;
+        ELSIF v_deltype <> 'c' THEN
+          RAISE EXCEPTION 'Foreign key on auth_tokens("userId") -> users(id) exists with non-CASCADE delete action (%). Manual migration required.', v_deltype;
         END IF;
 
+        -- Unique constraints (PostgreSQL automatically provisions btree indexes for UNIQUE constraints)
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint c
           JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
@@ -353,10 +379,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
         END IF;
       END $$;
 
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      -- Indispensable non-redundant indices (users.email and auth_tokens.tokenHash already indexed via UNIQUE)
       CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId");
       CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId");
-      CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON auth_tokens("tokenHash");
       CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type ON auth_tokens("userId", type);
     `);
 
@@ -507,56 +532,39 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
 
         const now = new Date().toISOString();
-        const companyId = params.companyId || `comp-${randomUUID()}`;
+        const companyId = `comp-${randomUUID()}`;
 
-        let newCompany: CompanyRecord;
-        if (!params.companyId) {
-          newCompany = {
-            id: companyId,
-            name: (params.companyName || "Azienda Senza Nome").trim(),
-            vatNumber: "",
-            address: "",
-            defaultHourlyRate: 45,
-            reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
-            stripeSubscriptionStatus: "Attivo (Piano Base)",
-            maxUsers: 5,
-            featurePdfExport: true,
-            createdAt: now,
-            updatedAt: now,
-          };
+        const newCompany: CompanyRecord = {
+          id: companyId,
+          name: (params.companyName || "Azienda Senza Nome").trim(),
+          vatNumber: "",
+          address: "",
+          defaultHourlyRate: 45,
+          reportFooterNotes: "Grazie per aver scelto i nostri servizi professionali.",
+          stripeSubscriptionStatus: "Attivo (Piano Base)",
+          maxUsers: 5,
+          featurePdfExport: true,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-          await client.query(
-            `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [
-              newCompany.id,
-              newCompany.name,
-              newCompany.vatNumber,
-              newCompany.address,
-              newCompany.defaultHourlyRate,
-              newCompany.reportFooterNotes,
-              newCompany.stripeSubscriptionStatus,
-              newCompany.maxUsers,
-              newCompany.featurePdfExport,
-              newCompany.createdAt,
-              newCompany.updatedAt,
-            ],
-          );
-        } else {
-          newCompany = {
-            id: companyId,
-            name: (params.companyName || "").trim(),
-            vatNumber: "",
-            address: "",
-            defaultHourlyRate: 45,
-            reportFooterNotes: "",
-            stripeSubscriptionStatus: "",
-            maxUsers: 5,
-            featurePdfExport: true,
-            createdAt: now,
-            updatedAt: now,
-          };
-        }
+        await client.query(
+          `INSERT INTO companies (id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "createdAt", "updatedAt") 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            newCompany.id,
+            newCompany.name,
+            newCompany.vatNumber,
+            newCompany.address,
+            newCompany.defaultHourlyRate,
+            newCompany.reportFooterNotes,
+            newCompany.stripeSubscriptionStatus,
+            newCompany.maxUsers,
+            newCompany.featurePdfExport,
+            newCompany.createdAt,
+            newCompany.updatedAt,
+          ],
+        );
 
         const { hash, salt } = hashPassword(params.password || randomUUID());
         const userId = `usr-${randomUUID()}`;
@@ -731,13 +739,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     await this.pool.query(
       `UPDATE users 
-       SET email = $1, "fullName" = $2, role = $3, "companyId" = $4, "companyName" = $5, "passwordHash" = $6, salt = $7, "isActive" = $8, "emailConfirmed" = $9, "phoneNumber" = $10, "updatedAt" = $11 
-       WHERE id = $12`,
+       SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "passwordHash" = $5, salt = $6, "isActive" = $7, "emailConfirmed" = $8, "phoneNumber" = $9, "updatedAt" = $10 
+       WHERE id = $11`,
       [
         updated.email,
         updated.fullName,
         updated.role,
-        updated.companyId,
         updated.companyName,
         updated.passwordHash,
         updated.salt,

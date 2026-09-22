@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "crypto";
 import { PostgresAdapter } from "./db-postgres";
 import { CompanyRecord, UserRecord, ReportRecord } from "./types";
 
@@ -45,8 +46,11 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS companies");
     expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS users");
     expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS reports");
-    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_users_email");
+    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_users_company_id");
     expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_reports_company_id");
+    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type");
+    expect(queryArg).not.toContain("CREATE INDEX IF NOT EXISTS idx_users_email");
+    expect(queryArg).not.toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash");
   });
 
   it("withTransaction executes BEGIN, queries, and COMMIT on success", async () => {
@@ -641,19 +645,27 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
   });
 
-  describe("P0.4.4-I2 — PostgreSQL Integrity Constraints & Foreign Keys", () => {
-    it("defines foreign keys with ON DELETE CASCADE and UNIQUE constraints in schema DDL", async () => {
+  describe("P0.4.4-I2 — PostgreSQL Integrity Constraints & Foreign Keys (Mock Suite)", () => {
+    it("defines foreign keys with ON DELETE CASCADE, column checks, and UNIQUE constraints in schema DDL", async () => {
       const adapter = new PostgresAdapter(mockPool);
       await adapter.initDatabase();
 
       const ddl = mockPool.query.mock.calls[0][0];
-      // Foreign keys with ON DELETE CASCADE
+      // Foreign keys with ON DELETE CASCADE in table definitions
       expect(ddl).toContain('"companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE');
       expect(ddl).toContain('"userId" VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE');
       // Unique constraints
       expect(ddl).toContain("email VARCHAR(255) UNIQUE NOT NULL");
       expect(ddl).toContain('"tokenHash" VARCHAR(255) NOT NULL UNIQUE');
-      // Migration DO $$ block constraints
+      // Migration DO $$ block checks confdeltype and exact column relationships
+      expect(ddl).toContain("c.confdeltype::text INTO v_deltype");
+      expect(ddl).toContain("a.attname = 'companyId'");
+      expect(ddl).toContain("a.attname = 'userId'");
+      expect(ddl).toContain("ELSIF v_deltype <> 'c' THEN");
+      expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on users(\"companyId\") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.'");
+      expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on reports(\"companyId\") -> companies(id) exists with non-CASCADE delete action (%). Manual migration required.'");
+      expect(ddl).toContain("RAISE EXCEPTION 'Foreign key on auth_tokens(\"userId\") -> users(id) exists with non-CASCADE delete action (%). Manual migration required.'");
+      // Migration DO $$ block adds constraints idempotently
       expect(ddl).toContain("ADD CONSTRAINT fk_users_company");
       expect(ddl).toContain('FOREIGN KEY ("companyId") REFERENCES companies(id) ON DELETE CASCADE');
       expect(ddl).toContain("ADD CONSTRAINT fk_reports_company");
@@ -661,19 +673,29 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       expect(ddl).toContain("ADD CONSTRAINT uq_users_email UNIQUE (email)");
       expect(ddl).toContain('ADD CONSTRAINT uq_auth_tokens_token_hash UNIQUE ("tokenHash")');
       // Indispensable indexes
-      expect(ddl).toContain("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_company_id ON users("companyId")');
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_reports_company_id ON reports("companyId")');
-      expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON auth_tokens("tokenHash")');
       expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type ON auth_tokens("userId", type)');
+      // Redundant indexes on UNIQUE columns are eliminated
+      expect(ddl).not.toContain("CREATE INDEX IF NOT EXISTS idx_users_email");
+      expect(ddl).not.toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash");
     });
 
-    it("rejects user creation with nonexistent companyId (foreign key constraint violation)", async () => {
+    it("fails migration with an explicit error if a foreign key exists with a non-CASCADE action", async () => {
       const adapter = new PostgresAdapter(mockPool);
+      mockPool.query.mockImplementation((sql: string) => {
+        if (sql.includes("DO $$") && sql.includes("confdeltype")) {
+          const err: any = new Error('Foreign key on users("companyId") -> companies(id) exists with non-CASCADE delete action (a). Manual migration required.');
+          return Promise.reject(err);
+        }
+        return Promise.resolve({ rows: [] });
+      });
 
-      mockClient.query.mockImplementation((sql: string) => {
-        if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
-        if (sql.includes("SELECT id FROM users WHERE email")) return Promise.resolve({ rowCount: 0, rows: [] });
+      await expect(adapter.initDatabase()).rejects.toThrow(/exists with non-CASCADE delete action/i);
+    });
+
+    it("rejects user insert with nonexistent companyId (foreign key constraint violation 23503)", async () => {
+      mockPool.query.mockImplementation((sql: string) => {
         if (sql.includes("INSERT INTO users")) {
           const fkErr: any = new Error('insert or update on table "users" violates foreign key constraint "fk_users_company"');
           fkErr.code = "23503";
@@ -683,15 +705,14 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       });
 
       await expect(
-        adapter.createUser({
-          email: "user_orphan@example.com",
-          fullName: "Orphan User",
-          companyId: "comp-nonexistent-999",
-        })
+        mockPool.query(
+          'INSERT INTO users (id, email, "fullName", "companyId") VALUES ($1, $2, $3, $4)',
+          ["usr-orphan-123", "orphan@example.com", "Orphan User", "comp-nonexistent-999"]
+        )
       ).rejects.toThrow(/violates foreign key constraint/i);
     });
 
-    it("rejects report creation with nonexistent companyId (foreign key constraint violation)", async () => {
+    it("rejects report creation with nonexistent companyId (foreign key constraint violation 23503)", async () => {
       const adapter = new PostgresAdapter(mockPool);
 
       mockPool.query.mockImplementation((sql: string) => {
@@ -710,7 +731,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       ).rejects.toThrow(/violates foreign key constraint/i);
     });
 
-    it("rejects auth token creation with nonexistent userId (foreign key constraint violation)", async () => {
+    it("rejects auth token creation with nonexistent userId (foreign key constraint violation 23503)", async () => {
       const adapter = new PostgresAdapter(mockPool);
 
       mockPool.query.mockImplementation((sql: string) => {
@@ -732,7 +753,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       ).rejects.toThrow(/violates foreign key constraint/i);
     });
 
-    it("rejects duplicate user email at database level (unique constraint violation)", async () => {
+    it("rejects duplicate user email at database level (unique constraint violation 23505)", async () => {
       const adapter = new PostgresAdapter(mockPool);
 
       mockClient.query.mockImplementation((sql: string) => {
@@ -756,7 +777,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       ).rejects.toThrow("Email already registered");
     });
 
-    it("rejects duplicate auth token tokenHash at database level (unique constraint violation)", async () => {
+    it("rejects duplicate auth token tokenHash at database level (unique constraint violation 23505)", async () => {
       const adapter = new PostgresAdapter(mockPool);
 
       mockPool.query.mockImplementation((sql: string) => {
@@ -776,6 +797,179 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
           expiresAt: new Date().toISOString(),
         })
       ).rejects.toThrow(/violates unique constraint/i);
+    });
+  });
+
+  const requireRealPostgres = process.env.REQUIRE_REAL_POSTGRES_TESTS === "true";
+  const realPostgresDescribe = requireRealPostgres ? describe : describe.skip;
+
+  realPostgresDescribe("P0.4.4-I2 — Real PostgreSQL Constraints & Cascade Suite (Optional)", () => {
+    let realPool: any = null;
+    let realAdapter: PostgresAdapter | null = null;
+    const runId = randomUUID().slice(0, 8);
+    const testCompanyId = `comp-real-${runId}`;
+    const testUserId = `usr-real-${runId}`;
+    const testUserEmail = `real-test-${runId}@example.com`;
+    const testReportId = `rep-real-${runId}`;
+
+    beforeAll(async () => {
+      if (!requireRealPostgres) return;
+      const testUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+      if (!testUrl) {
+        throw new Error("REQUIRE_REAL_POSTGRES_TESTS=true but neither TEST_DATABASE_URL nor DATABASE_URL is set.");
+      }
+      const { Pool } = await import("pg");
+      realPool = new Pool({ connectionString: testUrl, max: 2 });
+      realAdapter = new PostgresAdapter(realPool);
+      const ok = await realAdapter.ping(2000).catch(() => false);
+      if (!ok) {
+        throw new Error("REQUIRE_REAL_POSTGRES_TESTS=true but PostgreSQL connection ping failed.");
+      }
+      await realAdapter.initDatabase();
+    });
+
+    afterAll(async () => {
+      if (!requireRealPostgres || !realPool) return;
+      try {
+        // Safe granular cleanup: strictly delete records created by this runId
+        await realPool.query("DELETE FROM companies WHERE id = $1", [testCompanyId]);
+        await realPool.query("DELETE FROM users WHERE email = $1", [testUserEmail]);
+        await realPool.query('DELETE FROM auth_tokens WHERE "tokenHash" LIKE $1', [`%${runId}%`]);
+      } catch {
+        // ignore cleanup errors
+      }
+      await realPool.end();
+    });
+
+    it("rejects user insertion with nonexistent companyId (foreign key constraint violation 23503)", async () => {
+      try {
+        await realPool.query(
+          'INSERT INTO users (id, email, "fullName", "companyId") VALUES ($1, $2, $3, $4)',
+          [testUserId, testUserEmail, "Test User", "comp-nonexistent-orphan-999"]
+        );
+        expect.unreachable("Should have rejected user with nonexistent companyId");
+      } catch (err: any) {
+        expect(err.code).toBe("23503");
+      }
+    });
+
+    it("rejects report insertion with nonexistent companyId (foreign key constraint violation 23503)", async () => {
+      try {
+        await realAdapter!.createReport("comp-nonexistent-orphan-999", {
+          client: { name: "Orphan Client" },
+        });
+        expect.unreachable("Should have rejected report with nonexistent companyId");
+      } catch (err: any) {
+        expect(err.code).toBe("23503");
+      }
+    });
+
+    it("rejects auth token insertion with nonexistent userId (foreign key constraint violation 23503)", async () => {
+      try {
+        await realAdapter!.createAuthToken({
+          userId: "usr-nonexistent-orphan-999",
+          tokenHash: `hash-orphan-${runId}`,
+          type: "email_verification",
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+        });
+        expect.unreachable("Should have rejected auth token with nonexistent userId");
+      } catch (err: any) {
+        expect(err.code).toBe("23503");
+      }
+    });
+
+    it("rejects duplicate user email (unique constraint violation 23505)", async () => {
+      await realPool.query(
+        'INSERT INTO companies (id, name, "createdAt", "updatedAt") VALUES ($1, $2, NOW(), NOW())',
+        [testCompanyId, `Test Co ${runId}`]
+      );
+      await realPool.query(
+        'INSERT INTO users (id, email, "fullName", "companyId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
+        [testUserId, testUserEmail, "Original User", testCompanyId]
+      );
+      try {
+        await realPool.query(
+          'INSERT INTO users (id, email, "fullName", "companyId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
+          [`usr-dup-${runId}`, testUserEmail, "Duplicate User", testCompanyId]
+        );
+        expect.unreachable("Should have rejected duplicate email");
+      } catch (err: any) {
+        expect(err.code).toBe("23505");
+      }
+    });
+
+    it("rejects duplicate auth token tokenHash (unique constraint violation 23505)", async () => {
+      const tokenHash = `unique-hash-${runId}`;
+      await realAdapter!.createAuthToken({
+        userId: testUserId,
+        tokenHash,
+        type: "email_verification",
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+      });
+
+      try {
+        await realAdapter!.createAuthToken({
+          userId: testUserId,
+          tokenHash,
+          type: "password_reset",
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
+        });
+        expect.unreachable("Should have rejected duplicate tokenHash");
+      } catch (err: any) {
+        expect(err.code).toBe("23505");
+      }
+    });
+
+    it("cascades deletion: deleting a company deletes associated users and reports", async () => {
+      const cascadeCompanyId = `comp-casc-${runId}`;
+      const cascadeUserId = `usr-casc-${runId}`;
+      const cascadeReportId = `rep-casc-${runId}`;
+
+      await realPool.query(
+        'INSERT INTO companies (id, name, "createdAt", "updatedAt") VALUES ($1, $2, NOW(), NOW())',
+        [cascadeCompanyId, `Cascade Co ${runId}`]
+      );
+      await realPool.query(
+        'INSERT INTO users (id, email, "fullName", "companyId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
+        [cascadeUserId, `casc-${runId}@example.com`, "Cascade User", cascadeCompanyId]
+      );
+      await realPool.query(
+        'INSERT INTO reports (id, "companyId", "createdAt") VALUES ($1, $2, NOW())',
+        [cascadeReportId, cascadeCompanyId]
+      );
+
+      await realPool.query('DELETE FROM companies WHERE id = $1', [cascadeCompanyId]);
+
+      const userCheck = await realPool.query('SELECT id FROM users WHERE id = $1', [cascadeUserId]);
+      const reportCheck = await realPool.query('SELECT id FROM reports WHERE id = $1', [cascadeReportId]);
+      expect(userCheck.rowCount).toBe(0);
+      expect(reportCheck.rowCount).toBe(0);
+    });
+
+    it("cascades deletion: deleting a user deletes associated auth_tokens", async () => {
+      const cascadeUserId = `usr-casc-tok-${runId}`;
+      const cascadeUserEmail = `casc-tok-${runId}@example.com`;
+      const tokenHash = `casc-tok-hash-${runId}`;
+
+      await realPool.query(
+        'INSERT INTO companies (id, name, "createdAt", "updatedAt") VALUES ($1, $2, NOW(), NOW()) ON CONFLICT (id) DO NOTHING',
+        [testCompanyId, `Test Co ${runId}`]
+      );
+      await realPool.query(
+        'INSERT INTO users (id, email, "fullName", "companyId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW())',
+        [cascadeUserId, cascadeUserEmail, "Cascade User", testCompanyId]
+      );
+      await realAdapter!.createAuthToken({
+        userId: cascadeUserId,
+        tokenHash,
+        type: "email_verification",
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+      });
+
+      await realPool.query('DELETE FROM users WHERE id = $1', [cascadeUserId]);
+
+      const tokenCheck = await realPool.query('SELECT id FROM auth_tokens WHERE "tokenHash" = $1', [tokenHash]);
+      expect(tokenCheck.rowCount).toBe(0);
     });
   });
 });
