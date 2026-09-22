@@ -137,11 +137,17 @@ export interface IDatabaseAdapter {
 
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: Pool;
+  private isClosed = false;
   public tokenStore = tokenStore;
 
   constructor(customPool?: Pool) {
     if (customPool) {
       this.pool = customPool;
+      if (typeof (this.pool as any).on === "function") {
+        this.pool.on("error", (err: any) => {
+          console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err?.message || err);
+        });
+      }
       return;
     }
 
@@ -159,38 +165,85 @@ export class PostgresAdapter implements IDatabaseAdapter {
     );
     const useSsl = isProd && !isLocalDb;
 
+    const maxConnections = Number(process.env.PG_POOL_MAX) || 20;
+    const connectionTimeoutMillis = Number(process.env.PG_CONNECTION_TIMEOUT_MS) || 5000;
+    const idleTimeoutMillis = Number(process.env.PG_IDLE_TIMEOUT_MS) || 30000;
+
     this.pool = new Pool({
       connectionString: dbUrl,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
+      max: maxConnections,
+      connectionTimeoutMillis,
+      idleTimeoutMillis,
+      keepAlive: true,
     });
 
-    // Handle unexpected idle client connection pool errors
-    this.pool.on("error", (err) => {
-      console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err.message || err);
+    // Handle unexpected idle client connection pool errors without crashing the process
+    this.pool.on("error", (err: any) => {
+      console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err?.message || err);
     });
   }
 
+  public getPool(): Pool {
+    return this.pool;
+  }
+
   public async ping(timeoutMs = 2000): Promise<boolean> {
+    let timer: NodeJS.Timeout | null = null;
+    let timedOut = false;
+    let acquiredClient: PoolClient | null = null;
+
     try {
-      let timer: NodeJS.Timeout | null = null;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Database ping timed out")), timeoutMs);
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error("Database ping timed out"));
+        }, timeoutMs);
       });
 
-      const queryPromise = this.pool.query("SELECT 1");
-      try {
-        await Promise.race([queryPromise, timeoutPromise]);
-        return true;
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
+      const doPing = async () => {
+        if (typeof this.pool.connect === "function") {
+          const client = await this.pool.connect();
+          acquiredClient = client;
+          if (timedOut) {
+            try {
+              client.release(true);
+            } catch {}
+            return;
+          }
+          await client.query("SELECT 1");
+        } else {
+          await this.pool.query("SELECT 1");
+        }
+      };
+
+      await Promise.race([doPing(), timeoutPromise]);
+      return true;
     } catch {
       return false;
+    } finally {
+      if (timer) clearTimeout(timer);
+      if (acquiredClient) {
+        try {
+          if (timedOut) {
+            acquiredClient.release(true);
+          } else {
+            acquiredClient.release();
+          }
+        } catch {}
+      }
     }
   }
 
   public async close(): Promise<void> {
-    await this.pool.end();
+    if (this.isClosed) return;
+    this.isClosed = true;
+    try {
+      await this.pool.end();
+    } catch (err) {
+      console.error("[PostgresAdapter] Error closing connection pool:", err);
+      throw err;
+    }
   }
 
   public async initDatabase(): Promise<void> {

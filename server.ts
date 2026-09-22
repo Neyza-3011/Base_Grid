@@ -233,59 +233,118 @@ async function startServer() {
   });
 
   // Graceful Shutdown Handler
-  let isShuttingDown = false;
-  const gracefulShutdown = async (signal: string) => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    console.log(`Received ${signal}. Initiating graceful shutdown...`);
-
-    // 1. Close Express server to stop accepting new requests
-    server.close(() => {
-      console.log("Express server stopped accepting new connections.");
-    });
-
-    // 2. Kill the spawned Nitro frontend process
-    if (nitroProcess) {
-      console.log("Terminating Nitro frontend process...");
-      try {
-        nitroProcess.kill("SIGTERM");
-      } catch (err) {
-        console.error("Error killing Nitro process:", err);
-      }
-    }
-
-    // 3. Close the DB adapter connection pool
-    try {
-      if (db && typeof db.close === "function") {
-        console.log("Closing PostgreSQL connection pool...");
-        await db.close();
-      }
-    } catch (err) {
-      console.error("Error closing PostgreSQL pool:", err);
-    }
-
-    // 4. Close the tokenStore (Redis) adapter
-    try {
-      const adapter = tokenStore.getAdapter();
-      if (adapter && typeof adapter.close === "function") {
-        console.log("Closing Redis token store connection...");
-        await adapter.close();
-      }
-    } catch (err) {
-      console.error("Error closing Redis token store:", err);
-    }
-
-    console.log("Graceful shutdown sequence completed.");
-    process.exit(0);
-  };
+  const gracefulShutdown = createShutdownHandler({
+    server,
+    nitroProcess,
+    db,
+    tokenStore,
+    exit: (code) => process.exit(code),
+    timeoutMs: 10000,
+  });
 
   process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
-startServer().catch((err) => {
-  console.error("CRITICAL: Uncaught server startup failure:", err);
-  process.exit(1);
-});
+export interface ShutdownDependencies {
+  server: { close: (cb: (err?: Error) => void) => void };
+  nitroProcess?: { kill: (sig: string) => boolean } | null;
+  db?: { close?: () => Promise<void> };
+  tokenStore?: { getAdapter?: () => { close?: () => Promise<void> } };
+  exit?: (code: number) => void;
+  timeoutMs?: number;
+}
+
+export function createShutdownHandler(deps: ShutdownDependencies) {
+  let isShuttingDown = false;
+  let shutdownPromise: Promise<void> | null = null;
+
+  return (signal: string): Promise<void> => {
+    if (isShuttingDown && shutdownPromise) {
+      console.log(`Shutdown already in progress. Ignoring duplicate signal ${signal}.`);
+      return shutdownPromise;
+    }
+    isShuttingDown = true;
+    console.log(`Received ${signal}. Initiating graceful shutdown...`);
+
+    const timeoutMs = deps.timeoutMs ?? 10000;
+    const exitFn = deps.exit ?? ((code: number) => process.exit(code));
+
+    const forceTimer = setTimeout(() => {
+      console.error(`CRITICAL: Graceful shutdown timed out after ${timeoutMs}ms. Forcing process exit.`);
+      exitFn(1);
+    }, timeoutMs);
+
+    if (typeof (forceTimer as any).unref === "function") {
+      (forceTimer as any).unref();
+    }
+
+    shutdownPromise = (async () => {
+      try {
+        // 1 & 2. Stop accepting new requests and allow in-flight active requests to drain
+        await new Promise<void>((resolve) => {
+          deps.server.close((err) => {
+            if (err) {
+              console.error("Error while closing Express server:", err);
+            } else {
+              console.log("Express server stopped accepting new connections and drained active requests.");
+            }
+            resolve();
+          });
+        });
+
+        // 3. Terminate the spawned Nitro frontend process if present
+        if (deps.nitroProcess) {
+          console.log("Terminating Nitro frontend process...");
+          try {
+            deps.nitroProcess.kill("SIGTERM");
+          } catch (err) {
+            console.error("Error terminating Nitro process:", err);
+          }
+        }
+
+        // 4. Close the DB adapter PostgreSQL connection pool
+        if (deps.db && typeof deps.db.close === "function") {
+          console.log("Closing PostgreSQL connection pool...");
+          try {
+            await deps.db.close();
+          } catch (err) {
+            console.error("Error closing PostgreSQL pool:", err);
+          }
+        }
+
+        // 5. Complete existing Redis token store shutdown
+        if (deps.tokenStore && typeof deps.tokenStore.getAdapter === "function") {
+          try {
+            const adapter = deps.tokenStore.getAdapter();
+            if (adapter && typeof adapter.close === "function") {
+              console.log("Closing Redis token store connection...");
+              await adapter.close();
+            }
+          } catch (err) {
+            console.error("Error closing Redis token store:", err);
+          }
+        }
+
+        clearTimeout(forceTimer);
+        console.log("Graceful shutdown sequence completed.");
+        exitFn(0);
+      } catch (err) {
+        clearTimeout(forceTimer);
+        console.error("Unexpected error during graceful shutdown:", err);
+        exitFn(1);
+      }
+    })();
+
+    return shutdownPromise;
+  };
+}
+
+if (!process.argv[1]?.includes("vitest")) {
+  startServer().catch((err) => {
+    console.error("CRITICAL: Uncaught server startup failure:", err);
+    process.exit(1);
+  });
+}
 
 

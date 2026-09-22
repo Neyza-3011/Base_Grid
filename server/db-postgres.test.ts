@@ -1224,10 +1224,92 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
   });
 
+  describe("P0.4.4-I4 — PostgreSQL Pool, Timeout, Failure Handling & Graceful Shutdown (Mock Suite)", () => {
+    it("instantiates pg.Pool with explicit production-grade options: max, connectionTimeoutMillis, idleTimeoutMillis, keepAlive", async () => {
+      const origEnv = process.env.NODE_ENV;
+      const origDb = process.env.DATABASE_URL;
+      try {
+        process.env.NODE_ENV = "production";
+        process.env.DATABASE_URL = "postgres://user:pass@127.0.0.1:5432/testdb";
+        const adapter = new PostgresAdapter();
+        const pool = adapter.getPool();
+        expect(pool).toBeDefined();
+        expect((pool as any).options.connectionTimeoutMillis).toBe(5000);
+        expect((pool as any).options.idleTimeoutMillis).toBe(30000);
+        expect((pool as any).options.max).toBe(20);
+        expect((pool as any).options.keepAlive).toBe(true);
+        await adapter.close();
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origDb) process.env.DATABASE_URL = origDb;
+        else delete process.env.DATABASE_URL;
+      }
+    });
+
+    it("ping() returns true when SELECT 1 executes successfully within timeout", async () => {
+      mockClient.query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
+      const adapter = new PostgresAdapter(mockPool);
+      const res = await adapter.ping(1000);
+      expect(res).toBe(true);
+      expect(mockClient.query).toHaveBeenCalledWith("SELECT 1");
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it("ping() returns false when query or connection fails", async () => {
+      mockClient.query.mockRejectedValueOnce(new Error("Connection reset by peer"));
+      const adapter = new PostgresAdapter(mockPool);
+      const res = await adapter.ping(1000);
+      expect(res).toBe(false);
+    });
+
+    it("ping() returns false and destroys hung connection when query exceeds timeout", async () => {
+      mockClient.query.mockImplementationOnce(() => new Promise(() => {}));
+      const adapter = new PostgresAdapter(mockPool);
+      const res = await adapter.ping(50);
+      expect(res).toBe(false);
+      expect(mockClient.release).toHaveBeenCalledWith(true);
+    });
+
+    it("db.close() calls pool.end() and is idempotent", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.close();
+      expect(mockPool.end).toHaveBeenCalledTimes(1);
+
+      // Calling close a second time does not invoke pool.end again
+      await adapter.close();
+      expect(mockPool.end).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs idle client error without crashing process or throwing unhandled exception", () => {
+      const errorListeners: Array<(err: any) => void> = [];
+      const fakePoolWithEmitter = {
+        ...mockPool,
+        on: vi.fn((event: string, cb: (err: any) => void) => {
+          if (event === "error") errorListeners.push(cb);
+        }),
+      };
+
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const adapter = new PostgresAdapter(fakePoolWithEmitter as any);
+
+      expect(fakePoolWithEmitter.on).toHaveBeenCalledWith("error", expect.any(Function));
+
+      expect(() => {
+        errorListeners.forEach((listener) => listener(new Error("Idle client terminated unexpectedly")));
+      }).not.toThrow();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[PostgresPoolError]"),
+        expect.stringContaining("Idle client terminated unexpectedly"),
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
   const requireRealPostgres = process.env.REQUIRE_REAL_POSTGRES_TESTS === "true";
   const realPostgresDescribe = requireRealPostgres ? describe : describe.skip;
 
-  realPostgresDescribe("P0.4.4-I2/I3 — Real PostgreSQL Constraints, Transactions & Concurrency Suite (Optional)", () => {
+  realPostgresDescribe("P0.4.4-I2/I3/I4 — Real PostgreSQL Constraints, Transactions & Concurrency Suite (Optional)", () => {
     let realPool: any = null;
     let realAdapter: PostgresAdapter | null = null;
     const runId = randomUUID().slice(0, 8);
