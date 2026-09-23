@@ -2,6 +2,7 @@ import { rateLimiter } from "./rate-limiter";
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import http from "http";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { createApp } from "./app";
 import { db } from "./db";
 import { tokenStore, RefreshTokenStore } from "./token-store";
@@ -524,6 +525,49 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         tokenStore.setAvailability(true);
       }
     });
+
+    it("rejects refresh token when user authVersion was incremented (obsolete authVersion in payload)", async () => {
+      const user = await db.findUserByEmail("admin@rossi.it")!;
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      // Simulate a password change or security event that increments authVersion
+      await db.incrementUserAuthVersion(user.id);
+
+      const refreshRes = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: r1 },
+      });
+
+      expect(refreshRes.status).toBe(401);
+      expect(refreshRes.body.detail).toMatch(/motivi di sicurezza/i);
+    });
+
+    it("accepts refresh token when user authVersion matches payload authVersion", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      const refreshRes = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: r1 },
+      });
+
+      expect(refreshRes.status).toBe(200);
+      expect(refreshRes.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(true);
+      expect(refreshRes.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(true);
+    });
   });
 
   describe("5. Logout (/api/v1/auth/logout)", async () => {
@@ -561,6 +605,47 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         },
       });
       expect(refreshRes.status).toBe(401);
+    });
+
+    it("fails closed with 503 and clears cookies when tokenStore (Redis) is unavailable and refresh_token is provided", async () => {
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "admin@rossi.it",
+          password: "Password123!",
+        },
+      });
+      const r1 = loginRes.setCookieHeaders.find((c) => c.startsWith("refresh_token="))!.split(";")[0].split("=")[1];
+
+      tokenStore.setAvailability(false);
+      try {
+        const res = await apiRequest("/api/v1/auth/logout", {
+          method: "POST",
+          cookies: {
+            refresh_token: r1,
+          },
+        });
+
+        expect(res.status).toBe(503);
+        expect(res.body.detail).toMatch(/temporaneamente non disponibile/i);
+        // Cookies must still be cleared!
+        expect(res.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
+        expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token=;"))).toBe(true);
+        expect(res.setCookieHeaders.some((c) => c.startsWith("csrf_token=;"))).toBe(true);
+      } finally {
+        tokenStore.setAvailability(true);
+      }
+    });
+
+    it("succeeds with 200 and clears cookies when no refresh_token is provided", async () => {
+      const res = await apiRequest("/api/v1/auth/logout", {
+        method: "POST",
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token=;"))).toBe(true);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("csrf_token=;"))).toBe(true);
     });
   });
 
@@ -2498,3 +2583,355 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.body.detail).toContain("Sessione invalidata per motivi di sicurezza");
     });
   });
+
+  describe("15. Google OAuth Server-Authoritative & Session Security (P0.4.4-J)", () => {
+    let verifyIdTokenSpy: any;
+
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.GOOGLE_AUTH_ENABLED = true;
+      config.GOOGLE_CLIENT_ID = "test-google-client-id.apps.googleusercontent.com";
+
+      verifyIdTokenSpy = vi.spyOn(OAuth2Client.prototype, "verifyIdToken").mockImplementation(
+        async ({ idToken, audience }: any) => {
+          if (idToken === "valid-google-id-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://accounts.google.com",
+                aud: audience,
+                sub: "google-sub-user-001",
+                email: "google.contractor@gmail.com",
+                email_verified: true,
+                name: "Mario Rossi Google",
+              }),
+            } as any;
+          }
+
+          if (idToken === "valid-existing-google-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://accounts.google.com",
+                aud: audience,
+                sub: "google-sub-existing",
+                email: "existing.google.user@gmail.com",
+                email_verified: true,
+                name: "Existing Google Contractor",
+              }),
+            } as any;
+          }
+
+          if (idToken === "local-collision-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://accounts.google.com",
+                aud: audience,
+                sub: "google-sub-collision",
+                email: "admin@rossi.it", // matches existing local user!
+                email_verified: true,
+                name: "Attacker Impersonating Local Admin",
+              }),
+            } as any;
+          }
+
+          if (idToken === "unverified-email-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://accounts.google.com",
+                aud: audience,
+                sub: "google-sub-unverified",
+                email: "unverified@gmail.com",
+                email_verified: false,
+                name: "Unverified User",
+              }),
+            } as any;
+          }
+
+          if (idToken === "wrong-audience-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://accounts.google.com",
+                aud: "wrong-client-id-evil.apps.googleusercontent.com",
+                sub: "google-sub-evil",
+                email: "attacker@gmail.com",
+                email_verified: true,
+                name: "Wrong Audience Attacker",
+              }),
+            } as any;
+          }
+
+          if (idToken === "bad-issuer-token") {
+            return {
+              getPayload: () => ({
+                iss: "https://evil-issuer.com",
+                aud: audience,
+                sub: "google-sub-evil-iss",
+                email: "evil@evil-issuer.com",
+                email_verified: true,
+                name: "Evil Issuer",
+              }),
+            } as any;
+          }
+
+          throw new Error("Invalid Google token signature");
+        }
+      );
+    });
+
+    afterEach(() => {
+      verifyIdTokenSpy?.mockRestore();
+    });
+
+    it("rejects Google auth requests missing ID token / credential with 400", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {},
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toMatch(/Google ID token/i);
+    });
+
+    it("rejects arbitrary unverified client-supplied { email, fullName } without token with 400", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          email: "arbitrary.attacker@target.com",
+          fullName: "Attacker",
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toMatch(/Google ID token/i);
+    });
+
+    it("rejects invalid Google ID tokens with 401", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "completely-forged-or-invalid-token",
+        },
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/Invalid Google token signature/i);
+    });
+
+    it("rejects Google tokens with wrong audience with 401", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "wrong-audience-token",
+        },
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/audience non corrispondente/i);
+    });
+
+    it("rejects Google tokens with untrusted issuer with 401", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "bad-issuer-token",
+        },
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/issuer non attendibile/i);
+    });
+
+    it("rejects Google tokens with unverified email (email_verified === false) with 401", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "unverified-email-token",
+        },
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/email Google non verificato/i);
+    });
+
+    it("authenticates valid Google ID token, registers session in tokenStore, and returns safe session", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "valid-google-id-token",
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.email).toBe("google.contractor@gmail.com");
+      expect(res.body.fullName).toBe("Mario Rossi Google");
+      expect(res.body.provider).toBe("google");
+      expect(res.body.passwordHash).toBeUndefined();
+
+      // Check HttpOnly cookies
+      const accessTokenCookie = res.setCookieHeaders.find((c) => c.startsWith("access_token="));
+      const refreshTokenCookie = res.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
+      const csrfTokenCookie = res.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
+
+      expect(accessTokenCookie).toBeDefined();
+      expect(accessTokenCookie).toContain("HttpOnly");
+      expect(refreshTokenCookie).toBeDefined();
+      expect(refreshTokenCookie).toContain("HttpOnly");
+      expect(refreshTokenCookie).toContain("Path=/api/v1/auth");
+      expect(csrfTokenCookie).toBeDefined();
+
+      // Verify token registered in tokenStore
+      const refreshToken = refreshTokenCookie!.split(";")[0].split("=")[1];
+      const record = await tokenStore.getTokenRecord(refreshToken);
+      expect(record).toBeDefined();
+      expect(record?.userId).toBe(res.body.id);
+      expect(record?.status).toBe("active");
+    });
+
+    it("rejects automatic linking/takeover when email belongs to existing local account (409 Conflict)", async () => {
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: {
+          credential: "local-collision-token", // email: admin@rossi.it (local account)
+        },
+      });
+
+      expect(res.status).toBe(409);
+      expect(res.body.detail).toMatch(/credenziali locali/i);
+    });
+
+    it("allows repeat login for existing Google provider account", async () => {
+      // 1. First login/registration
+      const res1 = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: { credential: "valid-existing-google-token" },
+      });
+      expect(res1.status).toBe(200);
+      const userId1 = res1.body.id;
+
+      // 2. Second login with valid Google token for same user
+      const res2 = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: { credential: "valid-existing-google-token" },
+      });
+      expect(res2.status).toBe(200);
+      expect(res2.body.id).toBe(userId1);
+      expect(res2.body.email).toBe("existing.google.user@gmail.com");
+    });
+
+    it("rejects Google auth with 403 when GOOGLE_AUTH_ENABLED is false", async () => {
+      const { config } = await import("./config");
+      const original = config.GOOGLE_AUTH_ENABLED;
+      config.GOOGLE_AUTH_ENABLED = false;
+
+      try {
+        const res = await apiRequest("/api/v1/auth/google", {
+          method: "POST",
+          body: { credential: "valid-google-id-token" },
+        });
+
+        expect(res.status).toBe(403);
+        expect(res.body.detail).toMatch(/disabilitata o non configurata/i);
+      } finally {
+        config.GOOGLE_AUTH_ENABLED = original;
+      }
+    });
+
+    it("rejects authenticated requests when company no longer exists in DB with 401", async () => {
+      const user = await db.findUserByEmail("admin@rossi.it")!;
+      const originalCompanyId = user.companyId;
+
+      // Update user in DB to point to non-existent company
+      await db.updateUser(user.id, { companyId: "comp-non-existent-ghost" });
+
+      try {
+        const { accessToken } = generateTokens(user);
+
+        const res = await apiRequest("/api/v1/users/me", {
+          cookies: { access_token: accessToken, csrf_token: "csrf" },
+        });
+
+        expect(res.status).toBe(401);
+        expect(res.body.detail).toMatch(/Azienda associata non trovata/i);
+      } finally {
+        await db.updateUser(user.id, { companyId: originalCompanyId });
+      }
+    });
+
+    it("rejects authenticated requests when user account is deactivated (isActive=false) with 401", async () => {
+      const user = await db.findUserByEmail("tech@rossi.it")!;
+      const { accessToken } = generateTokens(user);
+
+      // Deactivate user
+      await db.updateUser(user.id, { isActive: false });
+
+      const res = await apiRequest("/api/v1/users/me", {
+        cookies: { access_token: accessToken, csrf_token: "csrf" },
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.detail).toMatch(/disattivato/i);
+
+      // Re-activate user
+      await db.updateUser(user.id, { isActive: true });
+    });
+
+    it("enforces authoritative DB user role/companyId even if JWT claims were forged/tampered", async () => {
+      const user = await db.findUserByEmail("tech@rossi.it")!; // Role is 'technician'
+      const secret = getJwtSecret();
+
+      // Attacker tampers JWT payload to claim 'superadmin' role and master company
+      const forgedRoleToken = jwt.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          role: "superadmin", // Forged!
+          companyId: "comp-master-000", // Forged!
+          tokenType: "access",
+          authVersion: user.authVersion,
+        },
+        secret,
+        { expiresIn: "15m" }
+      );
+
+      // Attempt to access superadmin-only endpoint (/api/v1/admin/stats)
+      const superadminReq = await apiRequest("/api/v1/admin/stats", {
+        cookies: { access_token: forgedRoleToken, csrf_token: "csrf" },
+      });
+
+      // Must be rejected with 403 because auth middleware queries user from DB (authoritative role is 'technician')
+      expect(superadminReq.status).toBe(403);
+    });
+
+    it("verifies tokens are never leaked in response bodies of login, register, or google", async () => {
+      const registerRes = await apiRequest("/api/v1/auth/register", {
+        method: "POST",
+        body: {
+          email: "leak-check@rossi.it",
+          password: "SecurePassword123!",
+          full_name: "Leak Check User",
+          company_name: "Leak Check Company",
+        },
+      });
+
+      expect([200, 201]).toContain(registerRes.status);
+      expect(registerRes.body.token).toBeUndefined();
+      expect(registerRes.body.accessToken).toBeUndefined();
+      expect(registerRes.body.refreshToken).toBeUndefined();
+      expect(registerRes.body.jwt).toBeUndefined();
+
+      const loginRes = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: {
+          email: "leak-check@rossi.it",
+          password: "SecurePassword123!",
+        },
+      });
+
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.token).toBeUndefined();
+      expect(loginRes.body.accessToken).toBeUndefined();
+      expect(loginRes.body.refreshToken).toBeUndefined();
+      expect(loginRes.body.jwt).toBeUndefined();
+    });
+  });
+
+

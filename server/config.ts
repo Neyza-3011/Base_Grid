@@ -21,6 +21,8 @@ export interface ServerConfig {
   SMTP_USER?: string;
   SMTP_PASS?: string;
   EMAIL_VERIFICATION_ENABLED: boolean;
+  GOOGLE_AUTH_ENABLED: boolean;
+  GOOGLE_CLIENT_ID?: string;
 }
 
 export function loadConfig(env = process.env): ServerConfig {
@@ -29,6 +31,10 @@ export function loadConfig(env = process.env): ServerConfig {
   // Feature flag for temporary email-independent mode
   // We default to false per requirements, allowing deployment without email service
   const EMAIL_VERIFICATION_ENABLED = env.EMAIL_VERIFICATION_ENABLED === "true";
+
+  // Google OAuth configuration: default false, requires GOOGLE_CLIENT_ID in prod if enabled
+  const GOOGLE_AUTH_ENABLED = env.GOOGLE_AUTH_ENABLED === "true";
+  const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID?.trim() || undefined;
 
   // JWT Secret is handled strictly by security.ts (fail-closed in prod)
   const JWT_SECRET = getJwtSecret(env);
@@ -117,6 +123,12 @@ export function loadConfig(env = process.env): ServerConfig {
         );
       }
     }
+
+    if (GOOGLE_AUTH_ENABLED && !GOOGLE_CLIENT_ID) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: GOOGLE_CLIENT_ID must be provided in production when GOOGLE_AUTH_ENABLED is true."
+      );
+    }
   } else {
     // Development / Test defaults
     if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
@@ -148,6 +160,8 @@ export function loadConfig(env = process.env): ServerConfig {
     SMTP_USER,
     SMTP_PASS,
     EMAIL_VERIFICATION_ENABLED,
+    GOOGLE_AUTH_ENABLED,
+    GOOGLE_CLIENT_ID,
   };
 }
 

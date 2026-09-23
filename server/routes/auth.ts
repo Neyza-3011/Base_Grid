@@ -11,6 +11,7 @@ import {
   normalizeEmail,
   toSafeUserSession,
   validatePasswordPolicy,
+  verifyGoogleIdToken,
   verifyPassword,
   verifyRefreshToken,
 } from "../security";
@@ -470,6 +471,16 @@ authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: a
       return;
     }
 
+    // authVersion security check: reject if token was issued prior to an authVersion increment
+    const tokenAuthVersion = payload.authVersion ?? 0;
+    const userAuthVersion = user.authVersion ?? 0;
+    if (tokenAuthVersion !== userAuthVersion) {
+      res.status(401).json({
+        detail: "Sessione invalidata per motivi di sicurezza. Effettua nuovamente l'accesso.",
+      });
+      return;
+    }
+
     // Atomic single-use consumption: detects reuse and invalidates compromised families
     const consumeResult = await tokenStore.consumeToken(refreshToken);
     if (!consumeResult.success) {
@@ -517,20 +528,37 @@ authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: a
 /**
  * POST /api/v1/auth/logout
  * Atomically revokes refresh token in persistent store and clears HttpOnly cookies.
+ * Fail-closed: returns 503 if refresh_token was provided but store is unavailable.
  */
 authRouter.post("/logout", asyncHandler(async (req: any, res: any): Promise<void> => {
-  try {
-    const refreshToken = req.cookies?.refresh_token;
-    if (refreshToken && tokenStore.isAvailable()) {
-      await tokenStore.revokeToken(refreshToken);
-    }
-  } catch {
-    // Fail-safe: cookie clearance must proceed regardless
-  }
+  const refreshToken = req.cookies?.refresh_token;
 
+  // Always clear client-side auth and CSRF cookies
   res.clearCookie("access_token", { path: "/" });
   res.clearCookie("refresh_token", { path: "/api/v1/auth" });
   res.clearCookie("csrf_token", { path: "/" });
+
+  if (refreshToken) {
+    // Fail-closed: if token store is unavailable, cookies are cleared but 503 is returned
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. La revoca server-side della sessione non è riuscita.",
+      });
+      return;
+    }
+
+    try {
+      await tokenStore.revokeToken(refreshToken);
+    } catch (err) {
+      if (err instanceof StoreUnavailableError) {
+        res.status(503).json({
+          detail: "Servizio di autenticazione temporaneamente non disponibile. La revoca server-side della sessione non è riuscita.",
+        });
+        return;
+      }
+      throw err;
+    }
+  }
 
   res.status(200).json({ message: "Logout effettuato con successo." });
 }));
@@ -538,21 +566,72 @@ authRouter.post("/logout", asyncHandler(async (req: any, res: any): Promise<void
 /**
  * POST /api/v1/auth/google
  * Server-authoritative Google OAuth authentication with token store registration.
+ * Requires genuine Google ID token verified with google-auth-library.
  */
 authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { email, fullName, companyName } = req.body;
-
-    if (!email || typeof email !== "string" || !fullName || typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 100) {
-      res.status(400).json({ detail: "Dati profilo Google mancanti (email e nome)." });
+    // 1. Google Auth must be configured and enabled
+    if (!config.GOOGLE_AUTH_ENABLED || !config.GOOGLE_CLIENT_ID) {
+      res.status(403).json({
+        detail: "Autenticazione Google disabilitata o non configurata nel sistema.",
+      });
       return;
     }
 
-    const normalizedEmail = normalizeEmail(email);
+    // 2. Token store must be available (Fail-Closed)
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+
+    // 3. Extract Google ID token from request (reject plain email/fullName)
+    const rawIdToken =
+      req.body?.credential || req.body?.idToken || req.body?.id_token || req.body?.token;
+
+    if (!rawIdToken || typeof rawIdToken !== "string" || !rawIdToken.trim()) {
+      res.status(400).json({
+        detail: "Google ID token (credential) mancante o non valido. L'autenticazione richiede una credenziale verificata.",
+      });
+      return;
+    }
+
+    // 4. Server-side verification using google-auth-library
+    let googlePayload;
+    try {
+      googlePayload = await verifyGoogleIdToken(rawIdToken.trim(), config.GOOGLE_CLIENT_ID);
+    } catch (verifyErr: any) {
+      res.status(401).json({
+        detail: verifyErr.message || "Token Google non valido o non verificabile.",
+      });
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(googlePayload.email);
+
+    // 5. Check if user already exists
+    const existingUser = await db.findUserByEmail(normalizedEmail);
+    if (existingUser) {
+      // Do not automatically convert or link local accounts to Google without explicit verification
+      if (existingUser.provider !== "google") {
+        res.status(409).json({
+          detail: "Un account con questo indirizzo email esiste già con credenziali locali. L'accesso tramite Google non è consentito per questo account.",
+        });
+        return;
+      }
+
+      if (!existingUser.isActive) {
+        res.status(401).json({ detail: "Account disattivato." });
+        return;
+      }
+    }
+
+    // 6. Create or login Google user
     const { user } = await db.createGoogleUser({
       email: normalizedEmail,
-      fullName: fullName.trim(),
-      companyName: companyName ? companyName.trim() : undefined,
+      fullName: googlePayload.fullName,
+      companyName: req.body?.companyName ? String(req.body.companyName).trim() : undefined,
     });
 
     if (!user.isActive) {
@@ -560,6 +639,7 @@ authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res:
       return;
     }
 
+    // 7. Issue session tokens with rotation registration
     const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
     await tokenStore.registerToken({
       token: refreshToken,
@@ -575,9 +655,15 @@ authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res:
     res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
 
     res.status(200).json(toSafeUserSession(user));
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof StoreUnavailableError) {
       res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
+    if (error?.message === "Account exists with non-Google provider") {
+      res.status(409).json({
+        detail: "Un account con questo indirizzo email esiste già con credenziali locali. L'accesso tramite Google non è consentito per questo account.",
+      });
       return;
     }
     res.status(500).json({ detail: "Errore durante l'autenticazione Google." });

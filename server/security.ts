@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { JwtPayload, SafeUserSession, UserRecord } from "./types";
 
 const MIN_SECRET_LENGTH = 32;
@@ -284,3 +285,63 @@ export function toSafeUserSession(user: UserRecord): SafeUserSession {
     phoneNumber: user.phoneNumber || "",
   };
 }
+
+export interface VerifiedGooglePayload {
+  email: string;
+  fullName: string;
+  sub: string;
+}
+
+/**
+ * Verifies a Google ID token server-authoritatively using google-auth-library.
+ * Validates cryptographic signature, issuer, audience, and email_verified claim.
+ */
+export async function verifyGoogleIdToken(
+  idToken: string,
+  expectedClientId: string,
+  clientOverride?: OAuth2Client,
+): Promise<VerifiedGooglePayload> {
+  if (!idToken || typeof idToken !== "string" || !idToken.trim()) {
+    throw new Error("Google ID token mancante o non valido.");
+  }
+  if (!expectedClientId || typeof expectedClientId !== "string" || !expectedClientId.trim()) {
+    throw new Error("GOOGLE_CLIENT_ID non configurato nel sistema.");
+  }
+
+  const client = clientOverride || new OAuth2Client(expectedClientId);
+  const ticket = await client.verifyIdToken({
+    idToken: idToken.trim(),
+    audience: expectedClientId,
+  });
+
+  const payload = ticket.getPayload();
+  if (!payload) {
+    throw new Error("Token Google non valido: nessun payload restituito.");
+  }
+
+  const validIssuers = ["https://accounts.google.com", "accounts.google.com"];
+  if (!payload.iss || !validIssuers.includes(payload.iss)) {
+    throw new Error(`Token Google con issuer non attendibile: ${payload.iss}`);
+  }
+
+  if (payload.aud !== expectedClientId) {
+    throw new Error("Token Google con audience non corrispondente.");
+  }
+
+  if (payload.email_verified !== true) {
+    throw new Error("Indirizzo email Google non verificato.");
+  }
+
+  if (!payload.email || typeof payload.email !== "string") {
+    throw new Error("Email assente nel payload Google.");
+  }
+
+  const fullName = (payload.name || payload.given_name || payload.email.split("@")[0] || "Google User").trim();
+
+  return {
+    email: payload.email,
+    fullName,
+    sub: payload.sub,
+  };
+}
+

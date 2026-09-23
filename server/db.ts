@@ -224,6 +224,9 @@ export class DatabaseStore implements IDatabaseAdapter {
     const normalized = normalizeEmail(params.email);
     const existing = await this.findUserByEmail(normalized);
     if (existing) {
+      if (existing.provider !== "google") {
+        throw new Error("Account exists with non-Google provider");
+      }
       const company = await this.findCompanyById(existing.companyId);
       return { user: existing, company: company! };
     }

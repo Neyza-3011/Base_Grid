@@ -893,4 +893,123 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     // Should gracefully clamp limit under the hood to max allowed (1000)
     // The query shouldn't crash
   });
+
+  describe("Google ID Token Server-Authoritative Verification (verifyGoogleIdToken)", () => {
+    it("rejects missing or blank ID token", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      await expect(verifyGoogleIdToken("", "client-id")).rejects.toThrow(/Google ID token mancante o non valido/i);
+      await expect(verifyGoogleIdToken("   ", "client-id")).rejects.toThrow(/Google ID token mancante o non valido/i);
+    });
+
+    it("rejects missing or blank GOOGLE_CLIENT_ID", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      await expect(verifyGoogleIdToken("dummy-token", "")).rejects.toThrow(/GOOGLE_CLIENT_ID non configurato/i);
+      await expect(verifyGoogleIdToken("dummy-token", "   ")).rejects.toThrow(/GOOGLE_CLIENT_ID non configurato/i);
+    });
+
+    it("rejects token when verifyIdToken returns null payload", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({ getPayload: () => null }),
+      } as any;
+
+      await expect(verifyGoogleIdToken("test-token", "expected-aud", mockClient)).rejects.toThrow(
+        /nessun payload restituito/i
+      );
+    });
+
+    it("rejects token with untrusted issuer", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({
+          getPayload: () => ({
+            iss: "https://untrusted-auth-server.com",
+            aud: "expected-aud",
+            email: "test@example.com",
+            email_verified: true,
+          }),
+        }),
+      } as any;
+
+      await expect(verifyGoogleIdToken("test-token", "expected-aud", mockClient)).rejects.toThrow(
+        /issuer non attendibile/i
+      );
+    });
+
+    it("rejects token with audience mismatch", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({
+          getPayload: () => ({
+            iss: "https://accounts.google.com",
+            aud: "different-client-id",
+            email: "test@example.com",
+            email_verified: true,
+          }),
+        }),
+      } as any;
+
+      await expect(verifyGoogleIdToken("test-token", "expected-aud", mockClient)).rejects.toThrow(
+        /audience non corrispondente/i
+      );
+    });
+
+    it("rejects token with email_verified === false", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({
+          getPayload: () => ({
+            iss: "https://accounts.google.com",
+            aud: "expected-aud",
+            email: "test@example.com",
+            email_verified: false,
+          }),
+        }),
+      } as any;
+
+      await expect(verifyGoogleIdToken("test-token", "expected-aud", mockClient)).rejects.toThrow(
+        /Indirizzo email Google non verificato/i
+      );
+    });
+
+    it("rejects token without email claim", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({
+          getPayload: () => ({
+            iss: "https://accounts.google.com",
+            aud: "expected-aud",
+            email_verified: true,
+          }),
+        }),
+      } as any;
+
+      await expect(verifyGoogleIdToken("test-token", "expected-aud", mockClient)).rejects.toThrow(
+        /Email assente/i
+      );
+    });
+
+    it("accepts valid token and returns verified payload", async () => {
+      const { verifyGoogleIdToken } = await import("./security");
+      const mockClient = {
+        verifyIdToken: async () => ({
+          getPayload: () => ({
+            iss: "https://accounts.google.com",
+            aud: "expected-aud",
+            email: "contractor@gmail.com",
+            email_verified: true,
+            name: "Contractor Name",
+            sub: "sub-12345",
+          }),
+        }),
+      } as any;
+
+      const result = await verifyGoogleIdToken("test-token", "expected-aud", mockClient);
+      expect(result).toEqual({
+        email: "contractor@gmail.com",
+        fullName: "Contractor Name",
+        sub: "sub-12345",
+      });
+    });
+  });
 });

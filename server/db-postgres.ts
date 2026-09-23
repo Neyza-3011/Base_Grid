@@ -702,6 +702,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
         if (existingRes.rowCount && existingRes.rowCount > 0) {
           const existing = mapUserRow(existingRes.rows[0]);
+          if (existing.provider !== "google") {
+            throw new Error("Account exists with non-Google provider");
+          }
           const compRes = await client.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [
             existing.companyId,
           ]);

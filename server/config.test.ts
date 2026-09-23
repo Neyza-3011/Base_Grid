@@ -216,4 +216,67 @@ describe("Configuration Security", () => {
     } as any);
     expect(defaultPortConfig.PORT).toBe(3000);
   });
+
+  describe("Google OAuth Configuration Security", () => {
+    it("defaults GOOGLE_AUTH_ENABLED to false when not provided", () => {
+      const config = loadConfig({
+        NODE_ENV: "development",
+      } as any);
+      expect(config.GOOGLE_AUTH_ENABLED).toBe(false);
+      expect(config.GOOGLE_CLIENT_ID).toBeUndefined();
+    });
+
+    it("fails in production when GOOGLE_AUTH_ENABLED is true and GOOGLE_CLIENT_ID is missing", () => {
+      expect(() =>
+        loadConfig({
+          NODE_ENV: "production",
+          JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+          REDIS_URL: "redis://127.0.0.1:6379",
+          DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+          FRONTEND_URL: "https://example.com",
+          CORS_ORIGINS: "https://example.com",
+          SUPERADMIN_EMAIL: "admin@example.com",
+          SUPERADMIN_PASSWORD: "super-secure-password",
+          GOOGLE_AUTH_ENABLED: "true",
+          // GOOGLE_CLIENT_ID is missing
+        } as any)
+      ).toThrow(/CRITICAL CONFIG ERROR: GOOGLE_CLIENT_ID must be provided in production when GOOGLE_AUTH_ENABLED is true/i);
+    });
+
+    it("succeeds in production when GOOGLE_AUTH_ENABLED is true and GOOGLE_CLIENT_ID is provided", () => {
+      const config = loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+        GOOGLE_AUTH_ENABLED: "true",
+        GOOGLE_CLIENT_ID: "123456789-test.apps.googleusercontent.com",
+      } as any);
+
+      expect(config.GOOGLE_AUTH_ENABLED).toBe(true);
+      expect(config.GOOGLE_CLIENT_ID).toBe("123456789-test.apps.googleusercontent.com");
+    });
+
+    it("allows production startup without GOOGLE_CLIENT_ID when GOOGLE_AUTH_ENABLED is false", () => {
+      const config = loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+        GOOGLE_AUTH_ENABLED: "false",
+      } as any);
+
+      expect(config.GOOGLE_AUTH_ENABLED).toBe(false);
+      expect(config.GOOGLE_CLIENT_ID).toBeUndefined();
+    });
+  });
 });
+
