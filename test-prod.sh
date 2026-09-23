@@ -1,21 +1,30 @@
 #!/bin/bash
 set -e
 
-# Stop previous server if any
-pkill node || true
+# ==============================================================================
+# BaseGrid - Local Production-Build Artifact Smoke Test
+# ==============================================================================
+# WARNING: This script is exclusively for LOCAL SMOKE TESTING of compiled artifacts.
+# DO NOT RUN THIS IN A PRODUCTION ENVIRONMENT OR AGAINST PRODUCTION DATABASES.
+# It uses ephemeral, dummy local-only values to verify process binding and API routes.
+# ==============================================================================
 
-# Start server in background
+# Stop previous server if any
+pkill -f "dist/server.cjs" || true
+
+# Start server in background with dummy local test environment
 export NODE_ENV=production
 export PORT=10006
 export SKIP_DB_INIT=true
-export JWT_SECRET=test_jwt_secret_key_production_12345
-export SUPERADMIN_EMAIL=admin@basegrid.io
-export SUPERADMIN_PASSWORD=SuperAdminPassword123!
-export FRONTEND_URL=https://basegrid.io
-export CORS_ORIGINS=https://basegrid.io
+export JWT_SECRET=test-local-dummy-jwt-secret-do-not-use-in-production-min32chars
+export SUPERADMIN_EMAIL=admin.smoke.test@basegrid.local
+export SUPERADMIN_PASSWORD=SmokeTestPassword123!
+export FRONTEND_URL=https://smoke-test.local
+export CORS_ORIGINS=https://smoke-test.local
 export REDIS_URL=redis://127.0.0.1:6379
 export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/basegrid
 export EMAIL_VERIFICATION_ENABLED=false
+export GOOGLE_AUTH_ENABLED=false
 
 npm start > server.log 2>&1 &
 SERVER_PID=$!
@@ -28,7 +37,7 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:10006/api/v1/auth/csrf-t
 echo "Running registration..."
 RES=$(curl -s -i -X POST http://127.0.0.1:10006/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "prod.user@basegrid.io", "password": "ProdPassword123!", "full_name": "Prod User", "company_name": "Prod Co"}')
+  -d '{"email": "smoke.user@basegrid.local", "password": "ProdPassword123!", "full_name": "Smoke User", "company_name": "Smoke Co"}')
 
 echo "$RES" | head -n 1
 

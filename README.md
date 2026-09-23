@@ -162,3 +162,57 @@ npm run dev
 npm run build
 npm start
 ```
+
+---
+
+## 🚀 Architettura di Produzione & Deployment Gate
+
+Il sistema è predisposto per un'architettura di produzione distribuita a due livelli con separazione tra frontend edge/SSR e backend API:
+
+```text
+Browser
+  ↓ (HTTPS)
+Vercel Edge / TanStack Start SSR (Directory: frontend)
+  ↓ (/api/* rewrite via frontend/vercel.json)
+Render Web Service (Node.js Express Backend)
+  ├── PostgreSQL (Database relazionale con pool 'pg' nativo e transazioni atomiche)
+  └── Redis / Upstash (Token store distribuito, rotazione refresh token atomica Lua)
+```
+
+### 1. Backend: Render (`render.yaml`)
+- **Runtime**: Node.js `22.12.0` (o `20.19+`)
+- **Blueprint**: Definito in `render.yaml` (`type: web`, `env: node`, `branch: main`, `autoDeploy: true`)
+- **Comandi**: `buildCommand: "npm ci && npm run build"`, `startCommand: "npm run start"`
+- **Health Check**: `/health` (endpoint liveness leggero senza dipendenze esterne)
+- **Readiness Check**: `/ready` (verifica connettività attiva a PostgreSQL e Redis)
+- **Variabili Deterministiche**:
+  - `NODE_ENV=production`
+  - `NODE_VERSION=22.12.0`
+  - `EMAIL_VERIFICATION_ENABLED=false`
+  - `GOOGLE_AUTH_ENABLED=false`
+
+### 2. Frontend: Vercel (`frontend/`)
+- **Root Directory**: `frontend`
+- **Engine**: TanStack Start / Nitro SSR
+- **Proxy Same-Origin**: Le chiamate frontend `/api/*` sono inoltrate al backend Render tramite la regola di rewrite esterna definita in `frontend/vercel.json`.
+
+### ⚠️ Configurazione MANUALE (Piattaforme Esterne)
+
+Le seguenti configurazioni **NON** sono presenti nel repository e **DEVONO** essere configurate manualmente sulle rispettive piattaforme:
+
+1. **`frontend/vercel.json` (Rewrite Destination)**:
+   - File: `frontend/vercel.json`
+   - Campo: `"destination": "https://YOUR_RENDER_BACKEND_SERVICE.onrender.com/api/:path*"`
+   - **Azione**: Sostituire `YOUR_RENDER_BACKEND_SERVICE.onrender.com` con l'URL effettivo assegnato da Render al Web Service (es. `basegrid-production.onrender.com` o dominio personalizzato `api.basegrid.io`).
+   - *Nota*: Vercel non esegue interpolazione di variabili d'ambiente all'interno di `vercel.json`; il valore di rewrite deve essere inserito prima del deploy frontend su Vercel.
+
+2. **Render Dashboard (Environment Variables / Secrets)**:
+   - `JWT_SECRET`: stringa casuale ad alta entropia (minimo 32 caratteri, no placeholder).
+   - `DATABASE_URL`: connection string PostgreSQL di produzione (es. Supabase, Neon, Render Postgres).
+   - `REDIS_URL`: connection string Redis con TLS (es. `rediss://...` da Upstash).
+   - `FRONTEND_URL`: URL canonico del frontend Vercel (es. `https://app.basegrid.io`).
+   - `CORS_ORIGINS`: origini permesse separate da virgola (es. `https://app.basegrid.io`). Non deve contenere `localhost` in produzione.
+   - `SUPERADMIN_EMAIL`: indirizzo email del master super-admin.
+   - `SUPERADMIN_PASSWORD`: password complessa (minimo 12 caratteri).
+   - `SUPERADMIN_COMPANY_NAME`: (opzionale) nome dell'organizzazione master.
+

@@ -6,14 +6,20 @@ services:
     plan: free
     branch: main
     autoDeploy: true
-    buildCommand: "npm install && npm run build"
+    buildCommand: "npm ci && npm run build"
     startCommand: "npm run start"
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: false
+      - key: GOOGLE_AUTH_ENABLED
+        value: false
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -22,13 +28,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: SUPERADMIN_COMPANY_NAME
-        sync: false
       - key: SUPERADMIN_EMAIL
         sync: false
       - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: SUPERADMIN_COMPANY_NAME
         sync: false
