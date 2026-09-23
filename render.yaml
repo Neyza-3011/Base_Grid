@@ -1,7 +1,7 @@
 services:
   - type: web
     name: basegrid-production
-    env: node
+    runtime: node
     region: frankfurt
     plan: free
     branch: main
@@ -11,13 +11,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
-        value: production
+        value: "production"
       - key: NODE_VERSION
-        value: 22.12.0
+        value: "22.12.0"
       - key: EMAIL_VERIFICATION_ENABLED
-        value: false
+        value: "false"
       - key: GOOGLE_AUTH_ENABLED
-        value: false
+        value: "false"
       - key: JWT_SECRET
         sync: false
       - key: DATABASE_URL
