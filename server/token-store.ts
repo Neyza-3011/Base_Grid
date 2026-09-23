@@ -244,7 +244,12 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
       } finally {
         if (timer) clearTimeout(timer);
       }
-    } catch {
+    } catch (err) {
+      console.error("[RedisPingError]", {
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+        code: (err as any)?.code,
+      });
       return false;
     }
   }
