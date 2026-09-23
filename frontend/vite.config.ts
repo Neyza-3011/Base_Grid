@@ -1,36 +1,33 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  nitro: {
-    preset: "node-server",
-  },
-  tanstackStart: {
-    server: { entry: "server" },
-  },
-  vite: {
-    resolve: {
-      alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-      },
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
-    server: {
-      port: 3000,
-      host: "::",
-      strictPort: true,
-      cors: true,
-      proxy: {
-        "/api": {
-          target: process.env.VITE_API_URL || "http://localhost:3000",
-          changeOrigin: true,
-          secure: false,
-        },
-      },
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-        "Access-Control-Allow-Headers": "*",
+  },
+  server: {
+    port: 3000,
+    host: "::",
+    strictPort: true,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_URL || "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
       },
     },
   },
+  plugins: [
+    tanstackStart(),
+    nitro(),
+    viteReact(),
+    tailwindcss(),
+  ],
 });
+
