@@ -101,6 +101,12 @@ export function loadConfig(env = process.env): ServerConfig {
       );
     }
 
+    if (CORS_ORIGINS_RAW.includes("*")) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain wildcard '*' in production."
+      );
+    }
+
     if (EMAIL_VERIFICATION_ENABLED) {
       if (!EMAIL_PROVIDER) {
         throw new Error(

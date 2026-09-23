@@ -60,9 +60,9 @@ export function createApp(): Express {
     asyncHandler(async (_req: Request, res: Response) => {
       const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
 
-      // In production, DATABASE_URL and REDIS_URL/REDIS_HOST are strictly required
+      // In production, DATABASE_URL and REDIS_URL are strictly required
       if (isProd) {
-        if (!config.DATABASE_URL || (!config.REDIS_URL && config.REDIS_HOST === "127.0.0.1")) {
+        if (!config.DATABASE_URL || !config.REDIS_URL) {
           res.status(503).json({ status: "not_ready" });
           return;
         }

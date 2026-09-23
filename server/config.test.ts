@@ -79,6 +79,19 @@ describe("Configuration Security", () => {
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain localhost/i);
+
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "https://example.com",
+        CORS_ORIGINS: "*",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain wildcard/i);
   });
 
   it("fails in production when EMAIL_PROVIDER is missing or not resend (when EMAIL_VERIFICATION_ENABLED is true)", () => {

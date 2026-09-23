@@ -428,6 +428,13 @@ export class DistributedStorageEngine implements ITokenStorageAdapter {
   private userTokens: Map<string, Set<string>> = new Map();
   private available = true;
 
+  constructor() {
+    const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+    if (isProd) {
+      throw new Error("CRITICAL SECURITY ERROR: DistributedStorageEngine (in-memory) cannot be used in production. Redis is required.");
+    }
+  }
+
   public isAvailable(): boolean {
     return this.available;
   }
