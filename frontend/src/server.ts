@@ -46,17 +46,6 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-          "Access-Control-Allow-Headers": "*",
-        },
-      });
-    }
-
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
@@ -65,25 +54,13 @@ export default {
         const text = await cloned.text();
         console.error(`SSR_RESPONSE_ERROR_${response.status}:`, text);
       }
-      const normalized = await normalizeCatastrophicSsrResponse(response);
-
-      const newHeaders = new Headers(normalized.headers);
-      newHeaders.set("Access-Control-Allow-Origin", "*");
-      newHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-      newHeaders.set("Access-Control-Allow-Headers", "*");
-
-      return new Response(normalized.body, {
-        status: normalized.status,
-        statusText: normalized.statusText,
-        headers: newHeaders,
-      });
+      return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error("SSR_RENDER_ERROR_STACK:", error);
       return new Response(renderErrorPage(), {
         status: 500,
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "Access-Control-Allow-Origin": "*",
         },
       });
     }
