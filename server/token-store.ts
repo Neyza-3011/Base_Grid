@@ -229,6 +229,56 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
     this.isExplicitlyDisabled = !isAvailable;
   }
 
+  private async ensureReady(): Promise<void> {
+    if (this.client.status === "ready") {
+      return;
+    }
+
+    if (this.client.status === "wait") {
+      await this.client.connect();
+    }
+
+    if (this.client.status === "ready") {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      if (this.client.status === "ready") {
+        resolve();
+        return;
+      }
+      if (this.client.status === "end" || this.client.status === "close") {
+        reject(new Error(`Redis connection is closed (status: ${this.client.status})`));
+        return;
+      }
+
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = (err: any) => {
+        cleanup();
+        reject(err);
+      };
+      const onClose = () => {
+        cleanup();
+        reject(new Error(`Redis connection closed before becoming ready (status: ${this.client.status})`));
+      };
+
+      const cleanup = () => {
+        this.client.removeListener?.("ready", onReady);
+        this.client.removeListener?.("error", onError);
+        this.client.removeListener?.("close", onClose);
+        this.client.removeListener?.("end", onClose);
+      };
+
+      this.client.once?.("ready", onReady);
+      this.client.once?.("error", onError);
+      this.client.once?.("close", onClose);
+      this.client.once?.("end", onClose);
+    });
+  }
+
   public async ping(timeoutMs = 2000): Promise<boolean> {
     if (this.isExplicitlyDisabled) return false;
     try {
@@ -237,10 +287,15 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
         timer = setTimeout(() => reject(new Error("Redis ping timed out")), timeoutMs);
       });
 
-      const pingPromise = this.client.ping();
-      try {
-        const res = await Promise.race([pingPromise, timeoutPromise]);
+      const executePing = async (): Promise<boolean> => {
+        await this.ensureReady();
+        const res = await this.client.ping();
         return res === "PONG";
+      };
+
+      try {
+        const res = await Promise.race([executePing(), timeoutPromise]);
+        return res;
       } finally {
         if (timer) clearTimeout(timer);
       }
