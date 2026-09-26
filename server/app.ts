@@ -102,13 +102,13 @@ export function createApp(): Express {
 
   // Centralized safe error handler (never leaks stack traces or internal secrets)
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || 500;
+    const status = err?.statusCode || err?.status || (typeof err === "number" ? err : 500);
     
     // Log the error safely (do not expose secrets in logs for 500s)
     if (status >= 500) {
-      console.error(`[ServerError] ${err.name || "Error"}: Internal Server Error (ID: ${crypto.randomUUID()})`);
+      console.error(`[ServerError] ${err?.name || "Error"} (status: ${status}, statusCode: ${err?.statusCode}, statusProp: ${err?.status}): ${err?.message || err}`);
     } else {
-      console.error(`[ServerError] ${err.name || "Error"}:`, err.message || err);
+      console.error(`[ClientError] ${err?.name || "Error"}:`, err?.message || err);
     }
     
     // Only return the exact error message to the client for expected HTTP errors (status < 500)

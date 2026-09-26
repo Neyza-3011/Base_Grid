@@ -55,6 +55,69 @@ export interface ReportRecord {
   createdAt: string;
 }
 
+export interface CreateReportInput {
+  date: string;
+  time: string;
+  workHours: number;
+  travelHours?: number;
+  status?: "draft" | "submitted" | "approved";
+  client: {
+    name: string;
+    address?: string;
+    city?: string;
+  };
+  technician: {
+    fullName: string;
+  };
+  materialsUsed?: { name: string; quantity: number }[];
+  notes?: string;
+  signatureBase64?: string;
+}
+
+export interface UpdateReportInput {
+  date?: string;
+  time?: string;
+  workHours?: number;
+  travelHours?: number;
+  status?: "draft" | "submitted" | "approved";
+  client?: {
+    name: string;
+    address?: string;
+    city?: string;
+  };
+  technician?: {
+    fullName: string;
+  };
+  materialsUsed?: { name: string; quantity: number }[];
+  notes?: string;
+  signatureBase64?: string;
+}
+
+export interface UpdateCompanyInput {
+  name?: string;
+  vatNumber?: string;
+  address?: string;
+  defaultHourlyRate?: number;
+  reportFooterNotes?: string;
+  maxUsers?: number;
+  featurePdfExport?: boolean;
+}
+
+export interface CreateUserInput {
+  email: string;
+  fullName: string;
+  role: UserRole;
+  password?: string;
+  phoneNumber?: string;
+}
+
+export interface UpdateUserInput {
+  fullName?: string;
+  role?: UserRole;
+  phoneNumber?: string;
+  isActive?: boolean;
+}
+
 export interface JwtPayload {
   sub: string; // userId
   email: string;
