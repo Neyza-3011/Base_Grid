@@ -143,6 +143,12 @@ export async function runMigrations(
 
   for (const migration of availableMigrations) {
     if (appliedMap.has(migration.version)) {
+      const recorded = appliedMap.get(migration.version)!;
+      if (recorded.checksum && recorded.checksum !== migration.checksum) {
+        throw new Error(
+          `[Migrator] Migration checksum mismatch for version ${migration.version} (${migration.name}): recorded checksum "${recorded.checksum}", current file checksum "${migration.checksum}". Migration files must be immutable once applied. Manual intervention required.`
+        );
+      }
       alreadyApplied.push(migration.name);
     } else {
       pendingMigrations.push(migration);

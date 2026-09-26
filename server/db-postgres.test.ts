@@ -37,20 +37,19 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     }
   });
 
-  it("initDatabase creates necessary tables with correct schema and indices", async () => {
+  it("initDatabase initializes runtime master data without containing schema evolution DDL", async () => {
     const adapter = new PostgresAdapter(mockPool);
     await adapter.initDatabase();
 
     expect(mockPool.query).toHaveBeenCalled();
-    const queryArg = mockPool.query.mock.calls[0][0];
-    expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS companies");
-    expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS users");
-    expect(queryArg).toContain("CREATE TABLE IF NOT EXISTS reports");
-    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_users_company_id");
-    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_reports_company_id");
-    expect(queryArg).toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_type");
-    expect(queryArg).not.toContain("CREATE INDEX IF NOT EXISTS idx_users_email");
-    expect(queryArg).not.toContain("CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash");
+    const allQueryCalls = mockPool.query.mock.calls.map((c: any[]) => c[0]).join("\n");
+    // Verifies runtime data bootstrap
+    expect(allQueryCalls).toContain("INSERT INTO companies");
+    // Verifies no DDL is executed by initDatabase
+    expect(allQueryCalls).not.toContain("CREATE TABLE");
+    expect(allQueryCalls).not.toContain("ALTER TABLE");
+    expect(allQueryCalls).not.toContain("CREATE INDEX");
+    expect(allQueryCalls).not.toContain("DO $$");
   });
 
   it("withTransaction executes BEGIN, queries, and COMMIT on success", async () => {
@@ -451,10 +450,10 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
 
     it("ensures users table schema and migration include authVersion, but companies does not", async () => {
-      const adapter = new PostgresAdapter(mockPool);
-      await adapter.initDatabase();
+      const fs = await import("fs");
+      const path = await import("path");
+      const queryArg = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/001_initial_schema.sql"), "utf-8");
 
-      const queryArg = mockPool.query.mock.calls[0][0];
       // User table has authVersion
       expect(queryArg).toContain('"authVersion" INTEGER NOT NULL DEFAULT 0');
       expect(queryArg).toContain('ALTER TABLE users ADD COLUMN IF NOT EXISTS "authVersion" INTEGER NOT NULL DEFAULT 0;');
@@ -647,10 +646,10 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
   describe("P0.4.4-I2 — PostgreSQL Integrity Constraints & Foreign Keys (Mock Suite)", () => {
     it("defines foreign keys with ON DELETE CASCADE, exact single-column checks (conkey, confkey), and exact single-column UNIQUE constraints in schema DDL", async () => {
-      const adapter = new PostgresAdapter(mockPool);
-      await adapter.initDatabase();
+      const fs = await import("fs");
+      const path = await import("path");
+      const ddl = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/001_initial_schema.sql"), "utf-8");
 
-      const ddl = mockPool.query.mock.calls[0][0];
       // Foreign keys with ON DELETE CASCADE in table definitions
       expect(ddl).toContain('"companyId" VARCHAR(255) REFERENCES companies(id) ON DELETE CASCADE');
       expect(ddl).toContain('"userId" VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE');
@@ -705,16 +704,18 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
 
     it("fails migration with an explicit error if a foreign key exists with a non-CASCADE action", async () => {
-      const adapter = new PostgresAdapter(mockPool);
-      mockPool.query.mockImplementation((sql: string) => {
+      const { runMigrations } = await import("./migrator");
+      const rejectHandler = (sql: string) => {
         if (sql.includes("DO $$") && sql.includes("confdeltype")) {
           const err: any = new Error('Foreign key on users("companyId") -> companies(id) exists with non-CASCADE delete action (a). Manual migration required.');
           return Promise.reject(err);
         }
         return Promise.resolve({ rows: [] });
-      });
+      };
+      mockClient.query.mockImplementation(rejectHandler);
+      mockPool.query.mockImplementation(rejectHandler);
 
-      await expect(adapter.initDatabase()).rejects.toThrow(/exists with non-CASCADE delete action/i);
+      await expect(runMigrations(mockPool)).rejects.toThrow(/exists with non-CASCADE delete action/i);
     });
 
     it("rejects user insert with nonexistent companyId (foreign key constraint violation 23503)", async () => {
@@ -824,10 +825,10 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("ensures composite foreign key containing companyId is not accepted as valid exact FK", async () => {
       // Test the logic that a composite foreign key with conkey length > 1 will not match c.conkey = ARRAY[a1.attnum]
-      const adapter = new PostgresAdapter(mockPool);
-      await adapter.initDatabase();
+      const fs = await import("fs");
+      const path = await import("path");
+      const ddl = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/001_initial_schema.sql"), "utf-8");
 
-      const ddl = mockPool.query.mock.calls[0][0];
       // conkey MUST equal single-element ARRAY[a1.attnum], so composite FKs are excluded
       expect(ddl).toContain("c.conkey = ARRAY[a1.attnum]");
       expect(ddl).toContain("c.confkey = ARRAY[a2.attnum]");
@@ -836,10 +837,10 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("ensures composite UNIQUE constraint containing email or tokenHash is not accepted as valid exact UNIQUE", async () => {
       // Test the logic that a composite unique constraint with conkey length > 1 will not match c.conkey = ARRAY[a.attnum]
-      const adapter = new PostgresAdapter(mockPool);
-      await adapter.initDatabase();
+      const fs = await import("fs");
+      const path = await import("path");
+      const ddl = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/001_initial_schema.sql"), "utf-8");
 
-      const ddl = mockPool.query.mock.calls[0][0];
       // conkey MUST equal single-element ARRAY[a.attnum], so composite UNIQUE constraints like UNIQUE(email, x) are excluded
       expect(ddl).toContain("c.conkey = ARRAY[a.attnum]");
       expect(ddl).not.toContain("a.attnum = ANY(c.conkey)");
@@ -1331,6 +1332,8 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       if (!ok) {
         throw new Error("REQUIRE_REAL_POSTGRES_TESTS=true but PostgreSQL connection ping failed.");
       }
+      const { runMigrations } = await import("./migrator");
+      await runMigrations(realPool);
       await realAdapter.initDatabase();
     });
 

@@ -8,6 +8,7 @@ import {
   MigrationFile,
   getDefaultMigrationsDir,
 } from "./migrator";
+import { PostgresAdapter } from "./db-postgres";
 
 describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
   let mockClient: any;
@@ -160,6 +161,58 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
     });
   });
 
+  describe("Checksum Integrity & Immutability Verification", () => {
+    it("verifies and accepts already-applied migration when checksum matches identically", async () => {
+      appliedRowsInDb = [
+        { version: "001", name: "001_first.sql", applied_at: "2026-01-01", checksum: "valid_hash_001" },
+      ];
+
+      const mockMigrations: MigrationFile[] = [
+        { version: "001", name: "001_first.sql", sql: "CREATE TABLE t1 (id int);", checksum: "valid_hash_001" },
+      ];
+
+      const result = await runMigrations(mockPool, { migrations: mockMigrations });
+
+      expect(result.alreadyApplied).toEqual(["001_first.sql"]);
+      expect(result.applied).toEqual([]);
+
+      // No migration SQL or modification query was executed
+      const updateCall = executedQueries.find((q) => q.sql.includes("UPDATE schema_migrations"));
+      expect(updateCall).toBeUndefined();
+    });
+
+    it("fails execution with explicit error when applied migration checksum differs from current SQL file", async () => {
+      appliedRowsInDb = [
+        { version: "001", name: "001_first.sql", applied_at: "2026-01-01", checksum: "original_recorded_hash" },
+      ];
+
+      const mockMigrations: MigrationFile[] = [
+        { version: "001", name: "001_first.sql", sql: "MODIFIED SQL AFTER APPLICATION;", checksum: "tampered_modified_hash" },
+        { version: "002", name: "002_second.sql", sql: "CREATE TABLE t2 (id int);", checksum: "hash2" },
+      ];
+
+      await expect(
+        runMigrations(mockPool, { migrations: mockMigrations })
+      ).rejects.toThrow(
+        /Migration checksum mismatch for version 001 \(001_first.sql\): recorded checksum "original_recorded_hash", current file checksum "tampered_modified_hash"/i
+      );
+
+      // Ensure no transaction was started
+      const beginCall = executedQueries.find((q) => q.sql === "BEGIN");
+      expect(beginCall).toBeUndefined();
+
+      // Ensure migration SQL was not executed
+      const sqlCall = executedQueries.find((q) => q.sql.includes("MODIFIED SQL"));
+      expect(sqlCall).toBeUndefined();
+
+      // Ensure schema_migrations was NOT modified
+      const insertCall = executedQueries.find((q) => q.sql.includes("INSERT INTO schema_migrations"));
+      const updateCall = executedQueries.find((q) => q.sql.includes("UPDATE schema_migrations"));
+      expect(insertCall).toBeUndefined();
+      expect(updateCall).toBeUndefined();
+    });
+  });
+
   describe("Failure Handling & Rollback Safety", () => {
     it("rolls back transaction and does NOT record migration on failure", async () => {
       queryErrorTrigger = (sql: string) => {
@@ -208,6 +261,29 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       ).rejects.toThrow(/Table constraint violation/);
 
       expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
+
+  describe("Runtime DDL Separation (Single Schema Evolution Authority)", () => {
+    it("guarantees PostgresAdapter.initDatabase() contains zero schema evolution DDL statements", async () => {
+      const adapter = new PostgresAdapter(mockPool);
+      await adapter.initDatabase();
+
+      // Inspect every query executed during initDatabase
+      const executedSqls = executedQueries.map((q) => q.sql);
+
+      // Verify master data insert is present
+      const hasMasterCompanyInsert = executedSqls.some((sql) => sql.includes("INSERT INTO companies"));
+      expect(hasMasterCompanyInsert).toBe(true);
+
+      // Verify NO DDL statements are executed
+      for (const sql of executedSqls) {
+        expect(sql).not.toContain("CREATE TABLE");
+        expect(sql).not.toContain("ALTER TABLE");
+        expect(sql).not.toContain("CREATE INDEX");
+        expect(sql).not.toContain("DROP TABLE");
+        expect(sql).not.toContain("DO $$");
+      }
     });
   });
 });
