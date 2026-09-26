@@ -152,7 +152,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
-    const dbUrl = process.env.DATABASE_URL || config.DATABASE_URL;
+    const dbUrl = isProd ? process.env.DATABASE_URL : (process.env.DATABASE_URL || config.DATABASE_URL);
 
     if (!dbUrl && isProd) {
       throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");

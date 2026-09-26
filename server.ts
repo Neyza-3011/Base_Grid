@@ -7,6 +7,7 @@ import { createApp } from "./server/app";
 import { db } from "./server/db";
 import { tokenStore } from "./server/token-store";
 import { asyncHandler } from "./server/async-handler";
+import { runMigrations } from "./server/migrator";
 
 
 // Dynamically import Vite if not in production
@@ -17,17 +18,27 @@ async function startServer() {
 
   if (isProd) {
     // Production fail-closed startup:
-    // SKIP_DB_INIT MUST NOT bypass database initialization or infrastructure checks in production.
+    // SKIP_DB_INIT MUST NOT bypass database initialization, migrations, or infrastructure checks in production.
     // Both PostgreSQL and Redis must be verified before the server binds and accepts traffic.
     try {
-      if (db.initDatabase) {
-        await db.initDatabase();
-        console.log("Database initialized successfully.");
-      }
       const dbPingOk = await db.ping(3000).catch(() => false);
       if (!dbPingOk) {
         throw new Error("PostgreSQL database ping failed or connection unreachable.");
       }
+
+      // 1. Versioned Schema Migrations
+      if (typeof (db as any).getPool === "function") {
+        const pool = (db as any).getPool();
+        const migResult = await runMigrations(pool);
+        console.log(`[Migrations] Schema verified: ${migResult.applied.length} applied, ${migResult.alreadyApplied.length} verified.`);
+      }
+
+      // 2. Runtime seed data / master tenant compatibility
+      if (db.initDatabase) {
+        await db.initDatabase();
+        console.log("Database initialized successfully.");
+      }
+
       const redisOk = await tokenStore.ping(3000).catch(() => false);
       if (!redisOk) {
         throw new Error("Redis token store ping failed or connection unreachable.");
@@ -39,6 +50,14 @@ async function startServer() {
     }
   } else {
     // Development / Local Test environment
+    if (typeof (db as any).getPool === "function" && process.env.SKIP_DB_INIT !== "true") {
+      try {
+        const pool = (db as any).getPool();
+        await runMigrations(pool);
+      } catch (err) {
+        console.error("Database migration failed (non-fatal in dev):", err);
+      }
+    }
     if (db.initDatabase && process.env.SKIP_DB_INIT !== "true") {
       try {
         await db.initDatabase();
