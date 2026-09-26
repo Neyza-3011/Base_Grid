@@ -12,9 +12,11 @@ let adminToken: string = "";
 let csrfToken: string = "";
 let adminCompanyId: string = "";
 let adminUserId: string = "";
+let techUserId: string = "";
 let techCookies: string[] = [];
 let techCsrfToken: string = "";
 let reportId: string = "";
+const createdReportIds = new Set<string>();
 
 describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () => {
   beforeAll(async () => {
@@ -118,6 +120,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         `[SecurityValidationTest Bootstrap] Technician registration did not return user id. Body: ${JSON.stringify(regTech.body)}`
       );
     }
+    techUserId = techId;
 
     await db.updateUser(techId, {
       role: "technician",
@@ -169,22 +172,47 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       );
     }
     reportId = resReport.body.id;
+    createdReportIds.add(reportId);
   });
 
   afterAll(async () => {
-    // Non-destructive cleanup of test artifacts without FLUSHDB or FLUSHALL
-    if (adminCompanyId && reportId) {
-      try {
-        await db.deleteReport(adminCompanyId, reportId);
-      } catch {}
-    }
-    if (adminUserId) {
-      try {
-        await tokenStore.revokeAllUserTokens(adminUserId);
-      } catch {}
-    }
-    if (originalTokenAdapter) {
-      tokenStore.setAdapter(originalTokenAdapter);
+    try {
+      // 1. Tenant-scoped cleanup of all reports created by this suite without FLUSHDB/FLUSHALL
+      if (adminCompanyId) {
+        try {
+          const remainingReports = await db.getReportsByCompany(adminCompanyId, 1000);
+          for (const rep of remainingReports) {
+            createdReportIds.add(rep.id);
+          }
+          for (const repId of createdReportIds) {
+            try {
+              const existing = await db.getReportById(adminCompanyId, repId);
+              if (existing) {
+                await db.deleteReport(adminCompanyId, repId);
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+
+      // 2. Revoke all active sessions/tokens for both admin and technician
+      if (adminUserId) {
+        try {
+          await tokenStore.revokeAllUserTokens(adminUserId);
+        } catch {}
+      }
+      if (techUserId) {
+        try {
+          await tokenStore.revokeAllUserTokens(techUserId);
+        } catch {}
+      }
+    } finally {
+      // 3. Always restore original token adapter if it was replaced
+      if (originalTokenAdapter) {
+        try {
+          tokenStore.setAdapter(originalTokenAdapter);
+        } catch {}
+      }
     }
   });
 
@@ -312,6 +340,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       });
       
     expect(res.status).toBe(201); // Created, but escaped
+    if (res.body?.id) createdReportIds.add(res.body.id);
     expect(res.body.client.name).toBe(sqlPayload); // Just treats as string
     
     // Let's verify the reports table is still there
@@ -416,6 +445,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         work_hours: 2,
       });
     expect(resLeap.status).toBe(201);
+    if (resLeap.body?.id) createdReportIds.add(resLeap.body.id);
   });
 
   // 4. invalid time
@@ -628,6 +658,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         travel_hours: 1,
       });
     expect(res.status).toBe(201);
+    if (res.body?.id) createdReportIds.add(res.body.id);
     // Persisted report retains server-controlled values
     expect(res.body.id).not.toBe("forged-report-id-999");
     const persisted = await db.getReportById(adminCompanyId, res.body.id);
@@ -674,6 +705,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       .send(validPayload);
 
     expect(res.status).toBe(201);
+    if (res.body?.id) createdReportIds.add(res.body.id);
     expect(res.body.status).toBe("draft");
     expect(res.body.client.name).toBe("Valid Client S.r.l.");
     expect(res.body.client.address).toBe("Via Roma 10");
@@ -703,6 +735,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           materials_used: [{ name: "Cavo FG16", quantity: 2.5 }]
         });
       expect(res.status).toBe(201);
+      if (res.body?.id) createdReportIds.add(res.body.id);
       expect(res.body.materials_used[0].quantity).toBe(2.5);
     });
 
@@ -718,6 +751,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           materials_used: [{ name: "Cavo FG16", quantity: 0 }]
         });
       expect(res.status).toBe(201);
+      if (res.body?.id) createdReportIds.add(res.body.id);
       expect(res.body.materials_used[0].quantity).toBe(0);
     });
 
@@ -834,6 +868,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           signature_base64: validPng,
         });
       expect(res.status).toBe(201);
+      if (res.body?.id) createdReportIds.add(res.body.id);
       const persisted = await db.getReportById(adminCompanyId, res.body.id);
       expect(persisted).not.toBeNull();
       expect(persisted!.signatureBase64).toBe(validPng);
@@ -852,6 +887,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           signature_base64: validJpeg,
         });
       expect(res.status).toBe(201);
+      if (res.body?.id) createdReportIds.add(res.body.id);
     });
 
     it("should accept valid WebP Base64 Data URL -> 201", async () => {
@@ -867,6 +903,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           signature_base64: validWebp,
         });
       expect(res.status).toBe(201);
+      if (res.body?.id) createdReportIds.add(res.body.id);
     });
 
     it("should reject data:image/png;base64,NOT_BASE64 -> 400", async () => {
