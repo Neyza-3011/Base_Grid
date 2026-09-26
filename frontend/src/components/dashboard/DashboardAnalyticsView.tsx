@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   FileText,
   Clock,
@@ -11,6 +11,8 @@ import {
   Users,
   HardHat,
   Eye,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -42,20 +44,25 @@ export function DashboardAnalyticsView({
   const [timeRange, setTimeRange] = useState<"30d" | "month" | "quarter">("30d");
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadReportsData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getReports();
+      setReports(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Impossibile caricare i dati dal server.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadReportsData() {
-      try {
-        const data = await getReports();
-        setReports(data);
-      } catch {
-        // fallback
-      } finally {
-        setLoading(false);
-      }
-    }
     loadReportsData();
-  }, []);
+  }, [loadReportsData]);
 
   const totalReports = reports.length;
   const totalHours = reports.reduce(
@@ -167,6 +174,21 @@ export function DashboardAnalyticsView({
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+            <span className="text-sm">{error}</span>
+          </div>
+          <button
+            onClick={loadReportsData}
+            className="h-8 px-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs font-semibold text-red-200 flex items-center gap-1.5 transition active:scale-95"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Riprova
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="p-12 text-center bg-slate-900/60 border border-white/10 rounded-2xl">

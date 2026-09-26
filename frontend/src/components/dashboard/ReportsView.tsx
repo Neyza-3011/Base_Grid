@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Search,
@@ -10,6 +10,8 @@ import {
   X,
   FileText,
   Building2,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { getReports, addReport, removeReport, Report } from "@/lib/reportsStorage";
 import { PdfPreviewModal } from "./PdfPreviewModal";
@@ -17,24 +19,26 @@ import { PdfPreviewModal } from "./PdfPreviewModal";
 export function ReportsView() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Tutti");
   const [previewReportId, setPreviewReportId] = useState<string | null>(null);
 
   // Quick Create Modal State
   const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientAddress, setNewClientAddress] = useState("");
-  const [newTechnician, setNewTechnician] = useState("Marco Rossi");
   const [newHours, setNewHours] = useState("4.0");
   const [newTravelHours, setNewTravelHours] = useState("0.5");
   const [newStatus, setNewStatus] = useState<"draft" | "submitted">("submitted");
   const [newNotes, setNewNotes] = useState("");
-  const [newMaterialName, setNewMaterialName] = useState("Cavo FG16 3x2.5");
-  const [newMaterialQty, setNewMaterialQty] = useState("10");
+  const [newMaterialName, setNewMaterialName] = useState("");
+  const [newMaterialQty, setNewMaterialQty] = useState("1");
 
-  const loadAllData = async () => {
+  const loadAllData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await getReports();
       // Sort newest first
@@ -42,25 +46,32 @@ export function ReportsView() {
         (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
       );
       setReports(data);
-    } catch {
-      toast.error("Errore durante il caricamento dei rapportini");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Errore durante il caricamento dei rapportini dal server.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [loadAllData]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo rapportino?")) return;
     try {
       await removeReport(id);
-      toast.success("Rapportino eliminato con successo");
-      loadAllData();
-    } catch {
-      toast.error("Errore durante l'eliminazione");
+      toast.success("Rapportino eliminato con successo.");
+      setReports((prev) => prev.filter((r) => r.id !== id));
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Errore durante l'eliminazione del rapportino.";
+      toast.error(msg);
     }
   };
 
@@ -75,34 +86,38 @@ export function ReportsView() {
       return;
     }
 
+    setSubmitting(true);
     try {
+      const materials = newMaterialName.trim()
+        ? [{ name: newMaterialName.trim(), quantity: parseInt(newMaterialQty) || 1 }]
+        : [];
+
       const created = await addReport({
         clientName: newClientName.trim(),
-        clientAddress: newClientAddress.trim() || "Cantiere Sede",
-        technicianName: newTechnician.trim() || "Tecnico Operativo",
+        clientAddress: newClientAddress.trim() || undefined,
         hours: parseFloat(newHours) || 1,
         travelHours: parseFloat(newTravelHours) || 0,
         status: newStatus,
-        notes: newNotes,
-        materials: [
-          {
-            name: newMaterialName,
-            quantity: parseInt(newMaterialQty) || 1,
-          },
-        ],
+        notes: newNotes.trim() || undefined,
+        materials,
       });
 
-      toast.success(`Rapportino ${created.id} creato!`, {
-        description: `Cliente: ${created.client.name} (${created.dateTimeFormatted})`,
+      toast.success(`Rapportino ${created.id} creato con successo!`, {
+        description: `Cliente: ${created.client.name}`,
       });
 
       setShowQuickCreate(false);
       setNewClientName("");
       setNewClientAddress("");
       setNewNotes("");
-      loadAllData();
-    } catch {
-      toast.error("Errore nella creazione del rapportino");
+      setNewMaterialName("");
+      setNewMaterialQty("1");
+      setReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Errore nella creazione del rapportino.";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -176,14 +191,15 @@ export function ReportsView() {
             </span>
           </div>
           <p className="text-sm text-white/60 mt-0.5">
-            Elenco ottimizzato dei rapportini d'intervento ordinati dal più recente.
+            Elenco autorevole dei rapportini d'intervento recuperati dal server aziendale.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
           <button
             onClick={exportCSV}
-            className="h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-4 border border-white/10 flex items-center gap-2 transition active:scale-95"
+            disabled={filtered.length === 0}
+            className="h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-4 border border-white/10 flex items-center gap-2 transition active:scale-95 disabled:opacity-40"
             title="Esporta in CSV"
           >
             <Download className="h-4 w-4 text-emerald-400" /> Esporta CSV
@@ -197,6 +213,22 @@ export function ReportsView() {
           </button>
         </div>
       </div>
+
+      {/* Error state banner if server fetch failed */}
+      {error && (
+        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+            <span className="text-sm">{error}</span>
+          </div>
+          <button
+            onClick={loadAllData}
+            className="h-8 px-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs font-semibold text-red-200 flex items-center gap-1.5 transition active:scale-95"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Riprova
+          </button>
+        </div>
+      )}
 
       {/* Filter & Search Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 items-center bg-slate-900/60 p-3 rounded-2xl border border-white/10 backdrop-blur-xl shadow-sm">
@@ -263,13 +295,15 @@ export function ReportsView() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="text-center py-16 text-white/40 text-sm">
-                    Caricamento archivio in corso...
+                    Caricamento archivio dal server in corso...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-16 text-white/40 text-sm">
-                    Nessun rapportino trovato per la ricerca o il filtro selezionato.
+                    {reports.length === 0
+                      ? "Nessun rapportino salvato nel database. Crea il tuo primo rapportino!"
+                      : "Nessun rapportino corrisponde ai criteri di ricerca o filtro."}
                   </td>
                 </tr>
               ) : (
@@ -299,7 +333,7 @@ export function ReportsView() {
                           {r.technician?.full_name ? r.technician.full_name[0].toUpperCase() : "T"}
                         </div>
                         <span className="font-medium text-xs text-white/90">
-                          {r.technician?.full_name || "Marco Rossi"}
+                          {r.technician?.full_name || "Tecnico"}
                         </span>
                       </div>
                     </td>
@@ -363,8 +397,9 @@ export function ReportsView() {
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative text-white space-y-4">
             <button
-              onClick={() => setShowQuickCreate(false)}
-              className="absolute right-4 top-4 text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
+              onClick={() => !submitting && setShowQuickCreate(false)}
+              disabled={submitting}
+              className="absolute right-4 top-4 text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition disabled:opacity-40"
             >
               <X className="h-5 w-5" />
             </button>
@@ -381,20 +416,22 @@ export function ReportsView() {
                 </label>
                 <input
                   required
+                  disabled={submitting}
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
                   placeholder="Es. Impianti Industriali Srl"
-                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none"
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-white/70">Cantiere / Indirizzo</label>
                 <input
+                  disabled={submitting}
                   value={newClientAddress}
                   onChange={(e) => setNewClientAddress(e.target.value)}
                   placeholder="Es. Via Milano 45, Milano"
-                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none"
+                  className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
                 />
               </div>
 
@@ -404,37 +441,50 @@ export function ReportsView() {
                   <input
                     type="number"
                     step="0.5"
+                    min="0.5"
+                    max="24"
+                    disabled={submitting}
                     value={newHours}
                     onChange={(e) => setNewHours(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none"
+                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-white/70">Tecnico</label>
+                  <label className="text-xs font-semibold text-white/70">Ore Viaggio</label>
                   <input
-                    value={newTechnician}
-                    onChange={(e) => setNewTechnician(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="24"
+                    disabled={submitting}
+                    value={newTravelHours}
+                    onChange={(e) => setNewTravelHours(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-white/70">Materiale Usato</label>
+                <label className="text-xs font-semibold text-white/70">
+                  Materiale Usato (Opzionale)
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   <input
+                    disabled={submitting}
                     value={newMaterialName}
                     onChange={(e) => setNewMaterialName(e.target.value)}
-                    placeholder="Articolo"
-                    className="col-span-2 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-xs"
+                    placeholder="Articolo (es. Cavo FG16)"
+                    className="col-span-2 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-xs disabled:opacity-50"
                   />
                   <input
                     type="number"
+                    min="1"
+                    disabled={submitting}
                     value={newMaterialQty}
                     onChange={(e) => setNewMaterialQty(e.target.value)}
                     placeholder="Qtà"
-                    className="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-xs"
+                    className="h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-xs disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -442,9 +492,10 @@ export function ReportsView() {
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-white/70">Stato Rapportino</label>
                 <select
+                  disabled={submitting}
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value as "draft" | "submitted")}
-                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-sm text-white"
+                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-sm text-white disabled:opacity-50"
                 >
                   <option value="submitted">Inviato (In attesa)</option>
                   <option value="draft">Bozza</option>
@@ -455,26 +506,36 @@ export function ReportsView() {
                 <label className="text-xs font-semibold text-white/70">Note Intervento</label>
                 <textarea
                   rows={2}
+                  disabled={submitting}
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
                   placeholder="Descrizione delle lavorazioni eseguite..."
-                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-xs focus:border-primary focus:outline-none"
+                  className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-xs focus:border-primary focus:outline-none disabled:opacity-50"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setShowQuickCreate(false)}
-                  className="px-4 h-10 rounded-xl border border-white/10 text-xs font-medium hover:bg-white/5 transition"
+                  className="px-4 h-10 rounded-xl border border-white/10 text-xs font-medium hover:bg-white/5 transition disabled:opacity-50"
                 >
                   Annulla
                 </button>
                 <button
                   type="submit"
-                  className="px-5 h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 btn-glow transition"
+                  disabled={submitting}
+                  className="px-5 h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 btn-glow transition disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Salva Rapportino
+                  {submitting ? (
+                    <>
+                      <div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Salvataggio...
+                    </>
+                  ) : (
+                    "Salva Rapportino"
+                  )}
                 </button>
               </div>
             </form>

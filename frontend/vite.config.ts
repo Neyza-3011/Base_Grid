@@ -23,11 +23,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [
-    tanstackStart(),
-    nitro(),
-    viteReact(),
-    tailwindcss(),
-  ],
+  plugins: [tanstackStart(), nitro(), viteReact(), tailwindcss()],
 });
-

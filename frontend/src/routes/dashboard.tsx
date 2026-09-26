@@ -7,14 +7,9 @@ import {
   HardHat,
   Package,
   Receipt,
-  Search,
   Bell,
-  Download,
-  Printer,
   X,
-  Hammer,
   LogOut,
-  ChevronDown,
   Plus,
   ShieldCheck,
   Menu,
@@ -51,98 +46,12 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
-type Report = {
-  id: string;
-  date: string;
-  tech: string;
-  client: string;
-  site: string;
-  hours: number;
-  status: "Bozza" | "Inviato" | "Approvato";
-};
-
-const REPORTS: Report[] = [
-  {
-    id: "R-2041",
-    date: "27/07/2026",
-    tech: "Jacopo A.",
-    client: "Rossi Srl",
-    site: "Via Milano 12",
-    hours: 4.5,
-    status: "Approvato",
-  },
-  {
-    id: "R-2040",
-    date: "27/07/2026",
-    tech: "Luca V.",
-    client: "Impianti Verdi",
-    site: "Cantiere B4",
-    hours: 6.0,
-    status: "Inviato",
-  },
-  {
-    id: "R-2039",
-    date: "26/07/2026",
-    tech: "Giulia P.",
-    client: "Casa Bianchi",
-    site: "Via Roma 8",
-    hours: 2.5,
-    status: "Bozza",
-  },
-  {
-    id: "R-2038",
-    date: "26/07/2026",
-    tech: "Jacopo A.",
-    client: "Termo SpA",
-    site: "Sede centrale",
-    hours: 8.0,
-    status: "Approvato",
-  },
-  {
-    id: "R-2037",
-    date: "25/07/2026",
-    tech: "Andrea M.",
-    client: "Elettro Rossi",
-    site: "Uffici piano 3",
-    hours: 3.5,
-    status: "Approvato",
-  },
-  {
-    id: "R-2036",
-    date: "25/07/2026",
-    tech: "Luca V.",
-    client: "Cantiere+",
-    site: "Lotto A",
-    hours: 5.5,
-    status: "Inviato",
-  },
-  {
-    id: "R-2035",
-    date: "24/07/2026",
-    tech: "Giulia P.",
-    client: "Idro Bianchi",
-    site: "Villa Sole",
-    hours: 4.0,
-    status: "Bozza",
-  },
-];
-
-const statusStyle: Record<Report["status"], string> = {
-  Approvato: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  Inviato: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  Bozza: "bg-slate-200 text-slate-700 border-slate-300",
-};
-
 function Dashboard() {
   const [activeView, setActiveView] = useState("dashboard");
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("Tutti");
-  const [pdfOpen, setPdfOpen] = useState<Report | null>(null);
   const [previewPdfId, setPreviewPdfId] = useState<string | null>(null);
   const [currentUser, setUser] = useState<UserSession | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [rapportiniExpanded, setRapportiniExpanded] = useState(true);
   const [resendingVerification, setResendingVerification] = useState(false);
   const navigate = useNavigate();
 
@@ -188,14 +97,6 @@ function Dashboard() {
       </div>
     );
   }
-
-  const filtered = REPORTS.filter(
-    (r) =>
-      (activeFilter === "Tutti" || r.status === activeFilter) &&
-      (r.client.toLowerCase().includes(query.toLowerCase()) ||
-        r.tech.toLowerCase().includes(query.toLowerCase()) ||
-        r.site.toLowerCase().includes(query.toLowerCase())),
-  );
 
   const getInitials = (name: string) => {
     return name
@@ -392,18 +293,7 @@ function Dashboard() {
             <span className="font-semibold text-sm">Dashboard</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 h-9 flex-1 max-w-md min-w-0 ml-auto lg:ml-4">
-            <Search className="h-4 w-4 shrink-0 text-slate-400" />
-            <input
-              suppressHydrationWarning
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cerca cliente, tecnico, cantiere…"
-              className="bg-transparent flex-1 min-w-0 text-sm outline-none placeholder:text-slate-400"
-            />
-          </div>
-
-          <div className="ml-auto sm:ml-4 flex items-center gap-2 shrink-0">
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             <button
               aria-label="Notifiche"
               onClick={() => toast.info("Nessuna nuova notifica.")}
@@ -514,147 +404,9 @@ function Dashboard() {
         </main>
       </div>
 
-      {pdfOpen && <PdfModal report={pdfOpen} onClose={() => setPdfOpen(null)} />}
       {previewPdfId && (
         <PdfPreviewModal reportId={previewPdfId} onClose={() => setPreviewPdfId(null)} />
       )}
-    </div>
-  );
-}
-
-function PdfModal({ report, onClose }: { report: Report; onClose: () => void }) {
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownload = () => {
-    toast.success(`Download del rapportino ${report.id} avviato.`);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div>
-            <div className="text-xs text-slate-500 font-mono">{report.id}</div>
-            <h3 className="font-semibold">Rapportino di lavoro</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrint}
-              className="h-9 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              Stampa
-            </button>
-            <button
-              onClick={handleDownload}
-              className="h-9 px-3 rounded-lg bg-primary text-white flex items-center gap-1.5 text-sm hover:bg-primary/90 btn-glow"
-            >
-              <Download className="h-4 w-4" />
-              Scarica
-            </button>
-            <button
-              onClick={onClose}
-              className="grid h-9 w-9 place-items-center rounded-lg hover:bg-slate-100"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div className="p-8">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-white">
-                <Hammer className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="font-semibold text-sm">Elettro Rossi Srl</div>
-                <div className="text-[11px] text-slate-500">P.IVA 01234567890 · Milano</div>
-              </div>
-            </div>
-            <div className="text-right text-xs text-slate-500">
-              <div className="tabular">{report.date}</div>
-              <div className="font-mono">{report.id}</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
-            <div>
-              <div className="text-xs text-slate-500">Cliente</div>
-              <div className="font-medium">{report.client}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500">Cantiere</div>
-              <div className="font-medium">{report.site}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500">Tecnico</div>
-              <div className="font-medium">{report.tech}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500">Ore lavorate</div>
-              <div className="font-medium tabular">{report.hours.toFixed(1)}h</div>
-            </div>
-          </div>
-          <div className="mt-6">
-            <div className="text-xs text-slate-500 mb-2">Descrizione lavori</div>
-            <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-700 leading-relaxed">
-              Sostituzione quadro elettrico principale, verifica dispersioni e messa a norma linea
-              illuminazione locali produttivi.
-            </div>
-          </div>
-          <div className="mt-6">
-            <div className="text-xs text-slate-500 mb-2">Materiali</div>
-            <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
-              <thead className="bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Articolo</th>
-                  <th className="text-right px-3 py-2 font-medium tabular">Q.tà</th>
-                  <th className="text-right px-3 py-2 font-medium tabular">Prezzo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ["Cavo FG16 3x2.5", 40, "€ 78,00"],
-                  ["Interruttore MT 25A", 2, "€ 96,00"],
-                  ["Presa Schuko IP55", 6, "€ 42,00"],
-                ].map(([a, q, p]) => (
-                  <tr key={String(a)} className="border-t border-slate-100">
-                    <td className="px-3 py-2">{a}</td>
-                    <td className="px-3 py-2 text-right tabular">{q}</td>
-                    <td className="px-3 py-2 text-right tabular">{p}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-slate-500 mb-2">Firma cliente</div>
-              <div className="rounded-lg border border-slate-200 h-24 grid place-items-center bg-slate-50/50">
-                <svg viewBox="0 0 200 60" className="h-12 w-32">
-                  <path
-                    d="M10 40 C 30 10, 60 55, 80 30 S 130 5, 160 35 190 20, 195 35"
-                    stroke="#0F172A"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 mb-2">Stato</div>
-              <div
-                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyle[report.status]}`}
-              >
-                {report.status}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
