@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import crypto from "crypto";
 import request from "supertest";
 import { createApp } from "./app";
 import { db } from "./db";
-import { tokenStore } from "./token-store";
+import { tokenStore, DistributedStorageEngine, ITokenStorageAdapter } from "./token-store";
 
 const app = createApp();
+let originalTokenAdapter: ITokenStorageAdapter | null = null;
 let adminCookies: string[] = [];
 let adminToken: string = "";
 let csrfToken: string = "";
@@ -16,83 +18,174 @@ let reportId: string = "";
 
 describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () => {
   beforeAll(async () => {
-    // 1. Setup a test admin user and get their cookies
+    // 1. Adapter readiness check: if Redis is configured but unreachable in the test environment,
+    // fallback gracefully to the built-in DistributedStorageEngine (which enforces identical CAS semantics)
+    // and restore original adapter in afterAll.
+    const isStoreReachable = await tokenStore.ping(500).catch(() => false);
+    if (!isStoreReachable) {
+      originalTokenAdapter = tokenStore.getAdapter();
+      tokenStore.setAdapter(new DistributedStorageEngine());
+    }
+
+    // 2. Setup isolated unique identifiers for this test execution run to prevent cross-run collisions
+    const runId = crypto.randomUUID().slice(0, 8);
+    const adminEmail = `sec-admin-${runId}@test.com`;
+    const techEmail = `sec-tech-${runId}@test.com`;
+    const companyName = `Security Co ${runId}`;
+
     const testAdmin = {
-      email: "sec-admin@test.com",
+      email: adminEmail,
       password: "Password123!",
       full_name: "Security Admin",
-      company_name: "Security Co",
+      company_name: companyName,
     };
-    
-    // Check if user exists
-    let existing = await db.findUserByEmail(testAdmin.email);
-    if (!existing) {
-      await request(app)
-        .post("/api/v1/auth/register")
-        .send(testAdmin);
+
+    // Register admin user
+    const regAdmin = await request(app)
+      .post("/api/v1/auth/register")
+      .send(testAdmin);
+
+    if (regAdmin.status !== 201) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Admin registration failed with status ${regAdmin.status}: ${JSON.stringify(regAdmin.body)}`
+      );
     }
-      
+
+    // Authenticate admin user
     const resLogin = await request(app)
       .post("/api/v1/auth/login")
       .send({ email: testAdmin.email, password: testAdmin.password });
-      
-    adminCookies = resLogin.headers["set-cookie"];
-    const accessCookie = adminCookies.find(c => c.startsWith("access_token="));
-    if (accessCookie) {
-       adminToken = accessCookie.split(";")[0].split("=")[1];
+
+    if (resLogin.status !== 200) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Admin login failed with status ${resLogin.status}: ${JSON.stringify(resLogin.body)}`
+      );
+    }
+
+    const rawAdminCookies = resLogin.headers["set-cookie"];
+    if (!rawAdminCookies || !Array.isArray(rawAdminCookies) || rawAdminCookies.length === 0) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Admin login response missing set-cookie header. Status: ${resLogin.status}, Body: ${JSON.stringify(resLogin.body)}`
+      );
+    }
+    adminCookies = rawAdminCookies;
+
+    const accessCookie = adminCookies.find((c) => typeof c === "string" && c.startsWith("access_token="));
+    if (!accessCookie) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] 'access_token' cookie not found in admin login response. Cookies: ${JSON.stringify(adminCookies)}`
+      );
+    }
+    adminToken = accessCookie.split(";")[0].split("=")[1];
+
+    const csrfCookie = adminCookies.find((c) => typeof c === "string" && c.startsWith("csrf_token="));
+    if (!csrfCookie) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] 'csrf_token' cookie not found in admin login response. Cookies: ${JSON.stringify(adminCookies)}`
+      );
+    }
+    csrfToken = csrfCookie.split(";")[0].split("=")[1];
+
+    if (!resLogin.body?.companyId || !resLogin.body?.id) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Admin login response missing companyId or id. Body: ${JSON.stringify(resLogin.body)}`
+      );
     }
     adminCompanyId = resLogin.body.companyId;
     adminUserId = resLogin.body.id;
-    const csrfCookie = adminCookies.find(c => c.startsWith("csrf_token="));
-    if (csrfCookie) {
-      csrfToken = csrfCookie.split(";")[0].split("=")[1];
-    }
 
     // 2. Setup a test technician in the same company
     const testTech = {
-      email: "sec-tech@test.com",
+      email: techEmail,
       password: "Password123!",
       full_name: "Security Technician",
-      company_name: "Security Co",
+      company_name: companyName,
     };
-    let existingTech = await db.findUserByEmail(testTech.email);
-    if (!existingTech) {
-      const regTech = await request(app)
-        .post("/api/v1/auth/register")
-        .send(testTech);
-      const techId = regTech.body.id;
-      await db.updateUser(techId, {
-        role: "technician",
-        companyId: adminCompanyId,
-      });
-    } else {
-      await db.updateUser(existingTech.id, {
-        role: "technician",
-        companyId: adminCompanyId,
-      });
+
+    const regTech = await request(app)
+      .post("/api/v1/auth/register")
+      .send(testTech);
+
+    if (regTech.status !== 201) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Technician registration failed with status ${regTech.status}: ${JSON.stringify(regTech.body)}`
+      );
     }
+
+    const techId = regTech.body?.id;
+    if (!techId) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Technician registration did not return user id. Body: ${JSON.stringify(regTech.body)}`
+      );
+    }
+
+    await db.updateUser(techId, {
+      role: "technician",
+      companyId: adminCompanyId,
+    });
 
     const resLoginTech = await request(app)
       .post("/api/v1/auth/login")
       .send({ email: testTech.email, password: testTech.password });
-    techCookies = resLoginTech.headers["set-cookie"];
-    const techCsrf = techCookies.find(c => c.startsWith("csrf_token="));
-    if (techCsrf) {
-      techCsrfToken = techCsrf.split(";")[0].split("=")[1];
+
+    if (resLoginTech.status !== 200) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Technician login failed with status ${resLoginTech.status}: ${JSON.stringify(resLoginTech.body)}`
+      );
     }
 
-    // Create a base report
+    const rawTechCookies = resLoginTech.headers["set-cookie"];
+    if (!rawTechCookies || !Array.isArray(rawTechCookies) || rawTechCookies.length === 0) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Technician login response missing set-cookie header. Status: ${resLoginTech.status}, Body: ${JSON.stringify(resLoginTech.body)}`
+      );
+    }
+    techCookies = rawTechCookies;
+
+    const techCsrf = techCookies.find((c) => typeof c === "string" && c.startsWith("csrf_token="));
+    if (!techCsrf) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] 'csrf_token' cookie not found in technician login response. Cookies: ${JSON.stringify(techCookies)}`
+      );
+    }
+    techCsrfToken = techCsrf.split(";")[0].split("=")[1];
+
+    // 3. Create a base report for report-dependent tests
     const resReport = await request(app)
       .post("/api/v1/reports")
-      .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
+      .set("Cookie", adminCookies)
+      .set("x-csrf-token", csrfToken)
       .send({
         client_name: "Valid Client",
         date: "2026-08-27",
         time: "10:00",
         work_hours: 2,
-        travel_hours: 1
+        travel_hours: 1,
       });
+
+    if (resReport.status !== 201 || !resReport.body?.id) {
+      throw new Error(
+        `[SecurityValidationTest Bootstrap] Base report creation failed. Status: ${resReport.status}, Body: ${JSON.stringify(resReport.body)}`
+      );
+    }
     reportId = resReport.body.id;
+  });
+
+  afterAll(async () => {
+    // Non-destructive cleanup of test artifacts without FLUSHDB or FLUSHALL
+    if (adminCompanyId && reportId) {
+      try {
+        await db.deleteReport(adminCompanyId, reportId);
+      } catch {}
+    }
+    if (adminUserId) {
+      try {
+        await tokenStore.revokeAllUserTokens(adminUserId);
+      } catch {}
+    }
+    if (originalTokenAdapter) {
+      tokenStore.setAdapter(originalTokenAdapter);
+    }
   });
 
 
