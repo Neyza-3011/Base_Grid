@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ReportsService } from "./reports.service";
 import { IDatabaseAdapter } from "../db";
 import { NotFoundError, ValidationError } from "../errors";
-import { ReportRecord } from "../types";
+import { ReportRecord, CreateReportRequest } from "../types";
 
 describe("ReportsService Domain Logic & Tenant Boundaries", () => {
   let mockDb: IDatabaseAdapter;
@@ -124,6 +124,35 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       expect(result.work_hours).toBe(3.5);
       expect(result.travel_hours).toBe(0.5);
       expect(result.status).toBe("submitted");
+    });
+
+    it("creates a draft report from typed CreateReportRequest DTO", async () => {
+      const draftPayload: CreateReportRequest = {
+        client_name: "Officine Meccaniche SpA",
+        client_address: "Corso Francia 100",
+        client_city: "Torino",
+        work_hours: 2,
+        travel_hours: 1,
+        date: "2026-09-26",
+        time: "08:30",
+        status: "draft",
+        notes: "Bozza preliminare",
+        materials_used: [{ name: "Guarnizioni", quantity: 4 }],
+      };
+
+      const result = await reportsService.createReport(
+        "comp-tenant-a",
+        "Marco Rossi",
+        draftPayload
+      );
+
+      expect(result.id).toBe("rep-new-001");
+      expect(result.status).toBe("draft");
+      expect(result.client.name).toBe("Officine Meccaniche SpA");
+      expect(result.work_hours).toBe(2);
+      expect(result.travel_hours).toBe(1);
+      expect(result.materials_used).toEqual([{ name: "Guarnizioni", quantity: 4 }]);
+      expect(result.notes).toBe("Bozza preliminare");
     });
 
     it("rejects invalid date format", async () => {

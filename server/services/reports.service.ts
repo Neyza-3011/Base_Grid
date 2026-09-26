@@ -1,27 +1,9 @@
 import { IDatabaseAdapter } from "../db";
-import { ReportRecord, CreateReportInput } from "../types";
+import { ReportRecord, CreateReportRequest, ReportResponseDTO } from "../types";
 import { AppError, NotFoundError, ValidationError, ForbiddenError } from "../errors";
 import { isValidCalendarDate, isValidTime, validateSignatureBase64 } from "../validation";
 
-export interface ReportResponseDTO {
-  id: string;
-  date: string;
-  time: string;
-  work_hours: number;
-  travel_hours: number;
-  status: "draft" | "submitted" | "approved";
-  client: {
-    name: string;
-    address?: string;
-    city?: string;
-  };
-  technician: {
-    full_name: string;
-  };
-  materials_used: { name: string; quantity: number }[];
-  notes?: string;
-  created_at: string;
-}
+export type { ReportResponseDTO };
 
 export class ReportsService {
   constructor(private readonly db: IDatabaseAdapter) {}
@@ -63,7 +45,7 @@ export class ReportsService {
   async createReport(
     companyId: string,
     creatorName: string,
-    body: any,
+    body: CreateReportRequest,
   ): Promise<ReportResponseDTO> {
     if (!companyId) {
       throw new ValidationError("Company ID is required");

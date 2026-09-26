@@ -55,42 +55,38 @@ export interface ReportRecord {
   createdAt: string;
 }
 
-export interface CreateReportInput {
+export interface CreateReportRequest {
+  client_name: string;
+  client_address?: string;
+  client_city?: string;
+  work_hours: number;
+  travel_hours?: number;
   date: string;
   time: string;
-  workHours: number;
-  travelHours?: number;
+  notes?: string;
+  materials_used?: { name: string; quantity: number }[];
   status?: "draft" | "submitted" | "approved";
+  signature_base64?: string;
+}
+
+export interface ReportResponseDTO {
+  id: string;
+  date: string;
+  time: string;
+  work_hours: number;
+  travel_hours: number;
+  status: "draft" | "submitted" | "approved";
   client: {
     name: string;
     address?: string;
     city?: string;
   };
   technician: {
-    fullName: string;
+    full_name: string;
   };
-  materialsUsed?: { name: string; quantity: number }[];
+  materials_used: { name: string; quantity: number }[];
   notes?: string;
-  signatureBase64?: string;
-}
-
-export interface UpdateReportInput {
-  date?: string;
-  time?: string;
-  workHours?: number;
-  travelHours?: number;
-  status?: "draft" | "submitted" | "approved";
-  client?: {
-    name: string;
-    address?: string;
-    city?: string;
-  };
-  technician?: {
-    fullName: string;
-  };
-  materialsUsed?: { name: string; quantity: number }[];
-  notes?: string;
-  signatureBase64?: string;
+  created_at: string;
 }
 
 export interface UpdateCompanyInput {

@@ -100,15 +100,15 @@ export function createApp(): Express {
     res.status(404).json({ detail: "Endpoint API non trovato." });
   });
 
-  // Centralized safe error handler (never leaks stack traces or internal secrets)
+  // Centralized safe error handler (never leaks stack traces, SQL, or internal secrets)
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err?.statusCode || err?.status || (typeof err === "number" ? err : 500);
     
-    // Log the error safely (do not expose secrets in logs for 500s)
+    // Log the error safely (never log err.message or stack trace for 5xx to prevent leakage of credentials/SQL)
     if (status >= 500) {
-      console.error(`[ServerError] ${err?.name || "Error"} (status: ${status}, statusCode: ${err?.statusCode}, statusProp: ${err?.status}): ${err?.message || err}`);
+      console.error(`[ServerError] ${err?.name || "InternalServerError"} (status: ${status})`);
     } else {
-      console.error(`[ClientError] ${err?.name || "Error"}:`, err?.message || err);
+      console.error(`[ClientError] ${err?.name || "Error"}:`, err?.message || "Client error");
     }
     
     // Only return the exact error message to the client for expected HTTP errors (status < 500)
