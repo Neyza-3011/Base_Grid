@@ -8,11 +8,11 @@ const app = createApp();
 
 describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
   beforeEach(async () => {
-    await rateLimiter.reset();
+    (rateLimiter as any).localFallback.clear();
   });
 
-  afterEach(async () => {
-    await rateLimiter.reset();
+  afterEach(() => {
+    (rateLimiter as any).localFallback.clear();
   });
 
   it("should return 429 when login limit is exceeded", async () => {
@@ -46,18 +46,9 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
 
   it("should not block /health even if API limit is exceeded", async () => {
     // generalApiLimiter: 1000 requests per 5 mins.
-    // Set for all potential localhost representations
+    // Let's just manually override the limit for the test
     const entry = { count: 1000, expiresAt: Date.now() + 60000 };
     (rateLimiter as any).localFallback.set("ratelimit:rl:api:::ffff:127.0.0.1", entry);
-    (rateLimiter as any).localFallback.set("ratelimit:rl:api:127.0.0.1", entry);
-    (rateLimiter as any).localFallback.set("ratelimit:rl:api:::1", entry);
-
-    const redis = await rateLimiter.getRedisClient();
-    if (redis && redis.status === "ready") {
-      await redis.set("ratelimit:rl:api:::ffff:127.0.0.1", 1000, "EX", 60);
-      await redis.set("ratelimit:rl:api:127.0.0.1", 1000, "EX", 60);
-      await redis.set("ratelimit:rl:api:::1", 1000, "EX", 60);
-    }
 
     const apiRes = await request(app).get("/api/v1/users/me").set("X-Test-RateLimit", "enable");
     expect(apiRes.status).toBe(429);
