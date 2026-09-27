@@ -12,9 +12,16 @@ export interface RateLimiterConfig {
   failClosed?: boolean; // Default to true for critical endpoints
 }
 
+const globalFallback: Map<string, { count: number; expiresAt: number }> =
+  (globalThis as any).__RATE_LIMITER_FALLBACK__ ||
+  ((globalThis as any).__RATE_LIMITER_FALLBACK__ = new Map());
+
 export class RateLimiter {
   private redisClient: Redis | null = null;
-  private localFallback = new Map<string, { count: number; expiresAt: number }>();
+
+  public get localFallback() {
+    return globalFallback;
+  }
 
   constructor(customRedisClient?: Redis | null) {
     if (customRedisClient !== undefined) {
@@ -66,7 +73,7 @@ export class RateLimiter {
       key = `ratelimit:${key}`;
 
       try {
-        if (this.redisClient && (this.redisClient.status === 'ready' || this.redisClient.status === 'connect' || this.redisClient.status === 'connecting' || this.redisClient.status === 'wait')) {
+        if (this.redisClient && this.redisClient.status === "ready") {
           const luaScript = `
             local current = redis.call("INCR", KEYS[1])
             if current == 1 then
@@ -92,15 +99,15 @@ export class RateLimiter {
           }
         } else {
           // Fallback logic
-          const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+          const isProd = config.NODE_ENV === "production";
           if (isProd) {
             if (failClosed) {
               res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-1)." });
               return;
             }
-          } else {
-            // Memory fallback for development and testing
-            const now = Date.now();
+          }
+          // Memory fallback for development and testing
+          const now = Date.now();
             let entry = this.localFallback.get(key);
             if (!entry || entry.expiresAt <= now) {
               entry = { count: 0, expiresAt: now + duration * 1000 };
@@ -119,7 +126,6 @@ export class RateLimiter {
               });
               return;
             }
-          }
         }
       } catch (err) {
         if (failClosed) {
@@ -140,6 +146,18 @@ export class RateLimiter {
       } catch (err) {}
     }
     return this.redisClient;
+  }
+
+  public async reset(): Promise<void> {
+    this.localFallback.clear();
+    if (this.redisClient && (this.redisClient.status === "ready" || this.redisClient.status === "connect")) {
+      try {
+        const keys = await this.redisClient.keys("ratelimit:*");
+        if (keys.length > 0) {
+          await this.redisClient.del(...keys);
+        }
+      } catch {}
+    }
   }
 
   public close() {

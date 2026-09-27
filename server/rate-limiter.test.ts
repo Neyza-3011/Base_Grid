@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
 import { rateLimiter } from "./rate-limiter";
@@ -7,6 +7,11 @@ import { config } from "./config";
 describe("Rate Limiter Middleware", () => {
   beforeEach(() => {
     // Reset local fallback map for tests if any
+    (rateLimiter as any).localFallback.clear();
+  });
+
+  afterEach(() => {
+    config.NODE_ENV = "test";
     (rateLimiter as any).localFallback.clear();
   });
 

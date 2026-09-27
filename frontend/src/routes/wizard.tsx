@@ -14,7 +14,7 @@ import {
   MapPin,
   PenTool,
   Loader2,
-  ChevronDown
+  ChevronDown,
 } from "lucide-react";
 import { addReport } from "@/lib/reportsStorage";
 import { fetchCustomers, fetchLocations, Customer, Location } from "@/lib/api/customers";
@@ -37,7 +37,7 @@ function Wizard() {
   const [clientName, setClientName] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [clientCity, setClientCity] = useState("");
-  
+
   // Real Customers & Locations
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -45,12 +45,16 @@ function Wizard() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
 
   useEffect(() => {
-    fetchCustomers("", true).then(setCustomers).catch(() => {});
+    fetchCustomers("", true)
+      .then(setCustomers)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (selectedCustomerId) {
-      fetchLocations(selectedCustomerId, "", true).then(setLocations).catch(() => {});
+      fetchLocations(selectedCustomerId, "", true)
+        .then(setLocations)
+        .catch(() => {});
     } else {
       setLocations([]);
     }
@@ -196,7 +200,6 @@ function Wizard() {
             </div>
 
             <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-              
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
                   <Building2 className="h-3.5 w-3.5 text-primary" />
@@ -208,9 +211,13 @@ function Wizard() {
                     onChange={handleSelectCustomer}
                     className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition appearance-none text-white"
                   >
-                    <option value="" className="bg-[#090D16]">-- Inserimento Manuale --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id} className="bg-[#090D16]">{c.displayName}</option>
+                    <option value="" className="bg-[#090D16]">
+                      -- Inserimento Manuale --
+                    </option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-[#090D16]">
+                        {c.displayName}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
@@ -229,9 +236,13 @@ function Wizard() {
                       onChange={handleSelectLocation}
                       className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition appearance-none text-white"
                     >
-                      <option value="" className="bg-[#090D16]">-- Inserimento Manuale Sede --</option>
-                      {locations.map(l => (
-                        <option key={l.id} value={l.id} className="bg-[#090D16]">{l.name} - {l.city}</option>
+                      <option value="" className="bg-[#090D16]">
+                        -- Inserimento Manuale Sede --
+                      </option>
+                      {locations.map((l) => (
+                        <option key={l.id} value={l.id} className="bg-[#090D16]">
+                          {l.name} - {l.city}
+                        </option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
