@@ -1,4 +1,31 @@
-export type UserRole = "superadmin" | "admin" | "technician";
+export type UserRole =
+  | "superadmin"
+  | "owner"
+  | "admin"
+  | "responsabile_tecnico"
+  | "dispatcher"
+  | "technician"
+  | "amministrazione"
+  | "commerciale"
+  | "cliente";
+
+/** Roles that can administer the team (add/edit/activate/deactivate members) */
+export const TEAM_ADMIN_ROLES: readonly UserRole[] = ["superadmin", "owner", "admin"] as const;
+
+/** Roles that a tenant admin/owner is allowed to assign to team members */
+export const ASSIGNABLE_ROLES: readonly UserRole[] = [
+  "owner",
+  "admin",
+  "responsabile_tecnico",
+  "dispatcher",
+  "technician",
+  "amministrazione",
+  "commerciale",
+  "cliente",
+] as const;
+
+/** Roles considered as admin/owner for self-protection (cannot deactivate last one) */
+export const ADMIN_OWNER_ROLES: readonly UserRole[] = ["owner", "admin"] as const;
 
 export interface UserRecord {
   id: string;
@@ -150,4 +177,75 @@ export interface AuthTokenRecord {
   expiresAt: string;
   createdAt: string;
   consumedAt?: string;
+}
+
+// --- Team Management Types ---
+
+/**
+ * Public response for a team member — NEVER includes passwordHash, salt, authVersion, or tokens.
+ */
+export interface TeamMemberResponse {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  phoneNumber: string;
+  isActive: boolean;
+  provider: string;
+  emailConfirmed: boolean;
+  createdAt: string;
+}
+
+/**
+ * Input for creating/inviting a new team member.
+ * companyId is NEVER accepted from the client — derived server-side from auth context.
+ */
+export interface CreateTeamMemberInput {
+  email: string;
+  fullName: string;
+  role: UserRole;
+  phoneNumber?: string;
+}
+
+/**
+ * Input for updating an existing team member.
+ * email changes are NOT supported in this task.
+ * companyId changes are NEVER allowed.
+ */
+export interface UpdateTeamMemberInput {
+  fullName?: string;
+  role?: UserRole;
+  phoneNumber?: string;
+  isActive?: boolean;
+}
+
+/**
+ * Invite token record for secure team member invitations.
+ * Raw token is never stored — only its SHA-256 hash.
+ */
+export interface InviteTokenRecord {
+  id: string;
+  companyId: string;
+  invitedEmail: string;
+  tokenHash: string;
+  role: UserRole;
+  fullName: string;
+  phoneNumber?: string;
+  invitedBy: string;
+  consumed: boolean;
+  revoked: boolean;
+  expiresAt: string;
+  createdAt: string;
+  consumedAt?: string;
+}
+
+/**
+ * Team stats for dashboard display.
+ */
+export interface TeamStats {
+  totalMembers: number;
+  activeMembers: number;
+  inactiveMembers: number;
+  pendingInvites: number;
+  roleBreakdown: Record<string, number>;
 }

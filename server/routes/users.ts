@@ -1,11 +1,14 @@
 import { Router, Request, Response } from "express";
-import { authenticate } from "../middleware/auth";
+import { authenticate, requireRole } from "../middleware/auth";
 import { db } from "../db";
 import { hashPassword, isValidEmail, normalizeEmail, toSafeUserSession, verifyPassword, validatePasswordPolicy } from "../security";
 import { tokenStore } from "../token-store";
 import { asyncHandler } from "../async-handler";
+import { TeamService } from "../services/team.service";
+import { TEAM_ADMIN_ROLES } from "../types";
 
 export const usersRouter = Router();
+const teamService = new TeamService(db);
 
 /**
  * GET /api/v1/users/me
@@ -158,4 +161,82 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     }
     res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
   }
+}));
+
+// ==========================================
+// TEAM MANAGEMENT ROUTES (Tenant-Scoped)
+// ==========================================
+
+/**
+ * GET /api/v1/users/team
+ * List all team members in the authenticated user's company
+ */
+usersRouter.get("/team", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const members = await teamService.listTeamMembers(req.user.companyId);
+  res.status(200).json(members);
+}));
+
+/**
+ * GET /api/v1/users/team/:id
+ * Get a specific team member
+ */
+usersRouter.get("/team/:id", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const member = await teamService.getTeamMember(req.user.companyId, req.params.id);
+  res.status(200).json(member);
+}));
+
+/**
+ * POST /api/v1/users/team
+ * Create a new team member and generate an invite token
+ */
+usersRouter.post("/team", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const { member, inviteToken } = await teamService.inviteTeamMember(
+    req.user.companyId,
+    req.company.name,
+    req.user.id,
+    req.body
+  );
+  res.status(201).json({ member, inviteToken });
+}));
+
+/**
+ * PUT /api/v1/users/team/:id
+ * Update a team member's profile and role
+ */
+usersRouter.put("/team/:id", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const member = await teamService.updateTeamMember(
+    req.user.companyId,
+    req.params.id,
+    req.user.id,
+    req.body
+  );
+  res.status(200).json(member);
+}));
+
+/**
+ * POST /api/v1/users/team/:id/activate
+ * Activate a team member
+ */
+usersRouter.post("/team/:id/activate", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const member = await teamService.changeMemberStatus(
+    req.user.companyId,
+    req.params.id,
+    req.user.id,
+    true
+  );
+  res.status(200).json(member);
+}));
+
+/**
+ * POST /api/v1/users/team/:id/deactivate
+ * Deactivate a team member
+ */
+usersRouter.post("/team/:id/deactivate", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  const member = await teamService.changeMemberStatus(
+    req.user.companyId,
+    req.params.id,
+    req.user.id,
+    false
+  );
+  res.status(200).json(member);
 }));

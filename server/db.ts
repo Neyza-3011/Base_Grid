@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import { AuthTokenRecord, AuthTokenType, CompanyRecord, InviteTokenRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config, ServerConfig } from "./config";
@@ -12,6 +12,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   private companies: Map<string, CompanyRecord> = new Map();
   private reports: Map<string, ReportRecord> = new Map();
   private authTokens: Map<string, AuthTokenRecord> = new Map();
+  private inviteTokens: Map<string, InviteTokenRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -485,6 +486,174 @@ export class DatabaseStore implements IDatabaseAdapter {
         this.authTokens.set(hash, tok);
       }
     }
+  }
+
+  // --- Team Management Operations ---
+
+  public async getUsersByCompany(companyId: string): Promise<UserRecord[]> {
+    const list: UserRecord[] = [];
+    for (const u of this.users.values()) {
+      if (u.companyId === companyId && u.role !== "superadmin") {
+        list.push(u);
+      }
+    }
+    return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  public async getUserByIdAndCompany(userId: string, companyId: string): Promise<UserRecord | null> {
+    const user = this.users.get(userId);
+    if (!user || user.companyId !== companyId) return null;
+    return { ...user };
+  }
+
+  public async createTeamMember(params: {
+    companyId: string;
+    companyName: string;
+    email: string;
+    fullName: string;
+    role: UserRole;
+    phoneNumber?: string;
+    passwordHash: string;
+    salt: string;
+    provider?: "local" | "google";
+    isActive: boolean;
+    emailConfirmed: boolean;
+  }): Promise<UserRecord> {
+    const normalized = normalizeEmail(params.email);
+    for (const u of this.users.values()) {
+      if (u.email === normalized) {
+        throw new Error("Email already registered");
+      }
+    }
+
+    const now = new Date().toISOString();
+    const userId = `usr-${randomUUID()}`;
+
+    const newUser: UserRecord = {
+      id: userId,
+      email: normalized,
+      fullName: params.fullName.trim(),
+      role: params.role,
+      companyId: params.companyId,
+      companyName: params.companyName,
+      passwordHash: params.passwordHash,
+      salt: params.salt,
+      isActive: params.isActive,
+      provider: params.provider || "local",
+      emailConfirmed: params.emailConfirmed,
+      phoneNumber: params.phoneNumber || "",
+      createdAt: now,
+      updatedAt: now,
+      authVersion: 0,
+    };
+
+    this.users.set(userId, newUser);
+    return { ...newUser };
+  }
+
+  public async updateTeamMember(
+    userId: string,
+    companyId: string,
+    updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+  ): Promise<UserRecord | null> {
+    const user = this.users.get(userId);
+    if (!user || user.companyId !== companyId) return null;
+
+    const updatedUser: UserRecord = {
+      ...user,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.users.set(userId, updatedUser);
+    return { ...updatedUser };
+  }
+
+  public async countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number> {
+    let count = 0;
+    for (const u of this.users.values()) {
+      if (
+        u.companyId === companyId &&
+        (u.role === "owner" || u.role === "admin") &&
+        u.isActive &&
+        u.id !== excludeUserId
+      ) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  // --- Invite Token Operations ---
+
+  public async createInviteToken(params: {
+    companyId: string;
+    invitedEmail: string;
+    tokenHash: string;
+    role: UserRole;
+    fullName: string;
+    phoneNumber?: string;
+    invitedBy: string;
+    expiresAt: string;
+  }): Promise<InviteTokenRecord> {
+    const id = `inv-${randomUUID()}`;
+    const now = new Date().toISOString();
+    const tokenRecord: InviteTokenRecord = {
+      id,
+      companyId: params.companyId,
+      invitedEmail: normalizeEmail(params.invitedEmail),
+      tokenHash: params.tokenHash,
+      role: params.role,
+      fullName: params.fullName,
+      phoneNumber: params.phoneNumber,
+      invitedBy: params.invitedBy,
+      consumed: false,
+      revoked: false,
+      expiresAt: params.expiresAt,
+      createdAt: now,
+    };
+    this.inviteTokens.set(tokenRecord.tokenHash, tokenRecord);
+    return { ...tokenRecord };
+  }
+
+  public async findInviteTokenByHash(tokenHash: string): Promise<InviteTokenRecord | null> {
+    const token = this.inviteTokens.get(tokenHash);
+    return token ? { ...token } : null;
+  }
+
+  public async consumeInviteToken(tokenHash: string): Promise<boolean> {
+    const token = this.inviteTokens.get(tokenHash);
+    if (!token || token.consumed || token.revoked) return false;
+    token.consumed = true;
+    token.consumedAt = new Date().toISOString();
+    this.inviteTokens.set(tokenHash, token);
+    return true;
+  }
+
+  public async revokeInviteTokensByEmail(companyId: string, email: string): Promise<void> {
+    const normalized = normalizeEmail(email);
+    for (const [hash, tok] of this.inviteTokens.entries()) {
+      if (tok.companyId === companyId && tok.invitedEmail === normalized && !tok.consumed && !tok.revoked) {
+        tok.revoked = true;
+        this.inviteTokens.set(hash, tok);
+      }
+    }
+  }
+
+  public async getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]> {
+    const list: InviteTokenRecord[] = [];
+    const now = Date.now();
+    for (const tok of this.inviteTokens.values()) {
+      if (
+        tok.companyId === companyId &&
+        !tok.consumed &&
+        !tok.revoked &&
+        new Date(tok.expiresAt).getTime() > now
+      ) {
+        list.push({ ...tok });
+      }
+    }
+    return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   private isExplicitlyDisabled = false;

@@ -1,7 +1,7 @@
 import { Pool, PoolClient } from "pg";
 import { randomUUID } from "crypto";
 import { config } from "./config";
-import { AuthTokenRecord, AuthTokenType, CompanyRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import { AuthTokenRecord, AuthTokenType, CompanyRecord, InviteTokenRecord, ReportRecord, UserRecord, UserRole } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
 
@@ -90,6 +90,24 @@ function mapReportRow(row: any): ReportRecord {
   };
 }
 
+function mapInviteTokenRow(row: any): InviteTokenRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    invitedEmail: row.invitedEmail,
+    tokenHash: row.tokenHash,
+    role: row.role as UserRole,
+    fullName: row.fullName,
+    phoneNumber: row.phoneNumber || undefined,
+    invitedBy: row.invitedBy,
+    consumed: Boolean(row.consumed),
+    revoked: Boolean(row.revoked),
+    expiresAt: row.expiresAt instanceof Date ? row.expiresAt.toISOString() : String(row.expiresAt || ""),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    consumedAt: row.consumedAt ? (row.consumedAt instanceof Date ? row.consumedAt.toISOString() : String(row.consumedAt)) : undefined,
+  };
+}
+
 export type TransactionClient = PoolClient;
 
 export interface IDatabaseAdapter {
@@ -133,6 +151,45 @@ export interface IDatabaseAdapter {
   initDatabase?(): Promise<void>;
   seedInitialData?(): void;
   close?(): Promise<void>;
+
+  // --- Team Management Operations (tenant-scoped) ---
+  getUsersByCompany(companyId: string): Promise<UserRecord[]>;
+  getUserByIdAndCompany(userId: string, companyId: string): Promise<UserRecord | null>;
+  createTeamMember(params: {
+    companyId: string;
+    companyName: string;
+    email: string;
+    fullName: string;
+    role: UserRole;
+    phoneNumber?: string;
+    passwordHash: string;
+    salt: string;
+    provider?: "local" | "google";
+    isActive: boolean;
+    emailConfirmed: boolean;
+  }): Promise<UserRecord>;
+  updateTeamMember(
+    userId: string,
+    companyId: string,
+    updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+  ): Promise<UserRecord | null>;
+  countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number>;
+
+  // --- Invite Token Operations ---
+  createInviteToken(params: {
+    companyId: string;
+    invitedEmail: string;
+    tokenHash: string;
+    role: UserRole;
+    fullName: string;
+    phoneNumber?: string;
+    invitedBy: string;
+    expiresAt: string;
+  }): Promise<InviteTokenRecord>;
+  findInviteTokenByHash(tokenHash: string): Promise<InviteTokenRecord | null>;
+  consumeInviteToken(tokenHash: string): Promise<boolean>;
+  revokeInviteTokensByEmail(companyId: string, email: string): Promise<void>;
+  getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -910,5 +967,228 @@ export class PostgresAdapter implements IDatabaseAdapter {
        WHERE "userId" = $2 AND type = $3 AND consumed = false`,
       [now, userId, type],
     );
+  }
+
+  // --- Team Management Operations ---
+
+  public async getUsersByCompany(companyId: string): Promise<UserRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM users WHERE "companyId" = $1 AND role != 'superadmin' ORDER BY "createdAt" ASC`,
+      [companyId],
+    );
+    return res.rows.map(mapUserRow);
+  }
+
+  public async getUserByIdAndCompany(userId: string, companyId: string): Promise<UserRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM users WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [userId, companyId],
+    );
+    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
+  }
+
+  public async createTeamMember(params: {
+    companyId: string;
+    companyName: string;
+    email: string;
+    fullName: string;
+    role: UserRole;
+    phoneNumber?: string;
+    passwordHash: string;
+    salt: string;
+    provider?: "local" | "google";
+    isActive: boolean;
+    emailConfirmed: boolean;
+  }): Promise<UserRecord> {
+    const now = new Date().toISOString();
+    const userId = `usr-${randomUUID()}`;
+    const normalized = normalizeEmail(params.email);
+
+    const newUser: UserRecord = {
+      id: userId,
+      email: normalized,
+      fullName: params.fullName.trim(),
+      role: params.role,
+      companyId: params.companyId,
+      companyName: params.companyName,
+      passwordHash: params.passwordHash,
+      salt: params.salt,
+      isActive: params.isActive,
+      provider: params.provider || "local",
+      emailConfirmed: params.emailConfirmed,
+      phoneNumber: params.phoneNumber || "",
+      createdAt: now,
+      updatedAt: now,
+      authVersion: 0,
+    };
+
+    await this.pool.query(
+      `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt", "authVersion")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [
+        newUser.id,
+        newUser.email,
+        newUser.fullName,
+        newUser.role,
+        newUser.companyId,
+        newUser.companyName,
+        newUser.passwordHash,
+        newUser.salt,
+        newUser.isActive,
+        newUser.provider,
+        newUser.emailConfirmed,
+        newUser.phoneNumber,
+        newUser.createdAt,
+        newUser.updatedAt,
+        newUser.authVersion,
+      ],
+    );
+
+    return newUser;
+  }
+
+  public async updateTeamMember(
+    userId: string,
+    companyId: string,
+    updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+  ): Promise<UserRecord | null> {
+    const existing = await this.getUserByIdAndCompany(userId, companyId);
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    const setClauses: string[] = ['"updatedAt" = $1'];
+    const params: any[] = [now];
+    let paramIndex = 2;
+
+    if (updates.fullName !== undefined) {
+      setClauses.push(`"fullName" = $${paramIndex}`);
+      params.push(updates.fullName);
+      paramIndex++;
+    }
+    if (updates.role !== undefined) {
+      setClauses.push(`role = $${paramIndex}`);
+      params.push(updates.role);
+      paramIndex++;
+    }
+    if (updates.phoneNumber !== undefined) {
+      setClauses.push(`"phoneNumber" = $${paramIndex}`);
+      params.push(updates.phoneNumber);
+      paramIndex++;
+    }
+    if (updates.isActive !== undefined) {
+      setClauses.push(`"isActive" = $${paramIndex}`);
+      params.push(updates.isActive);
+      paramIndex++;
+    }
+
+    params.push(userId);
+    params.push(companyId);
+    const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${paramIndex} AND "companyId" = $${paramIndex + 1} RETURNING *`;
+
+    const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapUserRow(res.rows[0]);
+  }
+
+  public async countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number> {
+    let sql = `SELECT COUNT(*) FROM users WHERE "companyId" = $1 AND role IN ('owner', 'admin') AND "isActive" = true`;
+    const params: any[] = [companyId];
+
+    if (excludeUserId) {
+      sql += ` AND id != $2`;
+      params.push(excludeUserId);
+    }
+
+    const res = await this.pool.query(sql, params);
+    return parseInt(res.rows[0]?.count || "0", 10);
+  }
+
+  // --- Invite Token Operations ---
+
+  public async createInviteToken(params: {
+    companyId: string;
+    invitedEmail: string;
+    tokenHash: string;
+    role: UserRole;
+    fullName: string;
+    phoneNumber?: string;
+    invitedBy: string;
+    expiresAt: string;
+  }): Promise<InviteTokenRecord> {
+    const id = `inv-${randomUUID()}`;
+    const now = new Date().toISOString();
+
+    const record: InviteTokenRecord = {
+      id,
+      companyId: params.companyId,
+      invitedEmail: normalizeEmail(params.invitedEmail),
+      tokenHash: params.tokenHash,
+      role: params.role,
+      fullName: params.fullName,
+      phoneNumber: params.phoneNumber,
+      invitedBy: params.invitedBy,
+      consumed: false,
+      revoked: false,
+      expiresAt: params.expiresAt,
+      createdAt: now,
+    };
+
+    await this.pool.query(
+      `INSERT INTO invite_tokens (id, "companyId", "invitedEmail", "tokenHash", role, "fullName", "phoneNumber", "invitedBy", consumed, revoked, "expiresAt", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        record.id,
+        record.companyId,
+        record.invitedEmail,
+        record.tokenHash,
+        record.role,
+        record.fullName,
+        record.phoneNumber || null,
+        record.invitedBy,
+        record.consumed,
+        record.revoked,
+        record.expiresAt,
+        record.createdAt,
+      ],
+    );
+
+    return record;
+  }
+
+  public async findInviteTokenByHash(tokenHash: string): Promise<InviteTokenRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM invite_tokens WHERE "tokenHash" = $1 LIMIT 1`,
+      [tokenHash],
+    );
+    return res.rows[0] ? mapInviteTokenRow(res.rows[0]) : null;
+  }
+
+  public async consumeInviteToken(tokenHash: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE invite_tokens SET consumed = true, "consumedAt" = $1
+       WHERE "tokenHash" = $2 AND consumed = false AND revoked = false`,
+      [now, tokenHash],
+    );
+    return Boolean(res.rowCount && res.rowCount > 0);
+  }
+
+  public async revokeInviteTokensByEmail(companyId: string, email: string): Promise<void> {
+    const normalized = normalizeEmail(email);
+    await this.pool.query(
+      `UPDATE invite_tokens SET revoked = true
+       WHERE "companyId" = $1 AND "invitedEmail" = $2 AND consumed = false AND revoked = false`,
+      [companyId, normalized],
+    );
+  }
+
+  public async getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM invite_tokens
+       WHERE "companyId" = $1 AND consumed = false AND revoked = false AND "expiresAt" > NOW()
+       ORDER BY "createdAt" DESC`,
+      [companyId],
+    );
+    return res.rows.map(mapInviteTokenRow);
   }
 }
