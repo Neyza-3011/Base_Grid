@@ -20,6 +20,9 @@ const INSECURE_PLACEHOLDERS = new Set([
   "basegrid-production-secure-jwt-key-2026-auth-authoritative",
 ]);
 
+// Stable local development and test fallback secret (STRICTLY PROHIBITED in production)
+const DEV_TEST_FALLBACK_SECRET = "basegrid-dev-local-jwt-secret-key-minimum-32-chars-long";
+
 /**
  * Retrieves the cryptographic JWT secret.
  * - In production (NODE_ENV === "production"): strictly requires a valid, high-entropy
@@ -33,41 +36,41 @@ export function getJwtSecret(customEnv?: NodeJS.ProcessEnv): string {
   const isProduction = env.NODE_ENV === "production";
   const rawSecret = env.JWT_SECRET || env.SECRET_KEY;
 
-  if (!rawSecret || typeof rawSecret !== "string") {
-    if (isProduction) {
-      throw new Error(
-        "CRITICAL SECURITY ERROR: JWT secret is missing. Set the JWT_SECRET or SECRET_KEY environment variable."
-      );
+  if (rawSecret !== undefined && rawSecret !== null) {
+    if (typeof rawSecret === "string") {
+      const trimmed = rawSecret.trim();
+      if (rawSecret.length > 0 && trimmed.length === 0) {
+        if (isProduction) {
+          throw new Error("CRITICAL SECURITY ERROR: JWT secret is empty or whitespace-only in production.");
+        }
+      } else if (trimmed.length > 0) {
+        if (trimmed.length < MIN_SECRET_LENGTH) {
+          if (isProduction) {
+            throw new Error(
+              `CRITICAL SECURITY ERROR: JWT secret is too short (${trimmed.length} chars). It must be at least ${MIN_SECRET_LENGTH} characters long in production.`
+            );
+          }
+        } else if (INSECURE_PLACEHOLDERS.has(trimmed.toLowerCase())) {
+          if (isProduction) {
+            throw new Error(
+              "CRITICAL SECURITY ERROR: JWT secret is set to a known insecure placeholder in production."
+            );
+          }
+        } else {
+          return trimmed;
+        }
+      }
     }
-    // In local development / preview environment, fallback to a stable local secret
-    return "dev-local-basegrid-auth-secret-key-do-not-use-in-prod-2026";
   }
 
-  const trimmed = rawSecret.trim();
-  if (trimmed.length === 0) {
-    if (isProduction) {
-      throw new Error(
-        "CRITICAL SECURITY ERROR: JWT secret is empty. Set a valid JWT_SECRET or SECRET_KEY environment variable."
-      );
-    }
-    return "dev-local-basegrid-auth-secret-key-do-not-use-in-prod-2026";
-  }
-
-  if (trimmed.length < MIN_SECRET_LENGTH) {
-    if (isProduction) {
-      throw new Error(
-        `CRITICAL SECURITY ERROR: JWT secret is too short (${trimmed.length} chars). It must be at least ${MIN_SECRET_LENGTH} characters long.`
-      );
-    }
-  }
-
-  if (isProduction && INSECURE_PLACEHOLDERS.has(trimmed.toLowerCase())) {
+  if (isProduction) {
     throw new Error(
-      "CRITICAL SECURITY ERROR: JWT secret is set to a known insecure placeholder. Provide a cryptographically strong random secret."
+      "CRITICAL SECURITY ERROR: JWT secret is missing or empty in production environment. Please set JWT_SECRET or SECRET_KEY."
     );
   }
 
-  return trimmed;
+  // Development and testing fallback
+  return DEV_TEST_FALLBACK_SECRET;
 }
 
 /**
