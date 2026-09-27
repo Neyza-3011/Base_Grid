@@ -1,7 +1,17 @@
 import { IDatabaseAdapter } from "../db";
-import { CreateTeamMemberInput, InviteTokenRecord, TeamMemberResponse, UpdateTeamMemberInput, UserRecord, UserRole, ASSIGNABLE_ROLES, ADMIN_OWNER_ROLES } from "../types";
+import {
+  CreateTeamMemberInput,
+  InviteInfoResponse,
+  InviteTokenRecord,
+  TeamMemberResponse,
+  UpdateTeamMemberInput,
+  UserRecord,
+  UserRole,
+  ASSIGNABLE_ROLES,
+  ADMIN_OWNER_ROLES,
+} from "../types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors";
-import { generateSecureToken, hashPassword, hashToken, normalizeEmail } from "../security";
+import { generateSecureToken, hashPassword, hashToken, normalizeEmail, validatePasswordPolicy } from "../security";
 import crypto from "crypto";
 
 export class TeamService {
@@ -48,7 +58,8 @@ export class TeamService {
   }
 
   /**
-   * Creates a new team member and an invitation token.
+   * Atomically creates a new team member and an invitation token in a single transaction.
+   * If either user creation or token creation fails, both roll back.
    * Returns the created member and the raw invitation token (to be displayed to the admin).
    */
   async inviteTeamMember(
@@ -73,42 +84,27 @@ export class TeamService {
       throw new ConflictError("Questa email è già registrata nel sistema.");
     }
 
-    // Revoke any pending invites for this email in this company
-    await this.db.revokeInviteTokensByEmail(companyId, normalizedEmail);
-
-    // Create user with a secure random password (they don't know it, must use invite link to set it)
+    // Temporary password (user will set their real password upon accepting invite)
     const randomPassword = crypto.randomBytes(32).toString("hex");
     const { hash, salt } = hashPassword(randomPassword);
 
-    const newUser = await this.db.createTeamMember({
-      companyId,
-      companyName,
-      email: normalizedEmail,
-      fullName: input.fullName,
-      role: input.role,
-      phoneNumber: input.phoneNumber,
-      passwordHash: hash,
-      salt,
-      provider: "local",
-      isActive: true, // Active, but emailConfirmed is false
-      emailConfirmed: false,
-    });
-
-    // Create invite token
     const rawToken = generateSecureToken();
     const tokenHash = hashToken(rawToken);
 
     // Expires in 7 days
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    await this.db.createInviteToken({
+    const { user: newUser } = await this.db.createTeamMemberWithInvite({
       companyId,
-      invitedEmail: normalizedEmail,
-      tokenHash,
-      role: input.role,
+      companyName,
+      inviterId,
+      email: normalizedEmail,
       fullName: input.fullName,
+      role: input.role,
       phoneNumber: input.phoneNumber,
-      invitedBy: inviterId,
+      passwordHash: hash,
+      salt,
+      tokenHash,
       expiresAt,
     });
 
@@ -120,6 +116,7 @@ export class TeamService {
 
   /**
    * Updates a team member's profile and role.
+   * Atomically updates user state AND increments authVersion in the same DB mutation.
    */
   async updateTeamMember(
     companyId: string,
@@ -165,12 +162,11 @@ export class TeamService {
       updates.role = input.role;
     }
 
-    // Role changes require session invalidation
-    if (updates.role !== undefined) {
-      await this.db.incrementUserAuthVersion(userId);
-    }
-
-    const updatedUser = await this.db.updateTeamMember(userId, companyId, updates);
+    // Atomically updates user state AND increments authVersion if role changed
+    const shouldIncrementAuthVersion = updates.role !== undefined;
+    const updatedUser = await this.db.updateTeamMember(userId, companyId, updates, {
+      incrementAuthVersion: shouldIncrementAuthVersion,
+    });
     if (!updatedUser) {
       throw new Error("Errore durante l'aggiornamento dell'utente.");
     }
@@ -180,6 +176,7 @@ export class TeamService {
 
   /**
    * Activates or deactivates a team member.
+   * Atomically updates user status AND increments authVersion in the same DB mutation.
    */
   async changeMemberStatus(
     companyId: string,
@@ -211,14 +208,63 @@ export class TeamService {
       }
     }
 
-    // Status change requires session invalidation
-    await this.db.incrementUserAuthVersion(userId);
-
-    const updatedUser = await this.db.updateTeamMember(userId, companyId, { isActive });
+    // Atomically updates isActive AND increments authVersion in single mutation
+    const updatedUser = await this.db.updateTeamMember(userId, companyId, { isActive }, {
+      incrementAuthVersion: true,
+    });
     if (!updatedUser) {
       throw new Error("Errore durante l'aggiornamento dello stato dell'utente.");
     }
 
     return this.toTeamMemberResponse(updatedUser);
+  }
+
+  /**
+   * Retrieves safe invitation info by raw token.
+   * Token is hashed before lookup.
+   */
+  async getInviteInfo(rawToken: string): Promise<InviteInfoResponse> {
+    if (!rawToken || typeof rawToken !== "string") {
+      throw new ValidationError("Token di invito non fornito.");
+    }
+    const tokenHash = hashToken(rawToken);
+    const info = await this.db.getInviteTokenInfo(tokenHash);
+    if (!info) {
+      throw new NotFoundError("Invito non valido o scaduto.");
+    }
+    return {
+      email: info.invite.invitedEmail,
+      fullName: info.invite.fullName,
+      role: info.invite.role,
+      companyName: info.companyName,
+      expiresAt: info.invite.expiresAt,
+    };
+  }
+
+  /**
+   * Accepts an invitation and sets the user's password.
+   * Validates token existence, non-consumed, non-revoked, and non-expired.
+   * Atomically consumes the token, sets the password, marks emailConfirmed=true,
+   * increments user authVersion, and revokes other pending invites.
+   */
+  async acceptInvite(rawToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    if (!rawToken || typeof rawToken !== "string") {
+      throw new ValidationError("Token di invito non fornito.");
+    }
+
+    const passwordValidation = validatePasswordPolicy(newPassword);
+    if (!passwordValidation.valid) {
+      throw new ValidationError(passwordValidation.message || "Password non valida.");
+    }
+
+    const tokenHash = hashToken(rawToken);
+    const { hash: passwordHash, salt } = hashPassword(newPassword);
+
+    await this.db.acceptInviteAndSetPassword(tokenHash, passwordHash, salt);
+
+    return {
+      success: true,
+      message: "Invito accettato con successo. Ora puoi effettuare il login.",
+    };
   }
 }

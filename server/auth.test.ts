@@ -99,7 +99,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       expect(res.status).toBe(201);
       expect(res.body.email).toBe("nuovo.cliente@azienda.it");
       expect(res.body.fullName).toBe("Mario Rossi");
-      expect(res.body.role).toBe("admin");
+      expect(res.body.role).toBe("owner");
       expect(res.body.companyName).toBe("Elettro Rossi Srl");
       expect(res.body.passwordHash).toBeUndefined();
       expect(res.body.salt).toBeUndefined();

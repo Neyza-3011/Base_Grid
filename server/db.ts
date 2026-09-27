@@ -1,5 +1,14 @@
 import { randomUUID } from "crypto";
-import { AuthTokenRecord, AuthTokenType, CompanyRecord, InviteTokenRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import {
+  AuthTokenRecord,
+  AuthTokenType,
+  CompanyRecord,
+  CreateTeamMemberWithInviteParams,
+  InviteTokenRecord,
+  ReportRecord,
+  UserRecord,
+  UserRole,
+} from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config, ServerConfig } from "./config";
@@ -551,17 +560,74 @@ export class DatabaseStore implements IDatabaseAdapter {
     return { ...newUser };
   }
 
+  public async createTeamMemberWithInvite(params: CreateTeamMemberWithInviteParams): Promise<{ user: UserRecord; inviteToken: InviteTokenRecord }> {
+    const normalized = normalizeEmail(params.email);
+    for (const u of this.users.values()) {
+      if (u.email === normalized) {
+        throw new Error("Questa email è già registrata nel sistema.");
+      }
+    }
+
+    const now = new Date().toISOString();
+
+    // Revoke previous pending invites
+    await this.revokeInviteTokensByEmail(params.companyId, normalized);
+
+    const userId = `usr-${randomUUID()}`;
+    const newUser: UserRecord = {
+      id: userId,
+      email: normalized,
+      fullName: params.fullName.trim(),
+      role: params.role,
+      companyId: params.companyId,
+      companyName: params.companyName,
+      passwordHash: params.passwordHash,
+      salt: params.salt,
+      isActive: true,
+      provider: "local",
+      emailConfirmed: false,
+      phoneNumber: params.phoneNumber || "",
+      createdAt: now,
+      updatedAt: now,
+      authVersion: 0,
+    };
+
+    const inviteTokenId = `inv-${randomUUID()}`;
+    const newInvite: InviteTokenRecord = {
+      id: inviteTokenId,
+      companyId: params.companyId,
+      invitedEmail: normalized,
+      tokenHash: params.tokenHash,
+      role: params.role,
+      fullName: params.fullName.trim(),
+      phoneNumber: params.phoneNumber,
+      invitedBy: params.inviterId,
+      consumed: false,
+      revoked: false,
+      expiresAt: params.expiresAt,
+      createdAt: now,
+    };
+
+    this.users.set(userId, newUser);
+    this.inviteTokens.set(newInvite.tokenHash, newInvite);
+
+    return { user: { ...newUser }, inviteToken: { ...newInvite } };
+  }
+
   public async updateTeamMember(
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+    options?: { incrementAuthVersion?: boolean },
   ): Promise<UserRecord | null> {
     const user = this.users.get(userId);
     if (!user || user.companyId !== companyId) return null;
 
+    const shouldIncrementAuthVersion = options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined;
     const updatedUser: UserRecord = {
       ...user,
       ...updates,
+      authVersion: shouldIncrementAuthVersion ? (user.authVersion || 0) + 1 : (user.authVersion || 0),
       updatedAt: new Date().toISOString(),
     };
 
@@ -654,6 +720,61 @@ export class DatabaseStore implements IDatabaseAdapter {
       }
     }
     return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  public async getInviteTokenInfo(tokenHash: string): Promise<{ invite: InviteTokenRecord; companyName: string } | null> {
+    const invite = this.inviteTokens.get(tokenHash);
+    if (!invite || invite.consumed || invite.revoked || new Date(invite.expiresAt).getTime() <= Date.now()) {
+      return null;
+    }
+    const company = this.companies.get(invite.companyId);
+    return {
+      invite: { ...invite },
+      companyName: company?.name || "Azienda",
+    };
+  }
+
+  public async acceptInviteAndSetPassword(tokenHash: string, passwordHash: string, salt: string): Promise<UserRecord> {
+    const invite = this.inviteTokens.get(tokenHash);
+    if (!invite || invite.consumed || invite.revoked || new Date(invite.expiresAt).getTime() <= Date.now()) {
+      throw new Error("Invito non valido, revocato o scaduto.");
+    }
+
+    const user = Array.from(this.users.values()).find(
+      (u) => u.email === invite.invitedEmail && u.companyId === invite.companyId,
+    );
+    if (!user) {
+      throw new Error("Utente collegato all'invito non trovato.");
+    }
+
+    // Atomically consume token
+    invite.consumed = true;
+    invite.consumedAt = new Date().toISOString();
+    this.inviteTokens.set(tokenHash, invite);
+
+    // Atomically update user
+    user.passwordHash = passwordHash;
+    user.salt = salt;
+    user.emailConfirmed = true;
+    user.authVersion = (user.authVersion || 0) + 1;
+    user.updatedAt = new Date().toISOString();
+    this.users.set(user.id, user);
+
+    // Revoke any other pending invites for this email/company
+    for (const [hash, tok] of this.inviteTokens.entries()) {
+      if (
+        tok.companyId === invite.companyId &&
+        tok.invitedEmail === invite.invitedEmail &&
+        tok.id !== invite.id &&
+        !tok.consumed &&
+        !tok.revoked
+      ) {
+        tok.revoked = true;
+        this.inviteTokens.set(hash, tok);
+      }
+    }
+
+    return { ...user };
   }
 
   private isExplicitlyDisabled = false;

@@ -236,7 +236,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     
     // Verify server-owned fields were ignored
     const user = await db.findUserById(adminUserId);
-    expect(user!.role).toBe("admin"); // Remains admin
+    expect(user!.role).toBe("owner"); // Remains owner
     expect(user!.companyId).toBe(adminCompanyId); // Remains original company
     expect(user!.isActive).toBe(true);
     expect(user!.authVersion).toBe(0); // Password didn't change

@@ -172,7 +172,9 @@ function Dashboard() {
           </div>
         </button>
 
-        {(currentUser.role === "admin" || currentUser.role === "superadmin" || currentUser.role === "owner") && (
+        {(currentUser.role === "admin" ||
+          currentUser.role === "superadmin" ||
+          currentUser.role === "owner") && (
           <button
             onClick={() => {
               setActiveView("team");

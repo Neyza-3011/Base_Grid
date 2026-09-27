@@ -41,7 +41,7 @@ companyRouter.get(
 companyRouter.put(
   "/settings",
   authenticate,
-  requireRole(["admin", "superadmin"]),
+  requireRole(["owner", "admin", "superadmin"]),
   asyncHandler(async (req: any, res: any): Promise<void> => {
     if (!req.user) {
       throw new UnauthorizedError("Non autenticato.");

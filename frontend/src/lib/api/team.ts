@@ -54,13 +54,18 @@ export async function createTeamMember(data: CreateTeamMemberInput): Promise<Inv
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: "Impossibile creare il membro del team." }));
+    const errorData = await res
+      .json()
+      .catch(() => ({ detail: "Impossibile creare il membro del team." }));
     throw new Error(errorData.detail || "Impossibile creare il membro del team.");
   }
   return res.json();
 }
 
-export async function updateTeamMember(id: string, data: UpdateTeamMemberInput): Promise<TeamMember> {
+export async function updateTeamMember(
+  id: string,
+  data: UpdateTeamMemberInput,
+): Promise<TeamMember> {
   const res = await fetch(`/api/v1/users/team/${id}`, {
     method: "PUT",
     headers: appendCsrfHeaders({
@@ -71,7 +76,9 @@ export async function updateTeamMember(id: string, data: UpdateTeamMemberInput):
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: "Impossibile aggiornare il membro del team." }));
+    const errorData = await res
+      .json()
+      .catch(() => ({ detail: "Impossibile aggiornare il membro del team." }));
     throw new Error(errorData.detail || "Impossibile aggiornare il membro del team.");
   }
   return res.json();
@@ -97,8 +104,49 @@ export async function deactivateTeamMember(id: string): Promise<TeamMember> {
     credentials: "include",
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: "Impossibile disattivare il membro." }));
+    const errorData = await res
+      .json()
+      .catch(() => ({ detail: "Impossibile disattivare il membro." }));
     throw new Error(errorData.detail || "Impossibile disattivare il membro.");
+  }
+  return res.json();
+}
+
+export interface InviteInfo {
+  valid: boolean;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  companyName: string;
+  expiresAt: string;
+}
+
+export async function fetchInviteInfo(token: string): Promise<InviteInfo> {
+  const res = await fetch(`/api/v1/auth/invite?token=${encodeURIComponent(token)}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Invito non valido o scaduto." }));
+    throw new Error(errorData.detail || "Invito non valido o scaduto.");
+  }
+  return res.json();
+}
+
+export async function acceptInvite(
+  token: string,
+  password: string,
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch("/api/v1/auth/accept-invite", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Impossibile accettare l'invito." }));
+    throw new Error(errorData.detail || "Impossibile accettare l'invito.");
   }
   return res.json();
 }

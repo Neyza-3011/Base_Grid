@@ -249,3 +249,32 @@ export interface TeamStats {
   pendingInvites: number;
   roleBreakdown: Record<string, number>;
 }
+
+/**
+ * Public response for invitation information before password setup.
+ */
+export interface InviteInfoResponse {
+  email: string;
+  fullName: string;
+  role: UserRole;
+  companyName: string;
+  expiresAt: string;
+}
+
+/**
+ * Parameters for atomic team member and invite token creation.
+ */
+export interface CreateTeamMemberWithInviteParams {
+  companyId: string;
+  companyName: string;
+  inviterId: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  phoneNumber?: string;
+  passwordHash: string;
+  salt: string;
+  tokenHash: string;
+  expiresAt: string;
+}
+

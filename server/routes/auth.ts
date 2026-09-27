@@ -29,8 +29,10 @@ import {
   resetPasswordLimiter,
   googleAuthLimiter
 } from "../rate-limiter";
+import { TeamService } from "../services/team.service";
 
 export const authRouter = Router();
+const teamService = new TeamService(db);
 
 const isProduction = process.env.NODE_ENV === "production";
 const cookieSettings = getCookieSettings(isProduction);
@@ -82,6 +84,7 @@ authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res:
       companyName: company_name.trim(),
       phoneNumber: phone_number ? phone_number.trim() : undefined,
       emailConfirmed: !config.EMAIL_VERIFICATION_ENABLED,
+      role: "owner",
     });
 
     if (config.EMAIL_VERIFICATION_ENABLED) {
@@ -682,4 +685,57 @@ authRouter.get("/csrf-token", asyncHandler(async (req: any, res: any): Promise<v
   }
   res.status(200).json({ csrfToken: token });
 }));
+
+/**
+ * GET /api/v1/auth/invite
+ * Validates and retrieves safe invitation details by token for onboarding UI.
+ * Does not require authentication.
+ */
+authRouter.get(["/invite", "/accept-invite"], asyncHandler(async (req: any, res: any): Promise<void> => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  if (!token) {
+    res.status(400).json({ detail: "Token di invito non fornito." });
+    return;
+  }
+
+  try {
+    const info = await teamService.getInviteInfo(token);
+    res.status(200).json({ valid: true, ...info });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ detail: err.message || "Invito non valido o scaduto." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/accept-invite
+ * Unauthenticated invite acceptance endpoint.
+ * Validates token, password policy, atomically consumes token, sets password,
+ * marks emailConfirmed, increments authVersion, and revokes other pending invites.
+ */
+authRouter.post(["/accept-invite", "/invite/accept"], resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  const { token, password } = req.body || {};
+  if (!token || typeof token !== "string" || !token.trim()) {
+    res.status(400).json({ detail: "Token di invito non fornito." });
+    return;
+  }
+
+  if (!password || typeof password !== "string") {
+    res.status(400).json({ detail: "Password mancante o non valida." });
+    return;
+  }
+
+  const passwordValidation = validatePasswordPolicy(password);
+  if (!passwordValidation.valid) {
+    res.status(400).json({ detail: passwordValidation.message || "Password non valida." });
+    return;
+  }
+
+  try {
+    const result = await teamService.acceptInvite(token.trim(), password);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ detail: err.message || "Invito non valido, revocato o scaduto." });
+  }
+}));
+
 

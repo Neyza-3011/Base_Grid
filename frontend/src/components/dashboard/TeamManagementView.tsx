@@ -15,7 +15,7 @@ import {
   AlertCircle,
   RefreshCw,
   MoreVertical,
-  Key
+  Key,
 } from "lucide-react";
 import {
   fetchTeamMembers,
@@ -24,7 +24,7 @@ import {
   activateTeamMember,
   deactivateTeamMember,
   TeamMember,
-  CreateTeamMemberInput
+  CreateTeamMemberInput,
 } from "@/lib/api/team";
 import { UserRole } from "../../../server/types";
 
@@ -52,7 +52,11 @@ const ROLE_COLORS: Record<UserRole, string> = {
   cliente: "text-slate-400 bg-slate-500/10 border-slate-500/20",
 };
 
-export function TeamManagementView({ currentUser }: { currentUser: any }) {
+export function TeamManagementView({
+  currentUser,
+}: {
+  currentUser: { id: string; role: string; [key: string]: unknown };
+}) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +64,13 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
   const [activeFilter, setActiveFilter] = useState("Tutti");
 
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ member: TeamMember; inviteToken: string } | null>(null);
-  
+  const [inviteResult, setInviteResult] = useState<{
+    member: TeamMember;
+    inviteToken: string;
+  } | null>(null);
+
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  
+
   const [formData, setFormData] = useState<CreateTeamMemberInput>({
     email: "",
     fullName: "",
@@ -79,8 +86,8 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
     try {
       const data = await fetchTeamMembers();
       setMembers(data);
-    } catch (err: any) {
-      setError(err.message || "Impossibile caricare il team.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Impossibile caricare il team.");
     } finally {
       setLoading(false);
     }
@@ -98,8 +105,8 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
       setInviteResult(result);
       toast.success("Membro invitato con successo!");
       loadTeam();
-    } catch (err: any) {
-      toast.error(err.message || "Errore durante l'invito.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Errore durante l'invito.");
     } finally {
       setSubmitting(false);
     }
@@ -118,8 +125,8 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
       toast.success("Profilo aggiornato con successo!");
       setEditingMember(null);
       loadTeam();
-    } catch (err: any) {
-      toast.error(err.message || "Errore durante l'aggiornamento.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Errore durante l'aggiornamento.");
     } finally {
       setSubmitting(false);
     }
@@ -135,8 +142,8 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
         toast.success("Membro attivato.");
       }
       loadTeam();
-    } catch (err: any) {
-      toast.error(err.message || "Errore durante la modifica dello stato.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Errore durante la modifica dello stato.");
     }
   };
 
@@ -165,7 +172,7 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
     const matchesSearch =
       m.fullName.toLowerCase().includes(query.toLowerCase()) ||
       m.email.toLowerCase().includes(query.toLowerCase());
-    
+
     if (!matchesSearch) return false;
     if (activeFilter === "Attivi") return m.isActive;
     if (activeFilter === "Disattivati") return !m.isActive;
@@ -222,7 +229,7 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
             className="w-full h-10 bg-slate-900/60 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
           />
         </div>
-        
+
         <div className="flex bg-slate-900/60 border border-white/10 rounded-xl p-1 w-full sm:w-auto overflow-x-auto">
           {["Tutti", "Attivi", "Disattivati", "In Attesa"].map((filter) => (
             <button
@@ -280,14 +287,20 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${ROLE_COLORS[member.role] || ROLE_COLORS.technician}`}>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${ROLE_COLORS[member.role] || ROLE_COLORS.technician}`}
+                      >
                         {ROLE_LABELS[member.role] || member.role}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${member.isActive ? "text-emerald-400" : "text-red-400"}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${member.isActive ? "bg-emerald-400" : "bg-red-400"}`}></span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${member.isActive ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${member.isActive ? "bg-emerald-400" : "bg-red-400"}`}
+                          ></span>
                           {member.isActive ? "Attivo" : "Disattivato"}
                         </span>
                         {!member.emailConfirmed && (
@@ -310,13 +323,17 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                           <button
                             onClick={() => handleToggleStatus(member)}
                             className={`p-2 rounded-lg transition-colors ${
-                              member.isActive 
-                                ? "text-red-400/70 hover:text-red-400 hover:bg-red-400/10" 
+                              member.isActive
+                                ? "text-red-400/70 hover:text-red-400 hover:bg-red-400/10"
                                 : "text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-400/10"
                             }`}
                             title={member.isActive ? "Disattiva" : "Attiva"}
                           >
-                            {member.isActive ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                            {member.isActive ? (
+                              <UserX className="h-4 w-4" />
+                            ) : (
+                              <UserCheck className="h-4 w-4" />
+                            )}
                           </button>
                         )}
                       </div>
@@ -338,7 +355,7 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                 {editingMember ? "Modifica Collaboratore" : "Invita Nuovo Collaboratore"}
               </h3>
             </div>
-            
+
             <div className="p-6">
               {inviteResult ? (
                 <div className="space-y-4 text-center">
@@ -347,17 +364,23 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                   </div>
                   <h4 className="text-white font-medium text-lg">Invito generato!</h4>
                   <p className="text-sm text-white/70">
-                    Copia il link seguente e invialo a <strong>{inviteResult.member.fullName}</strong>.
-                    <br/>Questo link permetterà all'utente di impostare la propria password.
+                    Copia il link seguente e invialo a{" "}
+                    <strong>{inviteResult.member.fullName}</strong>.
+                    <br />
+                    Questo link permetterà all'utente di impostare la propria password.
                   </p>
                   <div className="mt-4 p-3 bg-slate-950 border border-white/10 rounded-xl flex items-center gap-2">
-                    <input 
-                      readOnly 
-                      value={`https://app.basegrid.io/accept-invite?token=${inviteResult.inviteToken}`}
+                    <input
+                      readOnly
+                      value={`${typeof window !== "undefined" ? window.location.origin : "https://app.basegrid.io"}/accept-invite?token=${inviteResult.inviteToken}`}
                       className="bg-transparent border-none text-xs text-emerald-400 w-full focus:outline-none"
                     />
-                    <button 
-                      onClick={() => copyToClipboard(`https://app.basegrid.io/accept-invite?token=${inviteResult.inviteToken}`)}
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          `${typeof window !== "undefined" ? window.location.origin : "https://app.basegrid.io"}/accept-invite?token=${inviteResult.inviteToken}`,
+                        )
+                      }
                       className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition"
                     >
                       <Copy className="h-4 w-4" />
@@ -374,7 +397,9 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                 <form onSubmit={editingMember ? handleUpdate : handleInvite} className="space-y-4">
                   {!editingMember && (
                     <div>
-                      <label className="block text-xs font-medium text-white/70 mb-1.5">Indirizzo Email</label>
+                      <label className="block text-xs font-medium text-white/70 mb-1.5">
+                        Indirizzo Email
+                      </label>
                       <input
                         type="email"
                         required
@@ -385,9 +410,11 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                       />
                     </div>
                   )}
-                  
+
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1.5">Nome Completo</label>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      Nome Completo
+                    </label>
                     <input
                       type="text"
                       required
@@ -399,7 +426,9 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1.5">Telefono (Opzionale)</label>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      Telefono (Opzionale)
+                    </label>
                     <input
                       type="tel"
                       value={formData.phoneNumber || ""}
@@ -410,10 +439,14 @@ export function TeamManagementView({ currentUser }: { currentUser: any }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1.5">Ruolo nel sistema</label>
+                    <label className="block text-xs font-medium text-white/70 mb-1.5">
+                      Ruolo nel sistema
+                    </label>
                     <select
                       value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, role: e.target.value as UserRole })
+                      }
                       className="w-full h-10 bg-slate-950 border border-white/10 rounded-xl px-3 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
                     >
                       <option value="owner">Titolare (Owner)</option>

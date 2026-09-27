@@ -1,7 +1,17 @@
 import { Pool, PoolClient } from "pg";
 import { randomUUID } from "crypto";
 import { config } from "./config";
-import { AuthTokenRecord, AuthTokenType, CompanyRecord, InviteTokenRecord, ReportRecord, UserRecord, UserRole } from "./types";
+import {
+  AuthTokenRecord,
+  AuthTokenType,
+  CompanyRecord,
+  CreateTeamMemberWithInviteParams,
+  InviteInfoResponse,
+  InviteTokenRecord,
+  ReportRecord,
+  UserRecord,
+  UserRole,
+} from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
 
@@ -168,10 +178,12 @@ export interface IDatabaseAdapter {
     isActive: boolean;
     emailConfirmed: boolean;
   }): Promise<UserRecord>;
+  createTeamMemberWithInvite(params: CreateTeamMemberWithInviteParams): Promise<{ user: UserRecord; inviteToken: InviteTokenRecord }>;
   updateTeamMember(
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+    options?: { incrementAuthVersion?: boolean },
   ): Promise<UserRecord | null>;
   countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number>;
 
@@ -190,6 +202,8 @@ export interface IDatabaseAdapter {
   consumeInviteToken(tokenHash: string): Promise<boolean>;
   revokeInviteTokensByEmail(companyId: string, email: string): Promise<void>;
   getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]>;
+  getInviteTokenInfo(tokenHash: string): Promise<{ invite: InviteTokenRecord; companyName: string } | null>;
+  acceptInviteAndSetPassword(tokenHash: string, passwordHash: string, salt: string): Promise<UserRecord>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -1047,10 +1061,109 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return newUser;
   }
 
+  public async createTeamMemberWithInvite(params: CreateTeamMemberWithInviteParams): Promise<{ user: UserRecord; inviteToken: InviteTokenRecord }> {
+    return await this.withTransaction(async (client) => {
+      const now = new Date().toISOString();
+      const normalized = normalizeEmail(params.email);
+
+      // Check if user already exists
+      const existing = await client.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [normalized]);
+      if (existing.rowCount && existing.rowCount > 0) {
+        throw new Error("Questa email è già registrata nel sistema.");
+      }
+
+      // Revoke any previous pending invites for this email in this company
+      await client.query(
+        `UPDATE invite_tokens SET revoked = true
+         WHERE "companyId" = $1 AND "invitedEmail" = $2 AND consumed = false AND revoked = false`,
+        [params.companyId, normalized],
+      );
+
+      const userId = `usr-${randomUUID()}`;
+      const newUser: UserRecord = {
+        id: userId,
+        email: normalized,
+        fullName: params.fullName.trim(),
+        role: params.role,
+        companyId: params.companyId,
+        companyName: params.companyName,
+        passwordHash: params.passwordHash,
+        salt: params.salt,
+        isActive: true,
+        provider: "local",
+        emailConfirmed: false,
+        phoneNumber: params.phoneNumber || "",
+        createdAt: now,
+        updatedAt: now,
+        authVersion: 0,
+      };
+
+      await client.query(
+        `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt", "authVersion")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [
+          newUser.id,
+          newUser.email,
+          newUser.fullName,
+          newUser.role,
+          newUser.companyId,
+          newUser.companyName,
+          newUser.passwordHash,
+          newUser.salt,
+          newUser.isActive,
+          newUser.provider,
+          newUser.emailConfirmed,
+          newUser.phoneNumber,
+          newUser.createdAt,
+          newUser.updatedAt,
+          newUser.authVersion,
+        ],
+      );
+
+      const inviteTokenId = `inv-${randomUUID()}`;
+      const newInvite: InviteTokenRecord = {
+        id: inviteTokenId,
+        companyId: params.companyId,
+        invitedEmail: normalized,
+        tokenHash: params.tokenHash,
+        role: params.role,
+        fullName: params.fullName.trim(),
+        phoneNumber: params.phoneNumber,
+        invitedBy: params.inviterId,
+        consumed: false,
+        revoked: false,
+        expiresAt: params.expiresAt,
+        createdAt: now,
+      };
+
+      await client.query(
+        `INSERT INTO invite_tokens (id, "companyId", "invitedEmail", "tokenHash", role, "fullName", "phoneNumber", "invitedBy", consumed, revoked, "expiresAt", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          newInvite.id,
+          newInvite.companyId,
+          newInvite.invitedEmail,
+          newInvite.tokenHash,
+          newInvite.role,
+          newInvite.fullName,
+          newInvite.phoneNumber || null,
+          newInvite.invitedBy,
+          newInvite.consumed,
+          newInvite.revoked,
+          newInvite.expiresAt,
+          newInvite.createdAt,
+        ],
+      );
+
+      return { user: newUser, inviteToken: newInvite };
+    });
+  }
+
   public async updateTeamMember(
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
+    options?: { incrementAuthVersion?: boolean },
   ): Promise<UserRecord | null> {
     const existing = await this.getUserByIdAndCompany(userId, companyId);
     if (!existing) return null;
@@ -1079,6 +1192,10 @@ export class PostgresAdapter implements IDatabaseAdapter {
       setClauses.push(`"isActive" = $${paramIndex}`);
       params.push(updates.isActive);
       paramIndex++;
+    }
+
+    if (options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined) {
+      setClauses.push('"authVersion" = "authVersion" + 1');
     }
 
     params.push(userId);
@@ -1190,5 +1307,75 @@ export class PostgresAdapter implements IDatabaseAdapter {
       [companyId],
     );
     return res.rows.map(mapInviteTokenRow);
+  }
+
+  public async getInviteTokenInfo(tokenHash: string): Promise<{ invite: InviteTokenRecord; companyName: string } | null> {
+    const res = await this.pool.query(
+      `SELECT it.*, c.name as "companyName"
+       FROM invite_tokens it
+       JOIN companies c ON c.id = it."companyId"
+       WHERE it."tokenHash" = $1
+         AND it.consumed = false
+         AND it.revoked = false
+         AND it."expiresAt" > NOW()
+       LIMIT 1`,
+      [tokenHash],
+    );
+    if (!res.rows[0]) return null;
+    return {
+      invite: mapInviteTokenRow(res.rows[0]),
+      companyName: res.rows[0].companyName || "Azienda",
+    };
+  }
+
+  public async acceptInviteAndSetPassword(tokenHash: string, passwordHash: string, salt: string): Promise<UserRecord> {
+    return await this.withTransaction(async (client) => {
+      const now = new Date().toISOString();
+
+      // 1. Atomically consume token only if consumed=false, revoked=false, and expiresAt > NOW()
+      const tokenRes = await client.query(
+        `UPDATE invite_tokens
+         SET consumed = true, "consumedAt" = $1
+         WHERE "tokenHash" = $2
+           AND consumed = false
+           AND revoked = false
+           AND "expiresAt" > NOW()
+         RETURNING *`,
+        [now, tokenHash],
+      );
+
+      if (!tokenRes.rows[0]) {
+        throw new Error("Invito non valido, revocato o scaduto.");
+      }
+
+      const invite = mapInviteTokenRow(tokenRes.rows[0]);
+
+      // 2. Atomically update user: set password, salt, emailConfirmed=true, increment authVersion
+      const userRes = await client.query(
+        `UPDATE users
+         SET "passwordHash" = $1,
+             salt = $2,
+             "emailConfirmed" = true,
+             "authVersion" = "authVersion" + 1,
+             "updatedAt" = $3
+         WHERE email = $4 AND "companyId" = $5
+         RETURNING *`,
+        [passwordHash, salt, now, invite.invitedEmail, invite.companyId],
+      );
+
+      if (!userRes.rows[0]) {
+        throw new Error("Utente collegato all'invito non trovato.");
+      }
+
+      // 3. Invalidate/revoke any other pending invitations for this email in this company
+      await client.query(
+        `UPDATE invite_tokens
+         SET revoked = true
+         WHERE "companyId" = $1 AND "invitedEmail" = $2 AND id != $3 AND consumed = false AND revoked = false`,
+        [invite.companyId, invite.invitedEmail, invite.id],
+      );
+
+      return mapUserRow(userRes.rows[0]);
+    });
   }
 }

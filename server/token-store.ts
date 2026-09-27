@@ -457,8 +457,12 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
   }
 
   public async reset(): Promise<void> {
-    if (this.client.status === "ready" || this.client.status === "connect") {
-      await this.client.flushdb();
+    try {
+      if (this.client.status === "ready" || this.client.status === "connect") {
+        await this.client.flushdb();
+      }
+    } catch (err) {
+      console.warn("[RedisTokenStorageAdapter] reset warning:", err);
     }
   }
 
@@ -670,6 +674,8 @@ export class RefreshTokenStore {
   constructor(customAdapter?: ITokenStorageAdapter) {
     if (customAdapter) {
       this.adapter = customAdapter;
+    } else if (process.env.NODE_ENV === "test") {
+      this.adapter = new DistributedStorageEngine();
     } else if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       this.adapter = new RedisTokenStorageAdapter();
     } else {
