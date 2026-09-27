@@ -20,14 +20,14 @@ import { tokenStore, StoreUnavailableError } from "../token-store";
 import { authenticate } from "../middleware/auth";
 import { emailService } from "../email-service";
 import { config } from "../config";
-import { 
-  loginLimiter, 
+import {
+  loginLimiter,
   loginAccountLimiter,
-  registerLimiter, 
-  refreshLimiter, 
-  forgotPasswordLimiter, 
-  resetPasswordLimiter, 
-  googleAuthLimiter 
+  registerLimiter,
+  refreshLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+  googleAuthLimiter
 } from "../rate-limiter";
 
 export const authRouter = Router();

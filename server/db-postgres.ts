@@ -265,7 +265,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
           if (timedOut) {
             try {
               client.release(true);
-            } catch {}
+            } catch { }
             return;
           }
           await client.query("SELECT 1");
@@ -287,7 +287,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
           } else {
             acquiredClient.release();
           }
-        } catch {}
+        } catch { }
       }
     }
   }
@@ -379,7 +379,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   // --- Users Operations ---
-  
+
   public async incrementUserAuthVersion(userId: string): Promise<number | null> {
     try {
       const res = await this.pool.query(

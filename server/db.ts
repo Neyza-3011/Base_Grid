@@ -47,7 +47,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(masterCompanyId, masterCompany);
- 
+
     const { hash: saHash, salt: saSalt } = hashPassword(config.SUPERADMIN_PASSWORD);
     const superAdminUser: UserRecord = {
       id: "usr-superadmin-001",
@@ -83,7 +83,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(demoCompanyId, demoCompany);
- 
+
     const { hash: admHash, salt: admSalt } = hashPassword("Password123!");
     const adminUser: UserRecord = {
       id: "usr-rossi-admin",
@@ -125,7 +125,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.users.set(techUser.id, techUser);
   }
 
-  
+
   public async incrementUserAuthVersion(userId: string): Promise<number | null> {
     const user = this.users.get(userId);
     if (!user) return null;
@@ -195,7 +195,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(companyId, newCompany);
- 
+
     const { hash, salt } = hashPassword(params.password);
     const userId = `usr-${randomUUID()}`;
 
@@ -250,7 +250,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       updatedAt: now,
     };
     this.companies.set(companyId, newCompany);
- 
+
     const { hash, salt } = hashPassword(randomUUID());
     const userId = `usr-g-${randomUUID()}`;
 

@@ -5,7 +5,7 @@ import { generateSecureToken, hashPassword, hashToken, normalizeEmail } from "..
 import crypto from "crypto";
 
 export class TeamService {
-  constructor(private readonly db: IDatabaseAdapter) {}
+  constructor(private readonly db: IDatabaseAdapter) { }
 
   /**
    * Converts a user record to a safe public response, stripping all sensitive fields.
@@ -38,12 +38,12 @@ export class TeamService {
    */
   async getTeamMember(companyId: string, userId: string): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
-    
+
     const user = await this.db.getUserByIdAndCompany(userId, companyId);
     if (!user) {
       throw new NotFoundError("Utente non trovato in questa azienda.");
     }
-    
+
     return this.toTeamMemberResponse(user);
   }
 
@@ -58,7 +58,7 @@ export class TeamService {
     input: CreateTeamMemberInput
   ): Promise<{ member: TeamMemberResponse; inviteToken: string }> {
     if (!companyId) throw new ValidationError("Company ID is required");
-    
+
     const normalizedEmail = normalizeEmail(input.email);
     if (!normalizedEmail) {
       throw new ValidationError("Email non valida.");
@@ -97,7 +97,7 @@ export class TeamService {
     // Create invite token
     const rawToken = generateSecureToken();
     const tokenHash = hashToken(rawToken);
-    
+
     // Expires in 7 days
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -139,7 +139,7 @@ export class TeamService {
     if (input.fullName !== undefined) {
       updates.fullName = input.fullName.trim();
     }
-    
+
     if (input.phoneNumber !== undefined) {
       updates.phoneNumber = input.phoneNumber.trim();
     }
@@ -148,7 +148,7 @@ export class TeamService {
       if (!ASSIGNABLE_ROLES.includes(input.role)) {
         throw new ForbiddenError("Ruolo non valido o non assegnabile.");
       }
-      
+
       // Self-protection: cannot change own role
       if (userId === executorId) {
         throw new ForbiddenError("Non puoi modificare il tuo stesso ruolo. Contatta un altro amministratore.");
