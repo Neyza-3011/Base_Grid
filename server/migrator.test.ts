@@ -80,6 +80,42 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       expect(sql).toContain("idx_reports_company_id");
       expect(sql).toContain("idx_auth_tokens_user_type");
     });
+
+    it("verifies 003_customers_and_locations.sql defines UNIQUE (id, companyId) before composite FK", () => {
+      const dir = getDefaultMigrationsDir();
+      const filePath = path.join(dir, "003_customers_and_locations.sql");
+      const sql = fs.readFileSync(filePath, "utf-8");
+
+      // Verify customers and locations tables exist
+      expect(sql).toContain("CREATE TABLE IF NOT EXISTS customers");
+      expect(sql).toContain("CREATE TABLE IF NOT EXISTS locations");
+
+      // Verify constraint names
+      expect(sql).toContain("uq_customers_id_company");
+      expect(sql).toContain("fk_locations_tenant_consistency");
+
+      // Verify order: UNIQUE on customers(id, companyId) MUST precede the composite FK on locations
+      const customersIdx = sql.indexOf("CREATE TABLE IF NOT EXISTS customers");
+      const uqIdx = sql.indexOf("uq_customers_id_company");
+      const locationsIdx = sql.indexOf("CREATE TABLE IF NOT EXISTS locations");
+      const compositeFkIdx = sql.indexOf("fk_locations_tenant_consistency");
+
+      expect(customersIdx).toBeGreaterThan(-1);
+      expect(uqIdx).toBeGreaterThan(customersIdx);
+      expect(locationsIdx).toBeGreaterThan(uqIdx);
+      expect(compositeFkIdx).toBeGreaterThan(locationsIdx);
+
+      // Verify foreign keys to customers and locations in reports
+      expect(sql).toContain('ALTER TABLE reports ADD COLUMN IF NOT EXISTS "customerId" VARCHAR(255) REFERENCES customers(id) ON DELETE SET NULL');
+      expect(sql).toContain('ALTER TABLE reports ADD COLUMN IF NOT EXISTS "locationId" VARCHAR(255) REFERENCES locations(id) ON DELETE SET NULL');
+
+      // Verify indexes
+      expect(sql).toContain("idx_customers_company_id");
+      expect(sql).toContain("idx_locations_company_id");
+      expect(sql).toContain("idx_locations_customer_id");
+      expect(sql).toContain("idx_reports_customer_id");
+      expect(sql).toContain("idx_reports_location_id");
+    });
   });
 
   describe("Migration Execution & Ordering", () => {

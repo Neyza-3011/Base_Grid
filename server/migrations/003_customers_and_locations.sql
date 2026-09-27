@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE INDEX IF NOT EXISTS idx_customers_company_id ON customers("companyId");
 
+-- We need a UNIQUE constraint on customers (id, "companyId") to support the composite FK
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_customers_id_company'
+  ) THEN
+    ALTER TABLE customers ADD CONSTRAINT uq_customers_id_company UNIQUE (id, "companyId");
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS locations (
   id VARCHAR(255) PRIMARY KEY,
   "companyId" VARCHAR(255) NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -40,13 +50,17 @@ CREATE INDEX IF NOT EXISTS idx_locations_company_id ON locations("companyId");
 CREATE INDEX IF NOT EXISTS idx_locations_customer_id ON locations("customerId");
 
 -- Composite FK for tenant consistency on locations
-ALTER TABLE locations 
-  ADD CONSTRAINT fk_locations_tenant_consistency 
-  FOREIGN KEY ("customerId", "companyId") 
-  REFERENCES customers (id, "companyId") ON DELETE RESTRICT;
-
--- We need a UNIQUE constraint on customers (id, "companyId") to support the composite FK
-ALTER TABLE customers ADD CONSTRAINT uq_customers_id_company UNIQUE (id, "companyId");
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_locations_tenant_consistency'
+  ) THEN
+    ALTER TABLE locations 
+      ADD CONSTRAINT fk_locations_tenant_consistency 
+      FOREIGN KEY ("customerId", "companyId") 
+      REFERENCES customers (id, "companyId") ON DELETE RESTRICT;
+  END IF;
+END $$;
 
 -- Update reports to reference customers and locations (nullable for backward compatibility)
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS "customerId" VARCHAR(255) REFERENCES customers(id) ON DELETE SET NULL;

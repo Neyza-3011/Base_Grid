@@ -222,9 +222,42 @@ export class ReportsService {
       safeSignature = signature_base64;
     }
 
+    // Customer & Location reference and tenant consistency validation
+    let validatedCustomerId: string | undefined = undefined;
+    let validatedLocationId: string | undefined = undefined;
+    let customerRecord = null;
+    let locationRecord = null;
+
+    // Caso A: customer_id presente -> verifica esistenza nel tenant autenticato
+    if (customer_id !== undefined && customer_id !== null && String(customer_id).trim() !== "") {
+      const cid = typeof customer_id === "string" ? customer_id.trim() : String(customer_id);
+      customerRecord = await this.db.getCustomerByIdAndCompany(cid, companyId);
+      if (!customerRecord) {
+        throw new NotFoundError("Cliente non trovato o non accessibile.");
+      }
+      validatedCustomerId = customerRecord.id;
+    }
+
+    // Caso B: location_id presente -> verifica esistenza nel tenant autenticato
+    if (location_id !== undefined && location_id !== null && String(location_id).trim() !== "") {
+      const lid = typeof location_id === "string" ? location_id.trim() : String(location_id);
+      locationRecord = await this.db.getLocationByIdAndCompany(lid, companyId);
+      if (!locationRecord) {
+        throw new NotFoundError("Sede o cantiere non trovato o non accessibile.");
+      }
+      validatedLocationId = locationRecord.id;
+    }
+
+    // Caso C: entrambi presenti -> verifica coerenza tra customer e location
+    if (customerRecord && locationRecord) {
+      if (locationRecord.customerId !== customerRecord.id) {
+        throw new ValidationError("La sede specificata non appartiene al cliente indicato.");
+      }
+    }
+
     const newReport = await this.db.createReport(companyId, {
-      customerId: customer_id,
-      locationId: location_id,
+      customerId: validatedCustomerId,
+      locationId: validatedLocationId,
       date,
       time,
       workHours,
