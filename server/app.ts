@@ -59,11 +59,11 @@ export function createApp(): Express {
   app.get(
     "/ready",
     asyncHandler(async (_req: Request, res: Response) => {
-      const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+      const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
 
       // In production, DATABASE_URL and REDIS_URL are strictly required
       if (isProd) {
-        if (!config.DATABASE_URL || (!config.REDIS_URL && config.REDIS_HOST === "127.0.0.1")) {
+        if (!config.DATABASE_URL || !config.REDIS_URL) {
           res.status(503).json({ status: "not_ready" });
           return;
         }
@@ -105,13 +105,12 @@ export function createApp(): Express {
   // Centralized safe error handler (never leaks stack traces, SQL, or internal secrets)
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err?.statusCode || err?.status || (typeof err === "number" ? err : 500);
-    const errorId = crypto.randomUUID();
     
     // Log the error safely (never log err.message or stack trace for 5xx to prevent leakage of credentials/SQL)
     if (status >= 500) {
-      console.error(`[ServerError] Error: Internal Server Error (ID: ${errorId})`);
+      console.error(`[ServerError] ${err?.name || "InternalServerError"} (status: ${status})`);
     } else {
-      console.error(`[ServerError] ${err?.name || "Error"}:`, err?.message || "Client error");
+      console.error(`[ClientError] ${err?.name || "Error"}:`, err?.message || "Client error");
     }
     
     // Only return the exact error message to the client for expected HTTP errors (status < 500)

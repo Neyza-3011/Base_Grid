@@ -676,10 +676,14 @@ export class RefreshTokenStore {
       this.adapter = customAdapter;
     } else if (process.env.NODE_ENV === "test") {
       this.adapter = new DistributedStorageEngine();
-    } else if (config.REDIS_URL) {
+    } else if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
       this.adapter = new RedisTokenStorageAdapter();
     } else {
-      // Fallback local distributed-equivalent memory storage when Redis is not configured
+      const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+      if (isProd) {
+        throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");
+      }
+      // Fallback local memory storage for development / testing when Redis is not provided
       this.adapter = new DistributedStorageEngine();
     }
   }

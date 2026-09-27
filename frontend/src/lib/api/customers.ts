@@ -40,7 +40,7 @@ export interface CreateCustomerPayload {
   notes?: string;
 }
 
-export type UpdateCustomerPayload = Partial<CreateCustomerPayload>;
+export interface UpdateCustomerPayload extends Partial<CreateCustomerPayload> {}
 
 export interface CreateLocationPayload {
   name: string;
@@ -51,7 +51,7 @@ export interface CreateLocationPayload {
   notes?: string;
 }
 
-export type UpdateLocationPayload = Partial<CreateLocationPayload>;
+export interface UpdateLocationPayload extends Partial<CreateLocationPayload> {}
 
 export class CustomersApiError extends Error {
   public status: number;
@@ -128,10 +128,7 @@ export async function createCustomer(payload: CreateCustomerPayload): Promise<Cu
   return parseResponseOrThrow<Customer>(res);
 }
 
-export async function updateCustomer(
-  id: string,
-  payload: UpdateCustomerPayload,
-): Promise<Customer> {
+export async function updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<Customer> {
   const res = await fetch(`/api/v1/customers/${encodeURIComponent(id)}`, {
     method: "PUT",
     credentials: "include",
@@ -166,23 +163,16 @@ export async function reactivateCustomer(id: string): Promise<Customer> {
   return parseResponseOrThrow<Customer>(res);
 }
 
-export async function fetchLocations(
-  customerId: string,
-  search?: string,
-  activeOnly = true,
-): Promise<Location[]> {
+export async function fetchLocations(customerId: string, search?: string, activeOnly = true): Promise<Location[]> {
   const query = new URLSearchParams();
   if (search) query.append("search", search);
   query.append("activeOnly", String(activeOnly));
 
-  const res = await fetch(
-    `/api/v1/customers/${encodeURIComponent(customerId)}/locations?${query.toString()}`,
-    {
-      method: "GET",
-      credentials: "include",
-      headers: appendCsrfHeaders({ Accept: "application/json" }),
-    },
-  );
+  const res = await fetch(`/api/v1/customers/${encodeURIComponent(customerId)}/locations?${query.toString()}`, {
+    method: "GET",
+    credentials: "include",
+    headers: appendCsrfHeaders({ Accept: "application/json" }),
+  });
   return parseResponseOrThrow<Location[]>(res);
 }
 
@@ -195,10 +185,7 @@ export async function fetchLocation(id: string): Promise<Location> {
   return parseResponseOrThrow<Location>(res);
 }
 
-export async function createLocation(
-  customerId: string,
-  payload: CreateLocationPayload,
-): Promise<Location> {
+export async function createLocation(customerId: string, payload: CreateLocationPayload): Promise<Location> {
   const res = await fetch(`/api/v1/customers/${encodeURIComponent(customerId)}/locations`, {
     method: "POST",
     credentials: "include",
@@ -211,10 +198,7 @@ export async function createLocation(
   return parseResponseOrThrow<Location>(res);
 }
 
-export async function updateLocation(
-  id: string,
-  payload: UpdateLocationPayload,
-): Promise<Location> {
+export async function updateLocation(id: string, payload: UpdateLocationPayload): Promise<Location> {
   const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}`, {
     method: "PUT",
     credentials: "include",

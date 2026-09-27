@@ -16,7 +16,10 @@ const isProd = process.env.NODE_ENV === "production";
 async function startServer() {
   const app = createApp();
 
-  if (isProd && process.env.DATABASE_URL && process.env.SKIP_DB_INIT !== "true") {
+  if (isProd) {
+    // Production fail-closed startup:
+    // SKIP_DB_INIT MUST NOT bypass database initialization, migrations, or infrastructure checks in production.
+    // Both PostgreSQL and Redis must be verified before the server binds and accepts traffic.
     try {
       const dbPingOk = await db.ping(3000).catch(() => false);
       if (!dbPingOk) {
@@ -36,25 +39,23 @@ async function startServer() {
         console.log("Database initialized successfully.");
       }
 
-      if (process.env.REDIS_URL) {
-        const redisOk = await tokenStore.ping(3000).catch(() => false);
-        if (!redisOk) {
-          console.warn("Redis ping failed; falling back to memory token storage.");
-        }
+      const redisOk = await tokenStore.ping(3000).catch(() => false);
+      if (!redisOk) {
+        throw new Error("Redis token store ping failed or connection unreachable.");
       }
-      console.log("Infrastructure (PostgreSQL) verified successfully.");
+      console.log("Infrastructure (PostgreSQL and Redis) verified successfully.");
     } catch (err) {
-      console.error("CRITICAL STARTUP ERROR: Database verification failed in production:", err);
+      console.error("CRITICAL STARTUP ERROR: Database or Redis verification failed in production:", err);
       process.exit(1);
     }
   } else {
-    // Development / In-Memory / Standalone preview environment
+    // Development / Local Test environment
     if (typeof (db as any).getPool === "function" && process.env.SKIP_DB_INIT !== "true") {
       try {
         const pool = (db as any).getPool();
         await runMigrations(pool);
       } catch (err) {
-        console.error("Database migration failed (non-fatal):", err);
+        console.error("Database migration failed (non-fatal in dev):", err);
       }
     }
     if (db.initDatabase && process.env.SKIP_DB_INIT !== "true") {
@@ -62,7 +63,7 @@ async function startServer() {
         await db.initDatabase();
         console.log("Database initialized successfully.");
       } catch (err) {
-        console.error("Database initialization failed (non-fatal):", err);
+        console.error("Database initialization failed (non-fatal in dev):", err);
       }
     }
   }

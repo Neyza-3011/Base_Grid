@@ -175,9 +175,7 @@ export function CustomersView() {
       setShowCustomerModal(false);
       loadCustomers();
     } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : "Errore durante il salvataggio del cliente.",
-      );
+      toast.error(err instanceof Error ? err.message : "Errore durante il salvataggio del cliente.");
     } finally {
       setSubmittingCustomer(false);
     }
@@ -258,9 +256,7 @@ export function CustomersView() {
       setShowLocationModal(false);
       loadLocations(selectedCustomer.id);
     } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : "Errore durante il salvataggio del cantiere.",
-      );
+      toast.error(err instanceof Error ? err.message : "Errore durante il salvataggio del cantiere.");
     } finally {
       setSubmittingLocation(false);
     }
@@ -312,9 +308,7 @@ export function CustomersView() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-white/50">
-                {selectedCustomer.legalName || "Nessuna ragione sociale"}
-              </p>
+              <p className="text-sm text-white/50">{selectedCustomer.legalName || "Nessuna ragione sociale"}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -362,8 +356,7 @@ export function CustomersView() {
                 )}
                 {selectedCustomer.vatNumber && (
                   <div className="flex items-center gap-3 text-sm text-white/70">
-                    <Briefcase className="h-4 w-4 text-white/40" /> P.IVA:{" "}
-                    {selectedCustomer.vatNumber}
+                    <Briefcase className="h-4 w-4 text-white/40" /> P.IVA: {selectedCustomer.vatNumber}
                   </div>
                 )}
               </div>
@@ -477,9 +470,7 @@ export function CustomersView() {
               </div>
               <form onSubmit={submitLocation} className="p-6 space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-white/70">
-                    Nome Sede / Cantiere *
-                  </label>
+                  <label className="text-xs font-medium text-white/70">Nome Sede / Cantiere *</label>
                   <input
                     required
                     value={lForm.name}
@@ -684,9 +675,7 @@ export function CustomersView() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-white/70">
-                  Ragione Sociale (Opzionale)
-                </label>
+                <label className="text-xs font-medium text-white/70">Ragione Sociale (Opzionale)</label>
                 <input
                   value={cForm.legalName}
                   onChange={(e) => setCForm({ ...cForm, legalName: e.target.value })}
