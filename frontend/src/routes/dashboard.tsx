@@ -26,6 +26,7 @@ import { ReportsView } from "@/components/dashboard/ReportsView";
 import { DashboardAnalyticsView } from "@/components/dashboard/DashboardAnalyticsView";
 import { PdfPreviewModal } from "@/components/dashboard/PdfPreviewModal";
 import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
+import { CustomersView } from "@/components/dashboard/CustomersView";
 import { BaseGridLogo } from "@/components/common/BaseGridLogo";
 
 import {
@@ -177,6 +178,25 @@ function Dashboard() {
           currentUser.role === "owner") && (
           <button
             onClick={() => {
+              setActiveView("customers");
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+              activeView === "customers"
+                ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                : "text-white/70 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <Building2 className="h-4 w-4" />
+            <span>Clienti & Sedi</span>
+          </button>
+        )}
+
+        {(currentUser.role === "admin" ||
+          currentUser.role === "superadmin" ||
+          currentUser.role === "owner") && (
+          <button
+            onClick={() => {
               setActiveView("team");
               setSidebarOpen(false);
             }}
@@ -190,17 +210,6 @@ function Dashboard() {
             <span>Collaboratori</span>
           </button>
         )}
-
-        <button
-          onClick={() => {
-            setSidebarOpen(false);
-            toast.info("Sezione Cantieri in fase di sviluppo.");
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <HardHat className="h-4 w-4" />
-          <span>Cantieri</span>
-        </button>
 
         <button
           onClick={() => {
@@ -410,6 +419,7 @@ function Dashboard() {
           {activeView === "company_settings" && <CompanySettings />}
           {activeView === "reports" && <ReportsView />}
           {activeView === "team" && <TeamManagementView currentUser={currentUser} />}
+          {activeView === "customers" && <CustomersView />}
         </main>
       </div>
 

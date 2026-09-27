@@ -19,6 +19,8 @@ export interface AddReportInput {
   clientName: string;
   clientAddress?: string;
   clientCity?: string;
+  customerId?: string;
+  locationId?: string;
   technicianName?: string;
   hours: number;
   travelHours?: number;
@@ -66,6 +68,8 @@ export async function addReport(input: AddReportInput): Promise<Report> {
     client_name: input.clientName.trim(),
     client_address: input.clientAddress?.trim() || undefined,
     client_city: input.clientCity?.trim() || undefined,
+    customer_id: input.customerId,
+    location_id: input.locationId,
     work_hours: Number(input.hours) || 0,
     travel_hours: Number(input.travelHours) || 0,
     date: dateYYYYMMDD,

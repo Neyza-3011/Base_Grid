@@ -31,6 +31,8 @@ export type CreateReportPayload = {
   client_name: string;
   client_address?: string;
   client_city?: string;
+  customer_id?: string;
+  location_id?: string;
   work_hours: number;
   travel_hours?: number;
   date: string; // YYYY-MM-DD

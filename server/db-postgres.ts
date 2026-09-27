@@ -11,6 +11,8 @@ import {
   ReportRecord,
   UserRecord,
   UserRole,
+  CustomerRecord,
+  LocationRecord,
 } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
@@ -86,6 +88,8 @@ function mapReportRow(row: any): ReportRecord {
   return {
     id: row.id,
     companyId: row.companyId,
+    customerId: row.customerId || undefined,
+    locationId: row.locationId || undefined,
     date: row.date || "",
     time: row.time || "",
     workHours: Number(row.workHours) || 0,
@@ -97,6 +101,41 @@ function mapReportRow(row: any): ReportRecord {
     notes: row.notes || "",
     signatureBase64: row.signatureBase64 || undefined,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+  };
+}
+
+function mapCustomerRow(row: any): CustomerRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    displayName: row.displayName,
+    legalName: row.legalName || undefined,
+    vatNumber: row.vatNumber || undefined,
+    taxCode: row.taxCode || undefined,
+    email: row.email || undefined,
+    phoneNumber: row.phoneNumber || undefined,
+    pec: row.pec || undefined,
+    notes: row.notes || undefined,
+    isActive: Boolean(row.isActive),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+  };
+}
+
+function mapLocationRow(row: any): LocationRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    customerId: row.customerId,
+    name: row.name,
+    address: row.address,
+    city: row.city,
+    province: row.province || undefined,
+    postalCode: row.postalCode || undefined,
+    notes: row.notes || undefined,
+    isActive: Boolean(row.isActive),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
   };
 }
 
@@ -204,6 +243,18 @@ export interface IDatabaseAdapter {
   getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]>;
   getInviteTokenInfo(tokenHash: string): Promise<{ invite: InviteTokenRecord; companyName: string } | null>;
   acceptInviteAndSetPassword(tokenHash: string, passwordHash: string, salt: string): Promise<UserRecord>;
+
+  // --- Customers Operations ---
+  getCustomersByCompany(companyId: string, search?: string, activeOnly?: boolean, limit?: number): Promise<CustomerRecord[]>;
+  getCustomerByIdAndCompany(customerId: string, companyId: string): Promise<CustomerRecord | null>;
+  createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord>;
+  updateCustomer(companyId: string, customerId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord | null>;
+
+  // --- Locations Operations ---
+  getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit?: number): Promise<LocationRecord[]>;
+  getLocationByIdAndCompany(locationId: string, companyId: string): Promise<LocationRecord | null>;
+  createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord>;
+  updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -773,6 +824,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
       workHours: data.workHours || 0,
       travelHours: data.travelHours || 0,
       status: data.status || "submitted",
+      customerId: data.customerId,
+      locationId: data.locationId,
       client: {
         name: data.client?.name || "Cliente",
         address: data.client?.address || "",
@@ -788,11 +841,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
     };
 
     await this.pool.query(
-      `INSERT INTO reports (id, "companyId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      `INSERT INTO reports (id, "companyId", "customerId", "locationId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         newReport.id,
         newReport.companyId,
+        newReport.customerId || null,
+        newReport.locationId || null,
         newReport.date,
         newReport.time,
         newReport.workHours,
@@ -1377,5 +1432,180 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       return mapUserRow(userRes.rows[0]);
     });
+  }
+
+  // --- Customers Operations ---
+
+  public async getCustomersByCompany(companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<CustomerRecord[]> {
+    let sql = `SELECT * FROM customers WHERE "companyId" = $1`;
+    const params: any[] = [companyId];
+    let paramIdx = 2;
+
+    if (activeOnly) {
+      sql += ` AND "isActive" = true`;
+    }
+
+    if (search) {
+      sql += ` AND (
+        "displayName" ILIKE $${paramIdx} OR
+        "legalName" ILIKE $${paramIdx} OR
+        "vatNumber" ILIKE $${paramIdx} OR
+        email ILIKE $${paramIdx} OR
+        "phoneNumber" ILIKE $${paramIdx}
+      )`;
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    sql += ` ORDER BY "displayName" ASC LIMIT $${paramIdx}`;
+    params.push(limit);
+
+    const res = await this.pool.query(sql, params);
+    return res.rows.map(mapCustomerRow);
+  }
+
+  public async getCustomerByIdAndCompany(customerId: string, companyId: string): Promise<CustomerRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM customers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [customerId, companyId]
+    );
+    return res.rows[0] ? mapCustomerRow(res.rows[0]) : null;
+  }
+
+  public async createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord> {
+    const now = new Date().toISOString();
+    const id = data.id || `CUS-${randomUUID()}`;
+
+    const res = await this.pool.query(
+      `INSERT INTO customers (id, "companyId", "displayName", "legalName", "vatNumber", "taxCode", email, "phoneNumber", pec, notes, "isActive", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING *`,
+      [
+        id,
+        companyId,
+        data.displayName || "Cliente",
+        data.legalName || null,
+        data.vatNumber || null,
+        data.taxCode || null,
+        data.email || null,
+        data.phoneNumber || null,
+        data.pec || null,
+        data.notes || null,
+        data.isActive ?? true,
+        now,
+        now,
+      ]
+    );
+    return mapCustomerRow(res.rows[0]);
+  }
+
+  public async updateCustomer(companyId: string, customerId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord | null> {
+    const now = new Date().toISOString();
+    
+    const setClauses: string[] = ['"updatedAt" = $1'];
+    const params: any[] = [now];
+    let paramIdx = 2;
+
+    const fields = ['displayName', 'legalName', 'vatNumber', 'taxCode', 'email', 'phoneNumber', 'pec', 'notes', 'isActive'];
+    for (const field of fields) {
+      if ((data as any)[field] !== undefined) {
+        setClauses.push(`"${field}" = $${paramIdx}`);
+        params.push((data as any)[field]);
+        paramIdx++;
+      }
+    }
+
+    params.push(customerId, companyId);
+    const sql = `UPDATE customers SET ${setClauses.join(', ')} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
+    
+    const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapCustomerRow(res.rows[0]);
+  }
+
+  // --- Locations Operations ---
+
+  public async getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<LocationRecord[]> {
+    let sql = `SELECT * FROM locations WHERE "companyId" = $1 AND "customerId" = $2`;
+    const params: any[] = [companyId, customerId];
+    let paramIdx = 3;
+
+    if (activeOnly) {
+      sql += ` AND "isActive" = true`;
+    }
+
+    if (search) {
+      sql += ` AND (
+        name ILIKE $${paramIdx} OR
+        address ILIKE $${paramIdx} OR
+        city ILIKE $${paramIdx}
+      )`;
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    sql += ` ORDER BY name ASC LIMIT $${paramIdx}`;
+    params.push(limit);
+
+    const res = await this.pool.query(sql, params);
+    return res.rows.map(mapLocationRow);
+  }
+
+  public async getLocationByIdAndCompany(locationId: string, companyId: string): Promise<LocationRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM locations WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [locationId, companyId]
+    );
+    return res.rows[0] ? mapLocationRow(res.rows[0]) : null;
+  }
+
+  public async createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord> {
+    const now = new Date().toISOString();
+    const id = data.id || `LOC-${randomUUID()}`;
+
+    const res = await this.pool.query(
+      `INSERT INTO locations (id, "companyId", "customerId", name, address, city, province, "postalCode", notes, "isActive", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        id,
+        companyId,
+        customerId,
+        data.name || "Sede",
+        data.address || "",
+        data.city || "",
+        data.province || null,
+        data.postalCode || null,
+        data.notes || null,
+        data.isActive ?? true,
+        now,
+        now,
+      ]
+    );
+    return mapLocationRow(res.rows[0]);
+  }
+
+  public async updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null> {
+    const now = new Date().toISOString();
+    
+    const setClauses: string[] = ['"updatedAt" = $1'];
+    const params: any[] = [now];
+    let paramIdx = 2;
+
+    const fields = ['name', 'address', 'city', 'province', 'postalCode', 'notes', 'isActive'];
+    for (const field of fields) {
+      if ((data as any)[field] !== undefined) {
+        setClauses.push(`"${field}" = $${paramIdx}`);
+        params.push((data as any)[field]);
+        paramIdx++;
+      }
+    }
+
+    params.push(locationId, companyId);
+    const sql = `UPDATE locations SET ${setClauses.join(', ')} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
+    
+    const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapLocationRow(res.rows[0]);
   }
 }

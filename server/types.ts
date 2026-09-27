@@ -60,9 +60,85 @@ export interface CompanyRecord {
 
 }
 
+export interface CustomerRecord {
+  id: string;
+  companyId: string;
+  displayName: string;
+  legalName?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  email?: string;
+  phoneNumber?: string;
+  pec?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocationRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  name: string;
+  address: string;
+  city: string;
+  province?: string;
+  postalCode?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCustomerInput {
+  displayName: string;
+  legalName?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  email?: string;
+  phoneNumber?: string;
+  pec?: string;
+  notes?: string;
+}
+
+export interface UpdateCustomerInput {
+  displayName?: string;
+  legalName?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  email?: string;
+  phoneNumber?: string;
+  pec?: string;
+  notes?: string;
+}
+
+export interface CreateLocationInput {
+  name: string;
+  address: string;
+  city: string;
+  province?: string;
+  postalCode?: string;
+  notes?: string;
+}
+
+export interface UpdateLocationInput {
+  name?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  notes?: string;
+}
+
+export interface CustomerResponse extends Omit<CustomerRecord, "companyId"> {}
+export interface LocationResponse extends Omit<LocationRecord, "companyId"> {}
+
 export interface ReportRecord {
   id: string;
   companyId: string;
+  customerId?: string;
+  locationId?: string;
   date: string;
   time: string;
   workHours: number;
@@ -86,6 +162,8 @@ export interface CreateReportRequest {
   client_name: string;
   client_address?: string;
   client_city?: string;
+  customer_id?: string;
+  location_id?: string;
   work_hours: number;
   travel_hours?: number;
   date: string;
@@ -98,6 +176,8 @@ export interface CreateReportRequest {
 
 export interface ReportResponseDTO {
   id: string;
+  customer_id?: string;
+  location_id?: string;
   date: string;
   time: string;
   work_hours: number;

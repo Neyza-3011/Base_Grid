@@ -8,6 +8,8 @@ import {
   ReportRecord,
   UserRecord,
   UserRole,
+  CustomerRecord,
+  LocationRecord,
 } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
@@ -22,6 +24,8 @@ export class DatabaseStore implements IDatabaseAdapter {
   private reports: Map<string, ReportRecord> = new Map();
   private authTokens: Map<string, AuthTokenRecord> = new Map();
   private inviteTokens: Map<string, InviteTokenRecord> = new Map();
+  private customers: Map<string, CustomerRecord> = new Map();
+  private locations: Map<string, LocationRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -37,6 +41,9 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.companies.clear();
     this.reports.clear();
     this.authTokens.clear();
+    this.inviteTokens.clear();
+    this.customers.clear();
+    this.locations.clear();
     this.tokenStore.reset();
 
     const now = new Date().toISOString();
@@ -341,6 +348,8 @@ export class DatabaseStore implements IDatabaseAdapter {
       workHours: data.workHours || 0,
       travelHours: data.travelHours || 0,
       status: data.status || "submitted",
+      customerId: data.customerId,
+      locationId: data.locationId,
       client: {
         name: data.client?.name || "Cliente",
         address: data.client?.address || "",
@@ -775,6 +784,139 @@ export class DatabaseStore implements IDatabaseAdapter {
     }
 
     return { ...user };
+  }
+
+  // --- Customers & Locations ---
+
+  public async getCustomersByCompany(companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<CustomerRecord[]> {
+    const list: CustomerRecord[] = [];
+    const searchLower = search?.toLowerCase();
+    
+    for (const c of this.customers.values()) {
+      if (c.companyId === companyId) {
+        if (activeOnly && !c.isActive) continue;
+        
+        if (searchLower) {
+          const match = c.displayName.toLowerCase().includes(searchLower) ||
+                        c.legalName?.toLowerCase().includes(searchLower) ||
+                        c.vatNumber?.toLowerCase().includes(searchLower) ||
+                        c.email?.toLowerCase().includes(searchLower) ||
+                        c.phoneNumber?.toLowerCase().includes(searchLower);
+          if (!match) continue;
+        }
+        
+        list.push(c);
+      }
+    }
+    return list.slice(0, limit);
+  }
+
+  public async getCustomerByIdAndCompany(customerId: string, companyId: string): Promise<CustomerRecord | null> {
+    const customer = this.customers.get(customerId);
+    if (!customer || customer.companyId !== companyId) return null;
+    return customer;
+  }
+
+  public async createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord> {
+    const now = new Date().toISOString();
+    const id = data.id || `CUS-${randomUUID()}`;
+
+    const newCustomer: CustomerRecord = {
+      id,
+      companyId,
+      displayName: data.displayName || "Cliente",
+      legalName: data.legalName,
+      vatNumber: data.vatNumber,
+      taxCode: data.taxCode,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      pec: data.pec,
+      notes: data.notes,
+      isActive: data.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.customers.set(id, newCustomer);
+    return newCustomer;
+  }
+
+  public async updateCustomer(companyId: string, customerId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord | null> {
+    const customer = await this.getCustomerByIdAndCompany(customerId, companyId);
+    if (!customer) return null;
+
+    const updatedCustomer: CustomerRecord = {
+      ...customer,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.customers.set(customerId, updatedCustomer);
+    return updatedCustomer;
+  }
+
+  public async getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<LocationRecord[]> {
+    const list: LocationRecord[] = [];
+    const searchLower = search?.toLowerCase();
+
+    for (const loc of this.locations.values()) {
+      if (loc.companyId === companyId && loc.customerId === customerId) {
+        if (activeOnly && !loc.isActive) continue;
+
+        if (searchLower) {
+          const match = loc.name.toLowerCase().includes(searchLower) ||
+                        loc.address.toLowerCase().includes(searchLower) ||
+                        loc.city.toLowerCase().includes(searchLower);
+          if (!match) continue;
+        }
+
+        list.push(loc);
+      }
+    }
+    return list.slice(0, limit);
+  }
+
+  public async getLocationByIdAndCompany(locationId: string, companyId: string): Promise<LocationRecord | null> {
+    const location = this.locations.get(locationId);
+    if (!location || location.companyId !== companyId) return null;
+    return location;
+  }
+
+  public async createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord> {
+    const now = new Date().toISOString();
+    const id = data.id || `LOC-${randomUUID()}`;
+
+    const newLocation: LocationRecord = {
+      id,
+      companyId,
+      customerId,
+      name: data.name || "Sede",
+      address: data.address || "",
+      city: data.city || "",
+      province: data.province,
+      postalCode: data.postalCode,
+      notes: data.notes,
+      isActive: data.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.locations.set(id, newLocation);
+    return newLocation;
+  }
+
+  public async updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null> {
+    const location = await this.getLocationByIdAndCompany(locationId, companyId);
+    if (!location) return null;
+
+    const updatedLocation: LocationRecord = {
+      ...location,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.locations.set(locationId, updatedLocation);
+    return updatedLocation;
   }
 
   private isExplicitlyDisabled = false;

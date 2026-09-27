@@ -63,6 +63,8 @@ export class ReportsService {
       materials_used,
       status,
       signature_base64,
+      customer_id,
+      location_id,
     } = body || {};
 
     // work_hours: required, finite, >= 0, <= 1000
@@ -221,6 +223,8 @@ export class ReportsService {
     }
 
     const newReport = await this.db.createReport(companyId, {
+      customerId: customer_id,
+      locationId: location_id,
       date,
       time,
       workHours,
@@ -264,6 +268,8 @@ export class ReportsService {
   private toResponseDTO(r: ReportRecord): ReportResponseDTO {
     return {
       id: r.id,
+      customer_id: r.customerId,
+      location_id: r.locationId,
       date: r.date,
       time: r.time,
       work_hours: r.workHours,

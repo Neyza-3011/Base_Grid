@@ -14,8 +14,10 @@ import {
   MapPin,
   PenTool,
   Loader2,
+  ChevronDown
 } from "lucide-react";
 import { addReport } from "@/lib/reportsStorage";
+import { fetchCustomers, fetchLocations, Customer, Location } from "@/lib/api/customers";
 
 export const Route = createFileRoute("/wizard")({
   head: () => ({
@@ -35,6 +37,53 @@ function Wizard() {
   const [clientName, setClientName] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [clientCity, setClientCity] = useState("");
+  
+  // Real Customers & Locations
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
+
+  useEffect(() => {
+    fetchCustomers("", true).then(setCustomers).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchLocations(selectedCustomerId, "", true).then(setLocations).catch(() => {});
+    } else {
+      setLocations([]);
+    }
+  }, [selectedCustomerId]);
+
+  const handleSelectCustomer = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedCustomerId(val);
+    setSelectedLocationId(""); // reset location
+    if (val) {
+      const c = customers.find((x) => x.id === val);
+      if (c) setClientName(c.displayName);
+    } else {
+      setClientName("");
+      setClientAddress("");
+      setClientCity("");
+    }
+  };
+
+  const handleSelectLocation = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedLocationId(val);
+    if (val) {
+      const loc = locations.find((x) => x.id === val);
+      if (loc) {
+        setClientAddress(loc.address);
+        setClientCity(loc.city);
+      }
+    } else {
+      setClientAddress("");
+      setClientCity("");
+    }
+  };
 
   // Step 1: Ore, Viaggio & Materiali
   const [hours, setHours] = useState(2.0);
@@ -85,6 +134,8 @@ function Wizard() {
         clientName: clientName.trim(),
         clientAddress: clientAddress.trim() || undefined,
         clientCity: clientCity.trim() || undefined,
+        customerId: selectedCustomerId || undefined,
+        locationId: selectedLocationId || undefined,
         hours: Number(hours) || 0.5,
         travelHours: Number(travelHours) || 0,
         materials: validMaterials,
@@ -145,9 +196,53 @@ function Wizard() {
             </div>
 
             <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+              
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
                   <Building2 className="h-3.5 w-3.5 text-primary" />
+                  Seleziona Cliente Dal Database
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCustomerId}
+                    onChange={handleSelectCustomer}
+                    className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition appearance-none text-white"
+                  >
+                    <option value="" className="bg-[#090D16]">-- Inserimento Manuale --</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id} className="bg-[#090D16]">{c.displayName}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
+                </div>
+              </div>
+
+              {selectedCustomerId && locations.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-emerald-400" />
+                    Seleziona Cantiere / Sede
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedLocationId}
+                      onChange={handleSelectLocation}
+                      className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition appearance-none text-white"
+                    >
+                      <option value="" className="bg-[#090D16]">-- Inserimento Manuale Sede --</option>
+                      {locations.map(l => (
+                        <option key={l.id} value={l.id} className="bg-[#090D16]">{l.name} - {l.city}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              <hr className="border-white/10 my-4" />
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
                   Cliente / Ragione Sociale *
                 </label>
                 <input
@@ -155,20 +250,21 @@ function Wizard() {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="Es. Rossi Impianti Srl o Mario Rossi"
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition"
+                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition text-white placeholder:text-white/30"
+                  disabled={!!selectedCustomerId}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-emerald-400" />
                   Indirizzo Cantiere / Sede
                 </label>
                 <input
                   value={clientAddress}
                   onChange={(e) => setClientAddress(e.target.value)}
                   placeholder="Es. Via Roma 15, Piano 2"
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition"
+                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition text-white placeholder:text-white/30"
+                  disabled={!!selectedLocationId}
                 />
               </div>
 
@@ -178,7 +274,8 @@ function Wizard() {
                   value={clientCity}
                   onChange={(e) => setClientCity(e.target.value)}
                   placeholder="Es. Milano"
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition"
+                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-sm focus:border-primary focus:outline-none transition text-white placeholder:text-white/30"
+                  disabled={!!selectedLocationId}
                 />
               </div>
             </div>
