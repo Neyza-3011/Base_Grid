@@ -855,6 +855,34 @@ export class DatabaseStore implements IDatabaseAdapter {
     return updatedCustomer;
   }
 
+  public async archiveCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null> {
+    const customer = await this.getCustomerByIdAndCompany(customerId, companyId);
+    if (!customer) return null;
+
+    const updatedCustomer: CustomerRecord = {
+      ...customer,
+      isActive: false,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.customers.set(customerId, updatedCustomer);
+    return updatedCustomer;
+  }
+
+  public async reactivateCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null> {
+    const customer = await this.getCustomerByIdAndCompany(customerId, companyId);
+    if (!customer) return null;
+
+    const updatedCustomer: CustomerRecord = {
+      ...customer,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.customers.set(customerId, updatedCustomer);
+    return updatedCustomer;
+  }
+
   public async getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<LocationRecord[]> {
     const list: LocationRecord[] = [];
     const searchLower = search?.toLowerCase();
@@ -912,6 +940,34 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updatedLocation: LocationRecord = {
       ...location,
       ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.locations.set(locationId, updatedLocation);
+    return updatedLocation;
+  }
+
+  public async archiveLocation(companyId: string, locationId: string): Promise<LocationRecord | null> {
+    const location = await this.getLocationByIdAndCompany(locationId, companyId);
+    if (!location) return null;
+
+    const updatedLocation: LocationRecord = {
+      ...location,
+      isActive: false,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.locations.set(locationId, updatedLocation);
+    return updatedLocation;
+  }
+
+  public async reactivateLocation(companyId: string, locationId: string): Promise<LocationRecord | null> {
+    const location = await this.getLocationByIdAndCompany(locationId, companyId);
+    if (!location) return null;
+
+    const updatedLocation: LocationRecord = {
+      ...location,
+      isActive: true,
       updatedAt: new Date().toISOString(),
     };
 

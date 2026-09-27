@@ -98,4 +98,36 @@ export class CustomerService {
     }
     return updated;
   }
+
+  public async archiveCustomer(companyId: string, customerId: string): Promise<CustomerRecord> {
+    const archived = await this.db.archiveCustomer(companyId, customerId);
+    if (!archived) {
+      throw new NotFoundError("Cliente non trovato o non accessibile.");
+    }
+    return archived;
+  }
+
+  public async reactivateCustomer(companyId: string, customerId: string): Promise<CustomerRecord> {
+    const reactivated = await this.db.reactivateCustomer(companyId, customerId);
+    if (!reactivated) {
+      throw new NotFoundError("Cliente non trovato o non accessibile.");
+    }
+    return reactivated;
+  }
+
+  public async archiveLocation(companyId: string, locationId: string): Promise<LocationRecord> {
+    const archived = await this.db.archiveLocation(companyId, locationId);
+    if (!archived) {
+      throw new NotFoundError("Cantiere/Sede non trovato o non accessibile.");
+    }
+    return archived;
+  }
+
+  public async reactivateLocation(companyId: string, locationId: string): Promise<LocationRecord> {
+    const reactivated = await this.db.reactivateLocation(companyId, locationId);
+    if (!reactivated) {
+      throw new NotFoundError("Cantiere/Sede non trovato o non accessibile.");
+    }
+    return reactivated;
+  }
 }

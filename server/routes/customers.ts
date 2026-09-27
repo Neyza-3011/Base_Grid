@@ -1,12 +1,41 @@
 import { Router, Request, Response } from "express";
-import { authenticate } from "../middleware/auth";
+import { authenticate, requireRole } from "../middleware/auth";
 import { db } from "../db";
 import { asyncHandler } from "../async-handler";
 import { CustomerService } from "../services/customer.service";
-import { CreateCustomerInput, CreateLocationInput, UpdateCustomerInput, UpdateLocationInput, CustomerResponse, LocationResponse } from "../types";
+import {
+  CreateCustomerInput,
+  CreateLocationInput,
+  UpdateCustomerInput,
+  UpdateLocationInput,
+  CustomerResponse,
+  LocationResponse,
+  UserRole,
+} from "../types";
 
 export const customersRouter = Router();
 const customerService = new CustomerService(db);
+
+const READ_ROLES: UserRole[] = [
+  "owner",
+  "admin",
+  "responsabile_tecnico",
+  "dispatcher",
+  "technician",
+  "commerciale",
+  "amministrazione",
+  "superadmin",
+];
+
+const WRITE_ROLES: UserRole[] = [
+  "owner",
+  "admin",
+  "responsabile_tecnico",
+  "dispatcher",
+  "commerciale",
+  "amministrazione",
+  "superadmin",
+];
 
 /**
  * Format CustomerRecord to CustomerResponse (removing internal companyId)
@@ -24,6 +53,91 @@ function toLocationResponse(record: any): LocationResponse {
   return rest;
 }
 
+// ==============================================================================
+// 1. Locations Specific Routes (placed before /:id parameter routes)
+// ==============================================================================
+
+/**
+ * GET /api/v1/customers/locations/:id
+ * Gets a specific location
+ */
+customersRouter.get(
+  "/locations/:id",
+  authenticate,
+  requireRole(READ_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const location = await customerService.getLocationById(req.user.companyId, req.params.id);
+    res.status(200).json(toLocationResponse(location));
+  })
+);
+
+/**
+ * PUT /api/v1/customers/locations/:id
+ * Updates a specific location
+ */
+customersRouter.put(
+  "/locations/:id",
+  authenticate,
+  requireRole(WRITE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const input: UpdateLocationInput = req.body;
+    const location = await customerService.updateLocation(req.user.companyId, req.params.id, input);
+    res.status(200).json(toLocationResponse(location));
+  })
+);
+
+/**
+ * POST /api/v1/customers/locations/:id/archive
+ * Archives a specific location (isActive = false)
+ */
+customersRouter.post(
+  "/locations/:id/archive",
+  authenticate,
+  requireRole(WRITE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const location = await customerService.archiveLocation(req.user.companyId, req.params.id);
+    res.status(200).json(toLocationResponse(location));
+  })
+);
+
+/**
+ * POST /api/v1/customers/locations/:id/reactivate
+ * Reactivates a specific location (isActive = true)
+ */
+customersRouter.post(
+  "/locations/:id/reactivate",
+  authenticate,
+  requireRole(WRITE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const location = await customerService.reactivateLocation(req.user.companyId, req.params.id);
+    res.status(200).json(toLocationResponse(location));
+  })
+);
+
+// ==============================================================================
+// 2. Customers Main Routes
+// ==============================================================================
+
 /**
  * GET /api/v1/customers
  * Returns a list of customers for the current company
@@ -31,8 +145,9 @@ function toLocationResponse(record: any): LocationResponse {
 customersRouter.get(
   "/",
   authenticate,
+  requireRole(READ_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
@@ -40,7 +155,7 @@ customersRouter.get(
     const activeOnly = req.query.activeOnly !== "false";
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
 
-    const customers = await customerService.getCustomers(req.company.id, search, activeOnly, limit);
+    const customers = await customerService.getCustomers(req.user.companyId, search, activeOnly, limit);
     res.status(200).json(customers.map(toCustomerResponse));
   })
 );
@@ -52,14 +167,15 @@ customersRouter.get(
 customersRouter.post(
   "/",
   authenticate,
+  requireRole(WRITE_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
 
     const input: CreateCustomerInput = req.body;
-    const customer = await customerService.createCustomer(req.company.id, input);
+    const customer = await customerService.createCustomer(req.user.companyId, input);
     res.status(201).json(toCustomerResponse(customer));
   })
 );
@@ -71,13 +187,14 @@ customersRouter.post(
 customersRouter.get(
   "/:id",
   authenticate,
+  requireRole(READ_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
 
-    const customer = await customerService.getCustomerById(req.company.id, req.params.id);
+    const customer = await customerService.getCustomerById(req.user.companyId, req.params.id);
     res.status(200).json(toCustomerResponse(customer));
   })
 );
@@ -89,19 +206,60 @@ customersRouter.get(
 customersRouter.put(
   "/:id",
   authenticate,
+  requireRole(WRITE_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
 
     const input: UpdateCustomerInput = req.body;
-    const customer = await customerService.updateCustomer(req.company.id, req.params.id, input);
+    const customer = await customerService.updateCustomer(req.user.companyId, req.params.id, input);
     res.status(200).json(toCustomerResponse(customer));
   })
 );
 
-// --- Locations sub-routes ---
+/**
+ * POST /api/v1/customers/:id/archive
+ * Archives a specific customer (isActive = false)
+ */
+customersRouter.post(
+  "/:id/archive",
+  authenticate,
+  requireRole(WRITE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const customer = await customerService.archiveCustomer(req.user.companyId, req.params.id);
+    res.status(200).json(toCustomerResponse(customer));
+  })
+);
+
+/**
+ * POST /api/v1/customers/:id/reactivate
+ * Reactivates a specific customer (isActive = true)
+ */
+customersRouter.post(
+  "/:id/reactivate",
+  authenticate,
+  requireRole(WRITE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+
+    const customer = await customerService.reactivateCustomer(req.user.companyId, req.params.id);
+    res.status(200).json(toCustomerResponse(customer));
+  })
+);
+
+// ==============================================================================
+// 3. Customer Locations Sub-routes
+// ==============================================================================
 
 /**
  * GET /api/v1/customers/:customerId/locations
@@ -110,8 +268,9 @@ customersRouter.put(
 customersRouter.get(
   "/:customerId/locations",
   authenticate,
+  requireRole(READ_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
@@ -119,7 +278,13 @@ customersRouter.get(
     const activeOnly = req.query.activeOnly !== "false";
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
 
-    const locations = await customerService.getLocations(req.company.id, req.params.customerId, search, activeOnly, limit);
+    const locations = await customerService.getLocations(
+      req.user.companyId,
+      req.params.customerId,
+      search,
+      activeOnly,
+      limit
+    );
     res.status(200).json(locations.map(toLocationResponse));
   })
 );
@@ -131,51 +296,19 @@ customersRouter.get(
 customersRouter.post(
   "/:customerId/locations",
   authenticate,
+  requireRole(WRITE_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
+    if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
       return;
     }
 
     const input: CreateLocationInput = req.body;
-    const location = await customerService.createLocation(req.company.id, req.params.customerId, input);
+    const location = await customerService.createLocation(
+      req.user.companyId,
+      req.params.customerId,
+      input
+    );
     res.status(201).json(toLocationResponse(location));
-  })
-);
-
-/**
- * GET /api/v1/locations/:id
- * Gets a specific location
- */
-customersRouter.get(
-  "/locations/:id",
-  authenticate,
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
-
-    const location = await customerService.getLocationById(req.company.id, req.params.id);
-    res.status(200).json(toLocationResponse(location));
-  })
-);
-
-/**
- * PUT /api/v1/locations/:id
- * Updates a specific location
- */
-customersRouter.put(
-  "/locations/:id",
-  authenticate,
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.company) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
-
-    const input: UpdateLocationInput = req.body;
-    const location = await customerService.updateLocation(req.company.id, req.params.id, input);
-    res.status(200).json(toLocationResponse(location));
   })
 );

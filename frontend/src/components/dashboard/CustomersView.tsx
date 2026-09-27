@@ -11,7 +11,10 @@ import {
   Mail,
   Edit2,
   ArrowLeft,
-  Briefcase
+  Briefcase,
+  Archive,
+  ArchiveRestore,
+  Loader2,
 } from "lucide-react";
 import {
   Customer,
@@ -19,16 +22,21 @@ import {
   fetchCustomers,
   createCustomer,
   updateCustomer,
+  archiveCustomer,
+  reactivateCustomer,
   fetchLocations,
   createLocation,
-  updateLocation
+  updateLocation,
+  archiveLocation,
+  reactivateLocation,
 } from "@/lib/api/customers";
 
 export function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  
+  const [activeOnly, setActiveOnly] = useState(false);
+
   // Navigation states
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -37,21 +45,39 @@ export function CustomersView() {
   // Modal states
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  
+
   // Form states for Customer
-  const [cForm, setCForm] = useState({ id: "", displayName: "", legalName: "", vatNumber: "", email: "", phoneNumber: "", isActive: true });
+  const [cForm, setCForm] = useState({
+    id: "",
+    displayName: "",
+    legalName: "",
+    vatNumber: "",
+    email: "",
+    phoneNumber: "",
+    isActive: true,
+  });
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [submittingCustomer, setSubmittingCustomer] = useState(false);
 
   // Form states for Location
-  const [lForm, setLForm] = useState({ id: "", name: "", address: "", city: "", province: "", isActive: true });
+  const [lForm, setLForm] = useState({
+    id: "",
+    name: "",
+    address: "",
+    city: "",
+    province: "",
+    isActive: true,
+  });
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const [submittingLocation, setSubmittingLocation] = useState(false);
+
+  // Action loading state
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchCustomers(query || undefined, false);
+      const data = await fetchCustomers(query || undefined, activeOnly);
       setCustomers(data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Impossibile caricare i clienti.";
@@ -59,7 +85,7 @@ export function CustomersView() {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, activeOnly]);
 
   useEffect(() => {
     const delay = setTimeout(() => {
@@ -74,7 +100,8 @@ export function CustomersView() {
       const data = await fetchLocations(customerId, undefined, false);
       setLocations(data);
     } catch (err: unknown) {
-      toast.error("Impossibile caricare i cantieri.");
+      const msg = err instanceof Error ? err.message : "Impossibile caricare i cantieri.";
+      toast.error(msg);
     } finally {
       setLoadingLocations(false);
     }
@@ -92,7 +119,15 @@ export function CustomersView() {
   };
 
   const openNewCustomerModal = () => {
-    setCForm({ id: "", displayName: "", legalName: "", vatNumber: "", email: "", phoneNumber: "", isActive: true });
+    setCForm({
+      id: "",
+      displayName: "",
+      legalName: "",
+      vatNumber: "",
+      email: "",
+      phoneNumber: "",
+      isActive: true,
+    });
     setIsEditingCustomer(false);
     setShowCustomerModal(true);
   };
@@ -105,7 +140,7 @@ export function CustomersView() {
       vatNumber: customer.vatNumber || "",
       email: customer.email || "",
       phoneNumber: customer.phoneNumber || "",
-      isActive: customer.isActive
+      isActive: customer.isActive,
     });
     setIsEditingCustomer(true);
     setShowCustomerModal(true);
@@ -146,8 +181,39 @@ export function CustomersView() {
     }
   };
 
+  const handleToggleArchiveCustomer = async (customer: Customer) => {
+    setActionLoadingId(customer.id);
+    try {
+      if (customer.isActive) {
+        const updated = await archiveCustomer(customer.id);
+        toast.success("Cliente archiviato.");
+        if (selectedCustomer?.id === customer.id) {
+          setSelectedCustomer(updated);
+        }
+      } else {
+        const updated = await reactivateCustomer(customer.id);
+        toast.success("Cliente riattivato.");
+        if (selectedCustomer?.id === customer.id) {
+          setSelectedCustomer(updated);
+        }
+      }
+      loadCustomers();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Operazione non riuscita.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const openNewLocationModal = () => {
-    setLForm({ id: "", name: "", address: "", city: "", province: "", isActive: true });
+    setLForm({
+      id: "",
+      name: "",
+      address: "",
+      city: "",
+      province: "",
+      isActive: true,
+    });
     setIsEditingLocation(false);
     setShowLocationModal(true);
   };
@@ -159,7 +225,7 @@ export function CustomersView() {
       address: location.address,
       city: location.city,
       province: location.province || "",
-      isActive: location.isActive
+      isActive: location.isActive,
     });
     setIsEditingLocation(true);
     setShowLocationModal(true);
@@ -196,28 +262,81 @@ export function CustomersView() {
     }
   };
 
+  const handleToggleArchiveLocation = async (location: Location) => {
+    if (!selectedCustomer) return;
+    setActionLoadingId(location.id);
+    try {
+      if (location.isActive) {
+        await archiveLocation(location.id);
+        toast.success("Sede/cantiere archiviato.");
+      } else {
+        await reactivateLocation(location.id);
+        toast.success("Sede/cantiere riattivato.");
+      }
+      loadLocations(selectedCustomer.id);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Operazione non riuscita.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   if (selectedCustomer) {
     return (
       <div className="space-y-6 animate-in fade-in duration-200">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleBackToCustomers}
-            className="grid h-10 w-10 place-items-center rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Building2 className="h-6 w-6 text-primary" /> {selectedCustomer.displayName}
-            </h1>
-            <p className="text-sm text-white/50">{selectedCustomer.legalName || "Nessuna ragione sociale"}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleBackToCustomers}
+              className="grid h-10 w-10 place-items-center rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition"
+              title="Torna all'elenco clienti"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                  <Building2 className="h-6 w-6 text-primary" /> {selectedCustomer.displayName}
+                </h1>
+                {selectedCustomer.isActive ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Attivo
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    Archiviato
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-white/50">{selectedCustomer.legalName || "Nessuna ragione sociale"}</p>
+            </div>
           </div>
-          <button
-            onClick={() => openEditCustomerModal(selectedCustomer)}
-            className="h-10 px-4 rounded-lg bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition inline-flex items-center gap-2"
-          >
-            <Edit2 className="h-4 w-4" /> Modifica Cliente
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleToggleArchiveCustomer(selectedCustomer)}
+              disabled={actionLoadingId === selectedCustomer.id}
+              className={`h-10 px-4 rounded-lg border text-sm font-medium transition inline-flex items-center gap-2 ${
+                selectedCustomer.isActive
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+              }`}
+            >
+              {actionLoadingId === selectedCustomer.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : selectedCustomer.isActive ? (
+                <Archive className="h-4 w-4" />
+              ) : (
+                <ArchiveRestore className="h-4 w-4" />
+              )}
+              {selectedCustomer.isActive ? "Archivia Cliente" : "Riattiva Cliente"}
+            </button>
+            <button
+              onClick={() => openEditCustomerModal(selectedCustomer)}
+              className="h-10 px-4 rounded-lg bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition inline-flex items-center gap-2 border border-white/10"
+            >
+              <Edit2 className="h-4 w-4" /> Modifica
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -264,29 +383,76 @@ export function CustomersView() {
             ) : (
               <div className="grid gap-4">
                 {locations.map((loc) => (
-                  <div key={loc.id} className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition">
+                  <div
+                    key={loc.id}
+                    className={`flex items-center justify-between p-4 rounded-xl border transition ${
+                      loc.isActive
+                        ? "border-white/10 bg-white/5 hover:bg-white/10"
+                        : "border-white/5 bg-white/[0.02] opacity-75 hover:opacity-100"
+                    }`}
+                  >
                     <div className="flex items-center gap-4">
-                      <div className="grid h-10 w-10 place-items-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <div
+                        className={`grid h-10 w-10 place-items-center rounded-lg ${
+                          loc.isActive
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-amber-500/20 text-amber-400"
+                        }`}
+                      >
                         <MapPin className="h-5 w-5" />
                       </div>
                       <div>
-                        <div className="font-semibold text-white">{loc.name}</div>
-                        <div className="text-sm text-white/60">{loc.address}, {loc.city} {loc.province && `(${loc.province})`}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{loc.name}</span>
+                          {loc.isActive ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Attivo
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              Archiviato
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-white/60">
+                          {loc.address}, {loc.city} {loc.province && `(${loc.province})`}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => openEditLocationModal(loc)}
-                      className="text-white/40 hover:text-white p-2"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleToggleArchiveLocation(loc)}
+                        disabled={actionLoadingId === loc.id}
+                        className={`p-2 rounded-lg transition ${
+                          loc.isActive
+                            ? "text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
+                            : "text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10"
+                        }`}
+                        title={loc.isActive ? "Archivia sede" : "Riattiva sede"}
+                      >
+                        {actionLoadingId === loc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : loc.isActive ? (
+                          <Archive className="h-4 w-4" />
+                        ) : (
+                          <ArchiveRestore className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => openEditLocationModal(loc)}
+                        className="text-white/40 hover:text-white p-2 rounded-lg hover:bg-white/5 transition"
+                        title="Modifica sede"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
-        
+
         {/* Modal Cantiere (Location) */}
         {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -295,7 +461,12 @@ export function CustomersView() {
                 <h3 className="font-semibold text-lg text-white">
                   {isEditingLocation ? "Modifica Cantiere" : "Nuovo Cantiere"}
                 </h3>
-                <button onClick={() => setShowLocationModal(false)} className="text-white/50 hover:text-white">✕</button>
+                <button
+                  onClick={() => setShowLocationModal(false)}
+                  className="text-white/50 hover:text-white"
+                >
+                  ✕
+                </button>
               </div>
               <form onSubmit={submitLocation} className="p-6 space-y-4">
                 <div className="space-y-1">
@@ -372,12 +543,24 @@ export function CustomersView() {
           </h1>
           <p className="text-sm text-white/50">Gestisci i tuoi clienti e le loro sedi operative</p>
         </div>
-        <button
-          onClick={openNewCustomerModal}
-          className="h-10 px-4 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 active:scale-95 transition inline-flex items-center justify-center gap-2 btn-glow"
-        >
-          <Plus className="h-4 w-4" /> Nuovo Cliente
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveOnly((prev) => !prev)}
+            className={`h-10 px-3 rounded-xl border text-xs font-medium transition ${
+              activeOnly
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            {activeOnly ? "Solo Attivi" : "Tutti (inclusi archiviati)"}
+          </button>
+          <button
+            onClick={openNewCustomerModal}
+            className="h-10 px-4 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 active:scale-95 transition inline-flex items-center justify-center gap-2 btn-glow"
+          >
+            <Plus className="h-4 w-4" /> Nuovo Cliente
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-3 h-12">
@@ -398,10 +581,15 @@ export function CustomersView() {
           <Building2 className="h-12 w-12 text-white/20 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">Nessun cliente trovato</h3>
           <p className="text-white/50 text-sm mb-6 max-w-md mx-auto">
-            {query ? "Nessun risultato corrisponde alla tua ricerca." : "Inizia aggiungendo il tuo primo cliente al database."}
+            {query
+              ? "Nessun risultato corrisponde alla tua ricerca."
+              : "Inizia aggiungendo il tuo primo cliente al database."}
           </p>
           {!query && (
-            <button onClick={openNewCustomerModal} className="h-9 px-4 rounded-lg bg-primary/20 text-primary text-sm font-medium hover:bg-primary/30 transition">
+            <button
+              onClick={openNewCustomerModal}
+              className="h-9 px-4 rounded-lg bg-primary/20 text-primary text-sm font-medium hover:bg-primary/30 transition"
+            >
               Aggiungi Cliente
             </button>
           )}
@@ -412,13 +600,32 @@ export function CustomersView() {
             <div
               key={c.id}
               onClick={() => handleSelectCustomer(c)}
-              className="group cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-5 hover:bg-white/10 hover:border-primary/50 transition-all"
+              className={`group cursor-pointer rounded-2xl border p-5 transition-all ${
+                c.isActive
+                  ? "border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50"
+                  : "border-white/5 bg-white/[0.02] opacity-75 hover:opacity-100 hover:border-white/20"
+              }`}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/20 text-primary">
+                <div
+                  className={`grid h-12 w-12 place-items-center rounded-xl ${
+                    c.isActive ? "bg-primary/20 text-primary" : "bg-white/10 text-white/40"
+                  }`}
+                >
                   <Building2 className="h-6 w-6" />
                 </div>
-                <ChevronRight className="h-5 w-5 text-white/20 group-hover:text-primary transition-colors" />
+                <div className="flex items-center gap-2">
+                  {c.isActive ? (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Attivo
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      Archiviato
+                    </span>
+                  )}
+                  <ChevronRight className="h-5 w-5 text-white/20 group-hover:text-primary transition-colors" />
+                </div>
               </div>
               <h3 className="font-semibold text-lg text-white mb-1 truncate">{c.displayName}</h3>
               <div className="space-y-1.5 mt-4">
@@ -449,7 +656,12 @@ export function CustomersView() {
               <h3 className="font-semibold text-lg text-white">
                 {isEditingCustomer ? "Modifica Cliente" : "Nuovo Cliente"}
               </h3>
-              <button onClick={() => setShowCustomerModal(false)} className="text-white/50 hover:text-white">✕</button>
+              <button
+                onClick={() => setShowCustomerModal(false)}
+                className="text-white/50 hover:text-white"
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={submitCustomer} className="p-6 space-y-4">
               <div className="space-y-1">
@@ -498,7 +710,7 @@ export function CustomersView() {
                   className="w-full h-10 px-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:border-primary focus:outline-none transition"
                 />
               </div>
-              
+
               <div className="pt-4 flex justify-end gap-3">
                 <button
                   type="button"

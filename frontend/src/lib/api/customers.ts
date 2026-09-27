@@ -73,16 +73,20 @@ async function parseResponseOrThrow<T>(res: Response): Promise<T> {
     const errorData = await res.json();
     if (errorData && typeof errorData.detail === "string") {
       errorMessage = errorData.detail;
+    } else if (errorData && typeof errorData.message === "string") {
+      errorMessage = errorData.message;
     }
   } catch {
     // Non-JSON or empty response body
   }
 
-  if (res.status === 401) {
+  if (res.status === 401 && errorMessage === "Errore durante la richiesta.") {
     errorMessage = "Non autenticato o sessione scaduta.";
-  } else if (res.status === 403) {
+  } else if (res.status === 403 && errorMessage === "Errore durante la richiesta.") {
     errorMessage = "Accesso non autorizzato.";
-  } else if (res.status >= 500) {
+  } else if (res.status === 404 && errorMessage === "Errore durante la richiesta.") {
+    errorMessage = "Risorsa non trovata o non accessibile.";
+  } else if (res.status >= 500 && errorMessage === "Errore durante la richiesta.") {
     errorMessage = "Errore interno del server.";
   }
 
@@ -137,6 +141,28 @@ export async function updateCustomer(id: string, payload: UpdateCustomerPayload)
   return parseResponseOrThrow<Customer>(res);
 }
 
+export async function archiveCustomer(id: string): Promise<Customer> {
+  const res = await fetch(`/api/v1/customers/${encodeURIComponent(id)}/archive`, {
+    method: "POST",
+    credentials: "include",
+    headers: appendCsrfHeaders({
+      Accept: "application/json",
+    }),
+  });
+  return parseResponseOrThrow<Customer>(res);
+}
+
+export async function reactivateCustomer(id: string): Promise<Customer> {
+  const res = await fetch(`/api/v1/customers/${encodeURIComponent(id)}/reactivate`, {
+    method: "POST",
+    credentials: "include",
+    headers: appendCsrfHeaders({
+      Accept: "application/json",
+    }),
+  });
+  return parseResponseOrThrow<Customer>(res);
+}
+
 export async function fetchLocations(customerId: string, search?: string, activeOnly = true): Promise<Location[]> {
   const query = new URLSearchParams();
   if (search) query.append("search", search);
@@ -181,6 +207,28 @@ export async function updateLocation(id: string, payload: UpdateLocationPayload)
       Accept: "application/json",
     }),
     body: JSON.stringify(payload),
+  });
+  return parseResponseOrThrow<Location>(res);
+}
+
+export async function archiveLocation(id: string): Promise<Location> {
+  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}/archive`, {
+    method: "POST",
+    credentials: "include",
+    headers: appendCsrfHeaders({
+      Accept: "application/json",
+    }),
+  });
+  return parseResponseOrThrow<Location>(res);
+}
+
+export async function reactivateLocation(id: string): Promise<Location> {
+  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}/reactivate`, {
+    method: "POST",
+    credentials: "include",
+    headers: appendCsrfHeaders({
+      Accept: "application/json",
+    }),
   });
   return parseResponseOrThrow<Location>(res);
 }

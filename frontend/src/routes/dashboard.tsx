@@ -173,9 +173,7 @@ function Dashboard() {
           </div>
         </button>
 
-        {(currentUser.role === "admin" ||
-          currentUser.role === "superadmin" ||
-          currentUser.role === "owner") && (
+        {currentUser.role !== "cliente" && (
           <button
             onClick={() => {
               setActiveView("customers");

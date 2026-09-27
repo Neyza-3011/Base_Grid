@@ -249,12 +249,16 @@ export interface IDatabaseAdapter {
   getCustomerByIdAndCompany(customerId: string, companyId: string): Promise<CustomerRecord | null>;
   createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord>;
   updateCustomer(companyId: string, customerId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord | null>;
+  archiveCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null>;
+  reactivateCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null>;
 
   // --- Locations Operations ---
   getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit?: number): Promise<LocationRecord[]>;
   getLocationByIdAndCompany(locationId: string, companyId: string): Promise<LocationRecord | null>;
   createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord>;
   updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null>;
+  archiveLocation(companyId: string, locationId: string): Promise<LocationRecord | null>;
+  reactivateLocation(companyId: string, locationId: string): Promise<LocationRecord | null>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -1523,6 +1527,26 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return mapCustomerRow(res.rows[0]);
   }
 
+  public async archiveCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE customers SET "isActive" = false, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, customerId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapCustomerRow(res.rows[0]);
+  }
+
+  public async reactivateCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE customers SET "isActive" = true, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, customerId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapCustomerRow(res.rows[0]);
+  }
+
   // --- Locations Operations ---
 
   public async getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit: number = 100): Promise<LocationRecord[]> {
@@ -1605,6 +1629,26 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const sql = `UPDATE locations SET ${setClauses.join(', ')} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
     
     const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapLocationRow(res.rows[0]);
+  }
+
+  public async archiveLocation(companyId: string, locationId: string): Promise<LocationRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE locations SET "isActive" = false, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, locationId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapLocationRow(res.rows[0]);
+  }
+
+  public async reactivateLocation(companyId: string, locationId: string): Promise<LocationRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE locations SET "isActive" = true, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, locationId, companyId]
+    );
     if (!res.rows[0]) return null;
     return mapLocationRow(res.rows[0]);
   }
