@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import Redis, { RedisOptions } from "ioredis";
 import { config } from "./config";
+import { getRuntimeMode } from "./runtime-mode";
 
 export class StoreUnavailableError extends Error {
   constructor(message = "Token storage is currently unavailable") {
@@ -692,18 +693,18 @@ export class RefreshTokenStore {
   constructor(customAdapter?: ITokenStorageAdapter) {
     if (customAdapter) {
       this.adapter = customAdapter;
-    } else if (process.env.NODE_ENV === "test") {
+      return;
+    }
+
+    const mode = getRuntimeMode();
+    if (mode === "test") {
       this.adapter = new DistributedStorageEngine();
-    } else if (config.REDIS_URL || config.REDIS_HOST !== "127.0.0.1") {
+    } else if (config.REDIS_URL || (config.REDIS_HOST && config.REDIS_HOST !== "127.0.0.1" && process.env.REDIS_HOST)) {
       this.adapter = new RedisTokenStorageAdapter();
+    } else if (mode === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");
     } else {
-      const isProd =
-        (config.NODE_ENV === "production" || process.env.NODE_ENV === "production") &&
-        process.env.ALLOW_IN_MEMORY_REDIS !== "true";
-      if (isProd) {
-        throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");
-      }
-      // Fallback local memory storage for development / testing when Redis is not provided
+      // In ai-studio and development without Redis, fallback to DistributedStorageEngine in memory
       this.adapter = new DistributedStorageEngine();
     }
   }

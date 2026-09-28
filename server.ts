@@ -8,32 +8,27 @@ import { db } from "./server/db";
 import { tokenStore } from "./server/token-store";
 import { asyncHandler } from "./server/async-handler";
 import { runMigrations } from "./server/migrator";
+import { getRuntimeMode } from "./server/runtime-mode";
 
-
-// Dynamically import Vite if not in production
-const isProd = process.env.NODE_ENV === "production";
+const mode = getRuntimeMode();
+const isProd = mode === "production" || mode === "ai-studio" || process.env.NODE_ENV === "production";
 
 async function startServer() {
   const app = createApp();
 
-  if (isProd) {
-    // Production startup:
-    // If DATABASE_URL is configured, verify PostgreSQL and run migrations fail-closed.
-    // If REDIS_URL is configured, verify Redis connection fail-closed.
-    // If not configured (standalone container in AI Studio), allow clean in-memory fallback.
+  if (mode === "production") {
+    // Real Production startup: Strict fail-closed verification of PostgreSQL and Redis
     try {
-      if (process.env.DATABASE_URL) {
-        const dbPingOk = await db.ping(3000).catch(() => false);
-        if (!dbPingOk) {
-          throw new Error("PostgreSQL database ping failed or connection unreachable.");
-        }
+      const dbPingOk = await db.ping(3000).catch(() => false);
+      if (!dbPingOk) {
+        throw new Error("PostgreSQL database ping failed or connection unreachable.");
+      }
 
-        // 1. Versioned Schema Migrations
-        if (typeof (db as any).getPool === "function") {
-          const pool = (db as any).getPool();
-          const migResult = await runMigrations(pool);
-          console.log(`[Migrations] Schema verified: ${migResult.applied.length} applied, ${migResult.alreadyApplied.length} verified.`);
-        }
+      // 1. Versioned Schema Migrations
+      if (typeof (db as any).getPool === "function") {
+        const pool = (db as any).getPool();
+        const migResult = await runMigrations(pool);
+        console.log(`[Migrations] Schema verified: ${migResult.applied.length} applied, ${migResult.alreadyApplied.length} verified.`);
       }
 
       // 2. Runtime seed data / master tenant compatibility
@@ -42,15 +37,41 @@ async function startServer() {
         console.log("Database initialized successfully.");
       }
 
-      if (process.env.REDIS_URL) {
-        const redisOk = await tokenStore.ping(3000).catch(() => false);
-        if (!redisOk) {
-          throw new Error("Redis token store ping failed or connection unreachable.");
-        }
+      const redisOk = await tokenStore.ping(3000).catch(() => false);
+      if (!redisOk) {
+        throw new Error("Redis token store ping failed or connection unreachable.");
       }
       console.log("Infrastructure (PostgreSQL and Redis) verified successfully.");
     } catch (err) {
       console.error("CRITICAL STARTUP ERROR: Database or Redis verification failed in production:", err);
+      process.exit(1);
+    }
+  } else if (mode === "ai-studio") {
+    // Google AI Studio Standalone container startup
+    try {
+      if (process.env.DATABASE_URL) {
+        const dbPingOk = await db.ping(3000).catch(() => false);
+        if (!dbPingOk) {
+          throw new Error("Configured PostgreSQL database ping failed or connection unreachable.");
+        }
+        if (typeof (db as any).getPool === "function") {
+          const pool = (db as any).getPool();
+          const migResult = await runMigrations(pool);
+          console.log(`[AI Studio Migrations] Schema verified: ${migResult.applied.length} applied.`);
+        }
+      }
+      if (db.initDatabase) {
+        await db.initDatabase();
+      }
+      if (process.env.REDIS_URL) {
+        const redisOk = await tokenStore.ping(3000).catch(() => false);
+        if (!redisOk) {
+          throw new Error("Configured Redis token store ping failed or connection unreachable.");
+        }
+      }
+      console.log("[AI Studio] Standalone runtime environment initialized successfully.");
+    } catch (err) {
+      console.error("CRITICAL STARTUP ERROR: AI Studio service initialization failed:", err);
       process.exit(1);
     }
   } else {

@@ -17,6 +17,7 @@ import {
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config, ServerConfig } from "./config";
+import { getRuntimeMode } from "./runtime-mode";
 import { IDatabaseAdapter, TransactionClient, PostgresAdapter } from "./db-postgres";
 
 export { IDatabaseAdapter, TransactionClient, PostgresAdapter };
@@ -32,12 +33,9 @@ export class DatabaseStore implements IDatabaseAdapter {
   private assets: Map<string, AssetRecord> = new Map();
   public tokenStore = tokenStore;
 
-  constructor(allowInMemoryInProd = false) {
-    const isProd =
-      (process.env.NODE_ENV === "production" || config.NODE_ENV === "production") &&
-      !allowInMemoryInProd &&
-      process.env.ALLOW_IN_MEMORY_DB !== "true";
-    if (isProd) {
+  constructor() {
+    const mode = getRuntimeMode();
+    if (mode === "production") {
       throw new Error("CRITICAL SECURITY ERROR: DatabaseStore (in-memory) cannot be used in production. PostgreSQL adapter is required.");
     }
     this.seedInitialData();
@@ -1147,12 +1145,20 @@ export class DatabaseStore implements IDatabaseAdapter {
 
 /**
  * Database Provider Factory:
- * Strictly selects PostgresAdapter in production and DatabaseStore in development/test.
+ * Strictly selects PostgresAdapter in production and DatabaseStore in development/test or AI Studio standalone without DATABASE_URL.
  */
 export function createDatabaseAdapter(envConfig: ServerConfig = config): IDatabaseAdapter {
-  const isProd = process.env.NODE_ENV === "production" || envConfig.NODE_ENV === "production";
-  if (isProd) {
+  const mode =
+    (envConfig as any).BASEGRID_RUNTIME_MODE ||
+    (envConfig.NODE_ENV === "production" ? "production" : getRuntimeMode());
+  if (mode === "production") {
     return new PostgresAdapter();
+  }
+  if (mode === "ai-studio") {
+    if (envConfig.DATABASE_URL || process.env.DATABASE_URL) {
+      return new PostgresAdapter();
+    }
+    return new DatabaseStore();
   }
   return new DatabaseStore();
 }

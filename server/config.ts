@@ -1,4 +1,6 @@
+import crypto from "crypto";
 import { getJwtSecret } from "./security";
+import { getRuntimeMode } from "./runtime-mode";
 
 export interface ServerConfig {
   NODE_ENV: "development" | "production" | "test";
@@ -26,8 +28,7 @@ export interface ServerConfig {
 }
 
 export function loadConfig(env = process.env): ServerConfig {
-  const isCustomEnv = env !== process.env;
-  const isProduction = env.NODE_ENV === "production";
+  const mode = getRuntimeMode(env);
   
   // Feature flag for temporary email-independent mode
   // We default to false per requirements, allowing deployment without email service
@@ -37,8 +38,8 @@ export function loadConfig(env = process.env): ServerConfig {
   const GOOGLE_AUTH_ENABLED = env.GOOGLE_AUTH_ENABLED === "true";
   const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID?.trim() || undefined;
 
-  // JWT Secret is handled strictly by security.ts (fail-closed in prod when customEnv provided)
-  const JWT_SECRET = getJwtSecret(isCustomEnv ? env : undefined);
+  // JWT Secret is handled strictly by security.ts according to runtime mode
+  const JWT_SECRET = getJwtSecret(env);
 
   let FRONTEND_URL = env.FRONTEND_URL;
   let CORS_ORIGINS_RAW = env.CORS_ORIGINS;
@@ -51,15 +52,15 @@ export function loadConfig(env = process.env): ServerConfig {
   let SUPERADMIN_PASSWORD = env.SUPERADMIN_PASSWORD;
   const SUPERADMIN_COMPANY_NAME = env.SUPERADMIN_COMPANY_NAME || "BaseGrid Master Platform";
 
-  const EMAIL_PROVIDER = env.EMAIL_PROVIDER || (isProduction ? (EMAIL_VERIFICATION_ENABLED ? "" : "none") : "dev");
-  const EMAIL_FROM = env.EMAIL_FROM || (isProduction ? (EMAIL_VERIFICATION_ENABLED ? "" : "no-reply@basegrid.io") : "no-reply@basegrid.io");
+  const EMAIL_PROVIDER = env.EMAIL_PROVIDER || (mode === "production" ? (EMAIL_VERIFICATION_ENABLED ? "" : "none") : "dev");
+  const EMAIL_FROM = env.EMAIL_FROM || (mode === "production" ? (EMAIL_VERIFICATION_ENABLED ? "" : "no-reply@basegrid.io") : "no-reply@basegrid.io");
   const EMAIL_API_KEY = env.EMAIL_API_KEY;
   const SMTP_HOST = env.SMTP_HOST;
   const SMTP_PORT = env.SMTP_PORT ? Number(env.SMTP_PORT) : undefined;
   const SMTP_USER = env.SMTP_USER;
   const SMTP_PASS = env.SMTP_PASS;
 
-  if (isProduction && (isCustomEnv || env.STRICT_PROD_CONFIG === "true")) {
+  if (mode === "production") {
     if (!SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD) {
       throw new Error(
         "CRITICAL CONFIG ERROR: SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD must be set in production to secure the master tenant."
@@ -136,18 +137,24 @@ export function loadConfig(env = process.env): ServerConfig {
         "CRITICAL CONFIG ERROR: GOOGLE_CLIENT_ID must be provided in production when GOOGLE_AUTH_ENABLED is true."
       );
     }
+  } else if (mode === "ai-studio") {
+    // Standalone Google AI Studio Cloud Run container mode
+    if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
+    if (!SUPERADMIN_PASSWORD) SUPERADMIN_PASSWORD = crypto.randomBytes(16).toString("hex") + "Aa1!";
+    if (!FRONTEND_URL) FRONTEND_URL = "http://localhost:" + (Number(env.PORT) || 3000);
+    if (!CORS_ORIGINS_RAW) CORS_ORIGINS_RAW = FRONTEND_URL;
   } else {
-    // Standard defaults for standalone container or dev/test
+    // Development / Test defaults
     if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
     if (!SUPERADMIN_PASSWORD) SUPERADMIN_PASSWORD = "SuperAdmin2026!";
-    if (!FRONTEND_URL) FRONTEND_URL = isProduction ? "http://localhost:3000" : "http://localhost:5173";
+    if (!FRONTEND_URL) FRONTEND_URL = "http://localhost:5173";
     if (!CORS_ORIGINS_RAW) CORS_ORIGINS_RAW = FRONTEND_URL;
   }
 
   const CORS_ORIGINS = CORS_ORIGINS_RAW.split(",").map((s) => s.trim()).filter(Boolean);
 
   return {
-    NODE_ENV: (env.NODE_ENV as any) || "development",
+    NODE_ENV: (env.NODE_ENV as any) || (mode === "production" ? "production" : "development"),
     JWT_SECRET,
     DATABASE_URL,
     REDIS_URL,

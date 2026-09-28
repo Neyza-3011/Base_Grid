@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { JwtPayload, SafeUserSession, UserRecord } from "./types";
+import { getRuntimeMode } from "./runtime-mode";
 
 const MIN_SECRET_LENGTH = 32;
 const ACCESS_TOKEN_EXPIRY = "15m";
@@ -23,36 +24,37 @@ const INSECURE_PLACEHOLDERS = new Set([
 // Stable local development and test fallback secret (STRICTLY PROHIBITED in production)
 const DEV_TEST_FALLBACK_SECRET = "basegrid-dev-local-jwt-secret-key-minimum-32-chars-long";
 
+// Module-scoped ephemeral secret for Google AI Studio standalone runtime
+let ephemeralAiStudioSecret: string | null = null;
+
 /**
  * Retrieves the cryptographic JWT secret.
- * - In production (NODE_ENV === "production"): strictly requires a valid, high-entropy
- *   JWT_SECRET or SECRET_KEY environment variable (>= 32 chars, not a placeholder) and fails fast.
- * - In development / testing: if not provided via env, uses a stable local dev fallback
- *   so the local development server starts reliably without manual env injection.
+ * - In "production": strictly requires a valid, high-entropy JWT_SECRET or SECRET_KEY (>= 32 chars, not a placeholder) and fails fast.
+ * - In "ai-studio": uses valid env secret if provided; otherwise generates an ephemeral high-entropy random secret once per process.
+ * - In "development" / "test": uses stable dev fallback if not provided in env.
  * - Never leaks or prints secret values in error messages or logs.
  */
 export function getJwtSecret(customEnv?: NodeJS.ProcessEnv): string {
-  const isCustomEnv = Boolean(customEnv);
   const env = customEnv || process.env;
-  const isProduction = env.NODE_ENV === "production";
+  const mode = getRuntimeMode(env);
   const rawSecret = env.JWT_SECRET || env.SECRET_KEY;
 
   if (rawSecret !== undefined && rawSecret !== null) {
     if (typeof rawSecret === "string") {
       const trimmed = rawSecret.trim();
       if (rawSecret.length > 0 && trimmed.length === 0) {
-        if (isProduction) {
+        if (mode === "production") {
           throw new Error("CRITICAL SECURITY ERROR: JWT secret is empty or whitespace-only in production.");
         }
       } else if (trimmed.length > 0) {
         if (trimmed.length < MIN_SECRET_LENGTH) {
-          if (isProduction) {
+          if (mode === "production") {
             throw new Error(
               `CRITICAL SECURITY ERROR: JWT secret is too short (${trimmed.length} chars). It must be at least ${MIN_SECRET_LENGTH} characters long in production.`
             );
           }
         } else if (INSECURE_PLACEHOLDERS.has(trimmed.toLowerCase())) {
-          if (isProduction) {
+          if (mode === "production") {
             throw new Error(
               "CRITICAL SECURITY ERROR: JWT secret is set to a known insecure placeholder in production."
             );
@@ -64,15 +66,17 @@ export function getJwtSecret(customEnv?: NodeJS.ProcessEnv): string {
     }
   }
 
-  if (isProduction) {
-    // If strict customEnv is passed in unit tests, enforce throwing
-    if (isCustomEnv || env.STRICT_PROD_SECURITY === "true") {
-      throw new Error(
-        "CRITICAL SECURITY ERROR: JWT secret is missing or empty in production environment. Please set JWT_SECRET or SECRET_KEY."
-      );
+  if (mode === "production") {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: JWT secret is missing or empty in production environment. Please set JWT_SECRET or SECRET_KEY."
+    );
+  }
+
+  if (mode === "ai-studio") {
+    if (!ephemeralAiStudioSecret) {
+      ephemeralAiStudioSecret = crypto.randomBytes(32).toString("hex");
     }
-    // Standalone container fallback
-    return "basegrid-production-cloudrun-secret-jwt-key-min-32-chars-long";
+    return ephemeralAiStudioSecret;
   }
 
   // Development and testing fallback

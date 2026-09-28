@@ -3,6 +3,7 @@ import Redis from "ioredis";
 import { config } from "./config";
 import crypto from "crypto";
 import { asyncHandler } from "./async-handler";
+import { getRuntimeMode } from "./runtime-mode";
 
 export interface RateLimiterConfig {
   points: number;
@@ -37,8 +38,8 @@ export class RateLimiter {
         });
       }
     } else {
-      const isProduction = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-      if (isProduction) {
+      const mode = getRuntimeMode();
+      if (mode === "production") {
         throw new Error("CRITICAL SECURITY ERROR: Distributed Rate Limiting requires REDIS_URL in production.");
       }
     }
