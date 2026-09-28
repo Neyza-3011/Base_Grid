@@ -141,14 +141,14 @@ describe("P0.4.4-H1 — Production Readiness & Liveness (/health vs /ready)", ()
     });
   });
 
-  describe("3. Production Environment Gate", () => {
+  describe("3. Production Environment Gate & Runtime Mode Isolation", () => {
     it("fails closed (503) in production if DATABASE_URL is missing", async () => {
-      const originalEnv = config.NODE_ENV;
+      const originalMode = process.env.BASEGRID_RUNTIME_MODE;
       const originalDbUrl = config.DATABASE_URL;
       const originalRedisUrl = config.REDIS_URL;
 
       try {
-        (config as any).NODE_ENV = "production";
+        process.env.BASEGRID_RUNTIME_MODE = "production";
         (config as any).DATABASE_URL = "";
         (config as any).REDIS_URL = "redis://localhost:6379";
 
@@ -156,32 +156,81 @@ describe("P0.4.4-H1 — Production Readiness & Liveness (/health vs /ready)", ()
         expect(res.status).toBe(503);
         expect(res.body).toEqual({ status: "not_ready" });
       } finally {
-        (config as any).NODE_ENV = originalEnv;
+        if (originalMode !== undefined) process.env.BASEGRID_RUNTIME_MODE = originalMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
         (config as any).DATABASE_URL = originalDbUrl;
         (config as any).REDIS_URL = originalRedisUrl;
       }
     });
 
     it("fails closed (503) in production if REDIS_URL is missing", async () => {
-      const originalEnv = config.NODE_ENV;
+      const originalMode = process.env.BASEGRID_RUNTIME_MODE;
       const originalDbUrl = config.DATABASE_URL;
       const originalRedisUrl = config.REDIS_URL;
-      const originalRedisHost = config.REDIS_HOST;
 
       try {
-        (config as any).NODE_ENV = "production";
+        process.env.BASEGRID_RUNTIME_MODE = "production";
         (config as any).DATABASE_URL = "postgres://user:pass@localhost:5432/db";
         (config as any).REDIS_URL = "";
-        (config as any).REDIS_HOST = "127.0.0.1";
 
         const res = await request(app).get("/ready");
         expect(res.status).toBe(503);
         expect(res.body).toEqual({ status: "not_ready" });
       } finally {
-        (config as any).NODE_ENV = originalEnv;
+        if (originalMode !== undefined) process.env.BASEGRID_RUNTIME_MODE = originalMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
         (config as any).DATABASE_URL = originalDbUrl;
         (config as any).REDIS_URL = originalRedisUrl;
-        (config as any).REDIS_HOST = originalRedisHost;
+      }
+    });
+
+    it("does NOT enter production branch when BASEGRID_RUNTIME_MODE=ai-studio even with NODE_ENV=production and DB/Redis missing", async () => {
+      const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDbUrl = config.DATABASE_URL;
+      const originalRedisUrl = config.REDIS_URL;
+
+      try {
+        process.env.BASEGRID_RUNTIME_MODE = "ai-studio";
+        process.env.NODE_ENV = "production";
+        (config as any).DATABASE_URL = "";
+        (config as any).REDIS_URL = "";
+
+        const res = await request(app).get("/ready");
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: "ready" });
+      } finally {
+        if (originalMode !== undefined) process.env.BASEGRID_RUNTIME_MODE = originalMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
+        if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
+        else delete process.env.NODE_ENV;
+        (config as any).DATABASE_URL = originalDbUrl;
+        (config as any).REDIS_URL = originalRedisUrl;
+      }
+    });
+
+    it("maintains existing behavior in development mode", async () => {
+      const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDbUrl = config.DATABASE_URL;
+      const originalRedisUrl = config.REDIS_URL;
+
+      try {
+        delete process.env.BASEGRID_RUNTIME_MODE;
+        process.env.NODE_ENV = "development";
+        (config as any).DATABASE_URL = "";
+        (config as any).REDIS_URL = "";
+
+        const res = await request(app).get("/ready");
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: "ready" });
+      } finally {
+        if (originalMode !== undefined) process.env.BASEGRID_RUNTIME_MODE = originalMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
+        if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
+        else delete process.env.NODE_ENV;
+        (config as any).DATABASE_URL = originalDbUrl;
+        (config as any).REDIS_URL = originalRedisUrl;
       }
     });
   });

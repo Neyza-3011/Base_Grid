@@ -63,7 +63,7 @@ export function createApp(): Express {
     "/ready",
     asyncHandler(async (_req: Request, res: Response) => {
       // In production, DATABASE_URL and REDIS_URL are strictly required
-      const currentMode = config.NODE_ENV === "production" ? "production" : getRuntimeMode();
+      const currentMode = getRuntimeMode();
       if (currentMode === "production") {
         if (!config.DATABASE_URL || !config.REDIS_URL) {
           res.status(503).json({ status: "not_ready" });
