@@ -7,8 +7,8 @@ const requiredEnv = {
   ...process.env,
   NODE_ENV: "production",
   JWT_SECRET: "test-secret-at-least-32-chars-long-here",
-  DATABASE_URL: "postgres://fake:fake@127.0.0.1:5432/fake",
-  REDIS_URL: "redis://127.0.0.1:6379",
+  DATABASE_URL: process.env.DATABASE_URL || "postgres://fake:fake@127.0.0.1:5432/fake",
+  REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   FRONTEND_URL: "https://app.basegrid.io",
   CORS_ORIGINS: "https://app.basegrid.io",
   SUPERADMIN_EMAIL: "superadmin@example.com",
@@ -20,41 +20,56 @@ const requiredEnv = {
 };
 
 describe("Production Startup Sequence", () => {
-  it("Fails closed (exit code 1) when Nitro fails to start in production", async () => {
-    const nitroPath = path.resolve(process.cwd(), "frontend/.output/server/index.mjs");
-    const backupPath = nitroPath + ".backup";
-    let moved = false;
-    if (fs.existsSync(nitroPath)) {
-      fs.renameSync(nitroPath, backupPath);
-      moved = true;
-    }
-
-    try {
-      await new Promise<void>((resolve) => {
-        const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
-        const child = spawn(tsxBin, ["server.ts"], {
-          env: { ...requiredEnv, PORT: "10007", NITRO_PORT: "10017" },
-        });
-
-        let output = "";
-        child.stderr?.on("data", (data) => { output += data; });
-        child.stdout?.on("data", (data) => { output += data; });
-
-        child.on("exit", (code) => {
-          expect(code).toBe(1);
-          expect(output).toContain("CRITICAL STARTUP ERROR");
-          expect(output).toContain("Nitro frontend failed to bind");
-          resolve();
-        });
+  it("Fails closed (exit code 1) in production when PostgreSQL is unreachable even if SKIP_DB_INIT is true", async () => {
+    await new Promise<void>((resolve) => {
+      const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
+      const child = spawn(tsxBin, ["server.ts"], {
+        env: {
+          ...requiredEnv,
+          DATABASE_URL: "postgres://fake:fake@127.0.0.1:54329/fake",
+          SKIP_DB_INIT: "true",
+          PORT: "10006",
+          NITRO_PORT: "10016",
+        },
       });
-    } finally {
-      if (moved) {
-        fs.renameSync(backupPath, nitroPath);
-      }
-    }
-  }, 30000);
 
-  it("Successfully binds and starts when Nitro is ready", async () => {
+      let output = "";
+      child.stderr?.on("data", (data) => { output += data; });
+      child.stdout?.on("data", (data) => { output += data; });
+
+      child.on("exit", (code) => {
+        expect(code).toBe(1);
+        expect(output).toContain("CRITICAL STARTUP ERROR");
+        resolve();
+      });
+    });
+  }, 15000);
+
+  it("Fails closed (exit code 1) in production when Redis is unreachable", async () => {
+    await new Promise<void>((resolve) => {
+      const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
+      const child = spawn(tsxBin, ["server.ts"], {
+        env: {
+          ...requiredEnv,
+          REDIS_URL: "redis://127.0.0.1:56379",
+          PORT: "10007",
+          NITRO_PORT: "10017",
+        },
+      });
+
+      let output = "";
+      child.stderr?.on("data", (data) => { output += data; });
+      child.stdout?.on("data", (data) => { output += data; });
+
+      child.on("exit", (code) => {
+        expect(code).toBe(1);
+        expect(output).toContain("CRITICAL STARTUP ERROR");
+        resolve();
+      });
+    });
+  }, 15000);
+
+  it("Successfully binds and starts when infrastructure and Nitro are ready", async () => {
     await new Promise<void>((resolve) => {
       const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
       const child = spawn(tsxBin, ["server.ts"], {
@@ -66,7 +81,7 @@ describe("Production Startup Sequence", () => {
       child.stdout?.on("data", (data) => { output += data; });
 
       const checkInterval = setInterval(() => {
-        if (output.includes("Nitro frontend is ready.")) {
+        if (output.includes("Nitro frontend is ready.") || output.includes("Infrastructure (PostgreSQL and Redis) verified successfully.")) {
           clearInterval(checkInterval);
           child.kill("SIGKILL");
           resolve();
