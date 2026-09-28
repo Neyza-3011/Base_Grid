@@ -134,6 +134,77 @@ export interface UpdateLocationInput {
 export interface CustomerResponse extends Omit<CustomerRecord, "companyId"> {}
 export interface LocationResponse extends Omit<LocationRecord, "companyId"> {}
 
+// ==============================================================================
+// Asset Types (P1.3 Equipment / Impianti)
+// ==============================================================================
+
+export type AssetType =
+  | "quadro"
+  | "fotovoltaico"
+  | "inverter"
+  | "batteria"
+  | "wallbox"
+  | "climatizzazione"
+  | "automazione"
+  | "allarme"
+  | "rete_cablaggio"
+  | "altro";
+
+export type AssetStatus =
+  | "operativo"
+  | "manutenzione"
+  | "fuori_servizio"
+  | "dismesso";
+
+export interface AssetRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  locationId: string;
+  assetType: AssetType;
+  name: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  installationDate?: string;
+  warrantyEndDate?: string;
+  status: AssetStatus;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetResponse extends Omit<AssetRecord, "companyId"> {}
+
+export interface CreateAssetInput {
+  customerId: string;
+  locationId: string;
+  assetType: AssetType;
+  name: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  installationDate?: string;
+  warrantyEndDate?: string;
+  status?: AssetStatus;
+  notes?: string;
+}
+
+export interface UpdateAssetInput {
+  customerId?: string;
+  locationId?: string;
+  assetType?: AssetType;
+  name?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  installationDate?: string;
+  warrantyEndDate?: string;
+  status?: AssetStatus;
+  notes?: string;
+}
+
 export interface ReportRecord {
   id: string;
   companyId: string;

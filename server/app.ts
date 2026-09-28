@@ -8,6 +8,7 @@ import { companyRouter } from "./routes/company";
 import { adminRouter } from "./routes/admin";
 import { reportsRouter } from "./routes/reports";
 import { customersRouter, locationsRouter } from "./routes/customers";
+import { assetsRouter } from "./routes/assets";
 import { verifyCsrf } from "./middleware/auth";
 import { securityHeaders } from "./middleware/security-headers";
 import { assertValidJwtSecret } from "./security";
@@ -97,6 +98,7 @@ export function createApp(): Express {
   app.use("/api/v1/reports", reportsRouter);
   app.use("/api/v1/customers", customersRouter);
   app.use("/api/v1/locations", locationsRouter);
+  app.use("/api/v1/assets", assetsRouter);
 
   // 404 for unhandled API endpoints
   app.use("/api/*", (_req: Request, res: Response) => {

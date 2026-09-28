@@ -13,6 +13,9 @@ import {
   UserRole,
   CustomerRecord,
   LocationRecord,
+  AssetRecord,
+  AssetType,
+  AssetStatus,
 } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
@@ -132,6 +135,27 @@ function mapLocationRow(row: any): LocationRecord {
     city: row.city,
     province: row.province || undefined,
     postalCode: row.postalCode || undefined,
+    notes: row.notes || undefined,
+    isActive: Boolean(row.isActive),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+  };
+}
+
+function mapAssetRow(row: any): AssetRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    customerId: row.customerId,
+    locationId: row.locationId,
+    assetType: row.assetType as AssetType,
+    name: row.name,
+    manufacturer: row.manufacturer || undefined,
+    model: row.model || undefined,
+    serialNumber: row.serialNumber || undefined,
+    installationDate: row.installationDate || undefined,
+    warrantyEndDate: row.warrantyEndDate || undefined,
+    status: row.status as AssetStatus,
     notes: row.notes || undefined,
     isActive: Boolean(row.isActive),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
@@ -259,6 +283,25 @@ export interface IDatabaseAdapter {
   updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null>;
   archiveLocation(companyId: string, locationId: string): Promise<LocationRecord | null>;
   reactivateLocation(companyId: string, locationId: string): Promise<LocationRecord | null>;
+
+  // --- Assets Operations ---
+  getAssetsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      customerId?: string;
+      locationId?: string;
+      assetType?: string;
+      status?: string;
+      activeOnly?: boolean;
+      limit?: number;
+    }
+  ): Promise<AssetRecord[]>;
+  getAssetByIdAndCompany(assetId: string, companyId: string): Promise<AssetRecord | null>;
+  createAsset(companyId: string, customerId: string, locationId: string, data: Partial<AssetRecord>): Promise<AssetRecord>;
+  updateAsset(companyId: string, assetId: string, data: Partial<AssetRecord>): Promise<AssetRecord | null>;
+  archiveAsset(companyId: string, assetId: string): Promise<AssetRecord | null>;
+  reactivateAsset(companyId: string, assetId: string): Promise<AssetRecord | null>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -1651,5 +1694,202 @@ export class PostgresAdapter implements IDatabaseAdapter {
     );
     if (!res.rows[0]) return null;
     return mapLocationRow(res.rows[0]);
+  }
+
+  // --- Assets Operations ---
+
+  public async getAssetsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      customerId?: string;
+      locationId?: string;
+      assetType?: string;
+      status?: string;
+      activeOnly?: boolean;
+      limit?: number;
+    }
+  ): Promise<AssetRecord[]> {
+    let sql = `SELECT * FROM assets WHERE "companyId" = $1`;
+    const params: any[] = [companyId];
+    let paramIdx = 2;
+
+    if (filters?.customerId) {
+      sql += ` AND "customerId" = $${paramIdx}`;
+      params.push(filters.customerId);
+      paramIdx++;
+    }
+
+    if (filters?.locationId) {
+      sql += ` AND "locationId" = $${paramIdx}`;
+      params.push(filters.locationId);
+      paramIdx++;
+    }
+
+    if (filters?.assetType) {
+      sql += ` AND "assetType" = $${paramIdx}`;
+      params.push(filters.assetType);
+      paramIdx++;
+    }
+
+    if (filters?.status) {
+      sql += ` AND status = $${paramIdx}`;
+      params.push(filters.status);
+      paramIdx++;
+    }
+
+    if (filters?.activeOnly) {
+      sql += ` AND "isActive" = true`;
+    }
+
+    if (filters?.search) {
+      sql += ` AND (
+        name ILIKE $${paramIdx} OR
+        manufacturer ILIKE $${paramIdx} OR
+        model ILIKE $${paramIdx} OR
+        "serialNumber" ILIKE $${paramIdx} OR
+        notes ILIKE $${paramIdx}
+      )`;
+      params.push(`%${filters.search}%`);
+      paramIdx++;
+    }
+
+    const limit = filters?.limit ? filters.limit : 200;
+    sql += ` ORDER BY name ASC, "createdAt" DESC LIMIT $${paramIdx}`;
+    params.push(limit);
+
+    const res = await this.pool.query(sql, params);
+    return res.rows.map(mapAssetRow);
+  }
+
+  public async getAssetByIdAndCompany(assetId: string, companyId: string): Promise<AssetRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM assets WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [assetId, companyId]
+    );
+    return res.rows[0] ? mapAssetRow(res.rows[0]) : null;
+  }
+
+  public async createAsset(
+    companyId: string,
+    customerId: string,
+    locationId: string,
+    data: Partial<AssetRecord>
+  ): Promise<AssetRecord> {
+    // Verify that location exists and belongs to both customer and company
+    const locRes = await this.pool.query(
+      `SELECT id FROM locations WHERE id = $1 AND "customerId" = $2 AND "companyId" = $3 LIMIT 1`,
+      [locationId, customerId, companyId]
+    );
+    if (!locRes.rows[0]) {
+      throw new Error("Invalid location or customer: location does not belong to customer within company.");
+    }
+
+    const now = new Date().toISOString();
+    const id = data.id || `AST-${randomUUID()}`;
+
+    const res = await this.pool.query(
+      `INSERT INTO assets (
+        id, "companyId", "customerId", "locationId", "assetType",
+        name, manufacturer, model, "serialNumber", "installationDate",
+        "warrantyEndDate", status, notes, "isActive", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      RETURNING *`,
+      [
+        id,
+        companyId,
+        customerId,
+        locationId,
+        data.assetType || "altro",
+        data.name || "Impianto",
+        data.manufacturer || null,
+        data.model || null,
+        data.serialNumber || null,
+        data.installationDate || null,
+        data.warrantyEndDate || null,
+        data.status || "operativo",
+        data.notes || null,
+        data.isActive ?? true,
+        now,
+        now,
+      ]
+    );
+    return mapAssetRow(res.rows[0]);
+  }
+
+  public async updateAsset(
+    companyId: string,
+    assetId: string,
+    data: Partial<AssetRecord>
+  ): Promise<AssetRecord | null> {
+    // If customerId or locationId is updated, verify relational consistency
+    if (data.customerId !== undefined || data.locationId !== undefined) {
+      const current = await this.getAssetByIdAndCompany(assetId, companyId);
+      if (!current) return null;
+      const targetCustomer = data.customerId !== undefined ? data.customerId : current.customerId;
+      const targetLocation = data.locationId !== undefined ? data.locationId : current.locationId;
+      const locRes = await this.pool.query(
+        `SELECT id FROM locations WHERE id = $1 AND "customerId" = $2 AND "companyId" = $3 LIMIT 1`,
+        [targetLocation, targetCustomer, companyId]
+      );
+      if (!locRes.rows[0]) {
+        throw new Error("Invalid location or customer: location does not belong to customer within company.");
+      }
+    }
+
+    const now = new Date().toISOString();
+    const setClauses: string[] = ['"updatedAt" = $1'];
+    const params: any[] = [now];
+    let paramIdx = 2;
+
+    const fields = [
+      "customerId",
+      "locationId",
+      "assetType",
+      "name",
+      "manufacturer",
+      "model",
+      "serialNumber",
+      "installationDate",
+      "warrantyEndDate",
+      "status",
+      "notes",
+      "isActive",
+    ];
+
+    for (const field of fields) {
+      if ((data as any)[field] !== undefined) {
+        setClauses.push(`"${field}" = $${paramIdx}`);
+        params.push((data as any)[field]);
+        paramIdx++;
+      }
+    }
+
+    params.push(assetId, companyId);
+    const sql = `UPDATE assets SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
+
+    const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapAssetRow(res.rows[0]);
+  }
+
+  public async archiveAsset(companyId: string, assetId: string): Promise<AssetRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE assets SET "isActive" = false, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, assetId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapAssetRow(res.rows[0]);
+  }
+
+  public async reactivateAsset(companyId: string, assetId: string): Promise<AssetRecord | null> {
+    const now = new Date().toISOString();
+    const res = await this.pool.query(
+      `UPDATE assets SET "isActive" = true, "updatedAt" = $1 WHERE id = $2 AND "companyId" = $3 RETURNING *`,
+      [now, assetId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapAssetRow(res.rows[0]);
   }
 }

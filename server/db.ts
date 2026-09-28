@@ -10,6 +10,9 @@ import {
   UserRole,
   CustomerRecord,
   LocationRecord,
+  AssetRecord,
+  AssetType,
+  AssetStatus,
 } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
@@ -26,6 +29,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   private inviteTokens: Map<string, InviteTokenRecord> = new Map();
   private customers: Map<string, CustomerRecord> = new Map();
   private locations: Map<string, LocationRecord> = new Map();
+  private assets: Map<string, AssetRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -44,6 +48,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.inviteTokens.clear();
     this.customers.clear();
     this.locations.clear();
+    this.assets.clear();
     this.tokenStore.reset();
 
     const now = new Date().toISOString();
@@ -973,6 +978,157 @@ export class DatabaseStore implements IDatabaseAdapter {
 
     this.locations.set(locationId, updatedLocation);
     return updatedLocation;
+  }
+
+  // --- Assets Operations ---
+
+  public async getAssetsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      customerId?: string;
+      locationId?: string;
+      assetType?: string;
+      status?: string;
+      activeOnly?: boolean;
+      limit?: number;
+    }
+  ): Promise<AssetRecord[]> {
+    const list: AssetRecord[] = [];
+    for (const asset of this.assets.values()) {
+      if (asset.companyId !== companyId) continue;
+
+      if (filters?.customerId && asset.customerId !== filters.customerId) {
+        continue;
+      }
+      if (filters?.locationId && asset.locationId !== filters.locationId) {
+        continue;
+      }
+      if (filters?.assetType && asset.assetType !== filters.assetType) {
+        continue;
+      }
+      if (filters?.status && asset.status !== filters.status) {
+        continue;
+      }
+      if (filters?.activeOnly && !asset.isActive) {
+        continue;
+      }
+      if (filters?.search) {
+        const s = filters.search.toLowerCase();
+        const matches =
+          asset.name.toLowerCase().includes(s) ||
+          (asset.manufacturer && asset.manufacturer.toLowerCase().includes(s)) ||
+          (asset.model && asset.model.toLowerCase().includes(s)) ||
+          (asset.serialNumber && asset.serialNumber.toLowerCase().includes(s)) ||
+          (asset.notes && asset.notes.toLowerCase().includes(s));
+        if (!matches) continue;
+      }
+
+      list.push(asset);
+    }
+
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    const limit = filters?.limit ? filters.limit : 200;
+    return list.slice(0, limit);
+  }
+
+  public async getAssetByIdAndCompany(assetId: string, companyId: string): Promise<AssetRecord | null> {
+    const asset = this.assets.get(assetId);
+    if (!asset || asset.companyId !== companyId) return null;
+    return asset;
+  }
+
+  public async createAsset(
+    companyId: string,
+    customerId: string,
+    locationId: string,
+    data: Partial<AssetRecord>
+  ): Promise<AssetRecord> {
+    // Verify that location exists and belongs to both customer and company
+    const loc = this.locations.get(locationId);
+    if (!loc || loc.companyId !== companyId || loc.customerId !== customerId) {
+      throw new Error("Invalid location or customer: location does not belong to customer within company.");
+    }
+
+    const now = new Date().toISOString();
+    const id = data.id || `AST-${randomUUID()}`;
+
+    const newAsset: AssetRecord = {
+      id,
+      companyId,
+      customerId,
+      locationId,
+      assetType: (data.assetType as AssetType) || "altro",
+      name: data.name || "Impianto",
+      manufacturer: data.manufacturer,
+      model: data.model,
+      serialNumber: data.serialNumber,
+      installationDate: data.installationDate,
+      warrantyEndDate: data.warrantyEndDate,
+      status: (data.status as AssetStatus) || "operativo",
+      notes: data.notes,
+      isActive: data.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.assets.set(id, newAsset);
+    return newAsset;
+  }
+
+  public async updateAsset(
+    companyId: string,
+    assetId: string,
+    data: Partial<AssetRecord>
+  ): Promise<AssetRecord | null> {
+    const asset = await this.getAssetByIdAndCompany(assetId, companyId);
+    if (!asset) return null;
+
+    if (data.customerId !== undefined || data.locationId !== undefined) {
+      const targetCustomer = data.customerId !== undefined ? data.customerId : asset.customerId;
+      const targetLocation = data.locationId !== undefined ? data.locationId : asset.locationId;
+      const loc = this.locations.get(targetLocation);
+      if (!loc || loc.companyId !== companyId || loc.customerId !== targetCustomer) {
+        throw new Error("Invalid location or customer: location does not belong to customer within company.");
+      }
+    }
+
+    const updatedAsset: AssetRecord = {
+      ...asset,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.assets.set(assetId, updatedAsset);
+    return updatedAsset;
+  }
+
+  public async archiveAsset(companyId: string, assetId: string): Promise<AssetRecord | null> {
+    const asset = await this.getAssetByIdAndCompany(assetId, companyId);
+    if (!asset) return null;
+
+    const updatedAsset: AssetRecord = {
+      ...asset,
+      isActive: false,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.assets.set(assetId, updatedAsset);
+    return updatedAsset;
+  }
+
+  public async reactivateAsset(companyId: string, assetId: string): Promise<AssetRecord | null> {
+    const asset = await this.getAssetByIdAndCompany(assetId, companyId);
+    if (!asset) return null;
+
+    const updatedAsset: AssetRecord = {
+      ...asset,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.assets.set(assetId, updatedAsset);
+    return updatedAsset;
   }
 
   private isExplicitlyDisabled = false;

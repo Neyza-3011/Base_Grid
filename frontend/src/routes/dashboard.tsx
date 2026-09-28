@@ -17,6 +17,7 @@ import {
   Settings,
   AlertCircle,
   Mail,
+  Cpu,
 } from "lucide-react";
 import { fetchServerSession, logoutUser, resendVerificationEmail, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ import { DashboardAnalyticsView } from "@/components/dashboard/DashboardAnalytic
 import { PdfPreviewModal } from "@/components/dashboard/PdfPreviewModal";
 import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
+import { AssetsView } from "@/components/dashboard/AssetsView";
 import { BaseGridLogo } from "@/components/common/BaseGridLogo";
 
 import {
@@ -174,20 +176,37 @@ function Dashboard() {
         </button>
 
         {currentUser.role !== "cliente" && (
-          <button
-            onClick={() => {
-              setActiveView("customers");
-              setSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
-              activeView === "customers"
-                ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
-                : "text-white/70 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Building2 className="h-4 w-4" />
-            <span>Clienti & Sedi</span>
-          </button>
+          <>
+            <button
+              onClick={() => {
+                setActiveView("customers");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+                activeView === "customers"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Building2 className="h-4 w-4" />
+              <span>Clienti & Sedi</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveView("assets");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+                activeView === "assets"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Cpu className="h-4 w-4" />
+              <span>Impianti & Asset</span>
+            </button>
+          </>
         )}
 
         {(currentUser.role === "admin" ||
@@ -418,6 +437,7 @@ function Dashboard() {
           {activeView === "reports" && <ReportsView />}
           {activeView === "team" && <TeamManagementView currentUser={currentUser} />}
           {activeView === "customers" && <CustomersView />}
+          {activeView === "assets" && <AssetsView currentUser={currentUser} />}
         </main>
       </div>
 
