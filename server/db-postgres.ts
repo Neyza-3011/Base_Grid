@@ -19,6 +19,7 @@ import {
 } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
+import { getRuntimeMode } from "./runtime-mode";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -309,9 +310,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
   private isClosed = false;
   public tokenStore = tokenStore;
 
-  constructor(customPool?: Pool) {
-    if (customPool) {
-      this.pool = customPool;
+  constructor(customPoolOrUrl?: Pool | string) {
+    if (customPoolOrUrl && typeof (customPoolOrUrl as any).query === "function") {
+      this.pool = customPoolOrUrl as Pool;
       if (typeof (this.pool as any).on === "function") {
         this.pool.on("error", (err: any) => {
           console.error("[PostgresPoolError] Unexpected error on idle PostgreSQL client:", err?.message || err);
@@ -320,8 +321,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       return;
     }
 
-    const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
-    const dbUrl = isProd ? process.env.DATABASE_URL : (process.env.DATABASE_URL || config.DATABASE_URL);
+    const mode = getRuntimeMode();
+    const isProd = mode === "production";
+    const dbUrl = typeof customPoolOrUrl === "string"
+      ? customPoolOrUrl
+      : (isProd ? process.env.DATABASE_URL : (process.env.DATABASE_URL || config.DATABASE_URL));
 
     if (!dbUrl && isProd) {
       throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");
@@ -445,26 +449,54 @@ export class PostgresAdapter implements IDatabaseAdapter {
       if (usersRes.rows.length === 0) {
         // CASE A: No matching user exists by ID or email -> create SuperAdmin
         const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
-        await this.pool.query(
-          `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-          [
-            masterUserId,
-            saEmail,
-            "System SuperAdmin",
-            "superadmin",
-            masterCompanyId,
-            masterCompanyName,
-            hash,
-            salt,
-            true,
-            "local",
-            true,
-            "+39 02 1234567",
-            now,
-            now,
-          ],
-        );
+        try {
+          await this.pool.query(
+            `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [
+              masterUserId,
+              saEmail,
+              "System SuperAdmin",
+              "superadmin",
+              masterCompanyId,
+              masterCompanyName,
+              hash,
+              salt,
+              true,
+              "local",
+              true,
+              "+39 02 1234567",
+              now,
+              now,
+            ],
+          );
+        } catch (insertErr: any) {
+          // Concurrency protection: if another process concurrently inserted between SELECT and INSERT
+          if (
+            insertErr?.code === "23505" ||
+            String(insertErr?.message || "").includes("duplicate key") ||
+            String(insertErr?.message || "").includes("unique constraint")
+          ) {
+            const recheck = await this.pool.query(
+              'SELECT id, email, role FROM users WHERE id = $1 OR email = $2',
+              [masterUserId, saEmail],
+            );
+            if (
+              recheck.rows.length === 1 &&
+              recheck.rows[0].id === masterUserId &&
+              recheck.rows[0].email === saEmail
+            ) {
+              await this.pool.query(
+                `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+                [hash, salt, now, masterUserId],
+              );
+            } else {
+              throw insertErr;
+            }
+          } else {
+            throw insertErr;
+          }
+        }
       } else if (usersRes.rows.length === 1) {
         const existing = usersRes.rows[0];
         if (existing.id === masterUserId && existing.email === saEmail) {

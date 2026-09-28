@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { getRuntimeMode } from "./runtime-mode";
 import { getJwtSecret, assertValidJwtSecret } from "./security";
-import { loadConfig } from "./config";
+import { loadConfig, config } from "./config";
 import { createDatabaseAdapter, DatabaseStore, PostgresAdapter } from "./db";
 import { RefreshTokenStore, DistributedStorageEngine, RedisTokenStorageAdapter } from "./token-store";
 
@@ -127,6 +127,40 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       }).toThrow(/CRITICAL CONFIG ERROR: REDIS_URL must be provided/i);
     });
 
+    it("5b. production without REDIS_URL => RefreshTokenStore fails closed", () => {
+      const origMode = process.env.BASEGRID_RUNTIME_MODE;
+      const origRedis = process.env.REDIS_URL;
+      const origHost = process.env.REDIS_HOST;
+      try {
+        process.env.BASEGRID_RUNTIME_MODE = "production";
+        delete process.env.REDIS_URL;
+        delete process.env.REDIS_HOST;
+        expect(() => new RefreshTokenStore()).toThrow(/REDIS_URL or REDIS_HOST must be provided in production/i);
+      } finally {
+        if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
+        if (origRedis) process.env.REDIS_URL = origRedis;
+        else delete process.env.REDIS_URL;
+        if (origHost) process.env.REDIS_HOST = origHost;
+        else delete process.env.REDIS_HOST;
+      }
+    });
+
+    it("4b. production without DATABASE_URL => PostgresAdapter fails closed", () => {
+      const origMode = process.env.BASEGRID_RUNTIME_MODE;
+      const origDb = process.env.DATABASE_URL;
+      try {
+        process.env.BASEGRID_RUNTIME_MODE = "production";
+        delete process.env.DATABASE_URL;
+        expect(() => new PostgresAdapter()).toThrow(/DATABASE_URL is missing in production/i);
+      } finally {
+        if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
+        if (origDb) process.env.DATABASE_URL = origDb;
+        else delete process.env.DATABASE_URL;
+      }
+    });
+
     it("9. ai-studio without REDIS_URL => uses in-memory token store", () => {
       const store = new RefreshTokenStore();
       expect(store.isAvailable()).toBe(true);
@@ -145,6 +179,41 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
         else delete process.env.BASEGRID_RUNTIME_MODE;
         if (origNodeEnv) process.env.NODE_ENV = origNodeEnv;
         else delete process.env.NODE_ENV;
+      }
+    });
+
+    it("verifies BASEGRID_RUNTIME_MODE=ai-studio + NODE_ENV=production without DATABASE_URL/REDIS_URL", () => {
+      const origMode = process.env.BASEGRID_RUNTIME_MODE;
+      const origNodeEnv = process.env.NODE_ENV;
+      const origDb = process.env.DATABASE_URL;
+      const origRedis = process.env.REDIS_URL;
+      try {
+        process.env.BASEGRID_RUNTIME_MODE = "ai-studio";
+        process.env.NODE_ENV = "production";
+        delete process.env.DATABASE_URL;
+        delete process.env.REDIS_URL;
+
+        // getRuntimeMode() -> ai-studio
+        expect(getRuntimeMode()).toBe("ai-studio");
+
+        // createDatabaseAdapter() -> DatabaseStore
+        const adapter = createDatabaseAdapter();
+        expect(adapter).toBeInstanceOf(DatabaseStore);
+
+        // new DistributedStorageEngine() non fallisce
+        expect(() => new DistributedStorageEngine()).not.toThrow();
+
+        // new DatabaseStore() non fallisce
+        expect(() => new DatabaseStore()).not.toThrow();
+      } finally {
+        if (origMode !== undefined) process.env.BASEGRID_RUNTIME_MODE = origMode;
+        else delete process.env.BASEGRID_RUNTIME_MODE;
+        if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+        else delete process.env.NODE_ENV;
+        if (origDb !== undefined) process.env.DATABASE_URL = origDb;
+        else delete process.env.DATABASE_URL;
+        if (origRedis !== undefined) process.env.REDIS_URL = origRedis;
+        else delete process.env.REDIS_URL;
       }
     });
 
@@ -205,6 +274,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
 
   describe("SuperAdmin Bootstrap Idempotency & Collision Safety", () => {
     it("11 & 12. handles Case A, Case B, Case C, and Case D safely", async () => {
+      const targetEmail = (config.SUPERADMIN_EMAIL || "saas@rapporti.it").trim().toLowerCase();
       const mockPool = {
         query: vi.fn(),
       };
@@ -226,7 +296,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       mockPool.query.mockReset();
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // companies insert
       mockPool.query.mockResolvedValueOnce({
-        rows: [{ id: "usr-superadmin-001", email: "saas@rapporti.it", role: "superadmin" }],
+        rows: [{ id: "usr-superadmin-001", email: targetEmail, role: "superadmin" }],
       });
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // users update
       await postgresAdapter.initDatabase();
@@ -239,7 +309,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       mockPool.query.mockReset();
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // companies insert
       mockPool.query.mockResolvedValueOnce({
-        rows: [{ id: "usr-different-002", email: "saas@rapporti.it", role: "admin" }],
+        rows: [{ id: "usr-different-002", email: targetEmail, role: "admin" }],
       });
       await expect(postgresAdapter.initDatabase()).rejects.toThrow(
         /CRITICAL BOOTSTRAP ERROR: SuperAdmin email .* is already assigned to a different user ID/i
@@ -249,10 +319,42 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       mockPool.query.mockReset();
       mockPool.query.mockResolvedValueOnce({ rows: [] }); // companies insert
       mockPool.query.mockResolvedValueOnce({
-        rows: [{ id: "usr-superadmin-001", email: "other@rapporti.it", role: "superadmin" }],
+        rows: [{ id: "usr-superadmin-001", email: "other-conflicting@rapporti.it", role: "superadmin" }],
       });
       await expect(postgresAdapter.initDatabase()).rejects.toThrow(
         /CRITICAL BOOTSTRAP ERROR: SuperAdmin ID .* is already assigned to a different email/i
+      );
+    });
+
+    it("handles concurrent startup duplicate-key race condition without crashing", async () => {
+      const targetEmail = (config.SUPERADMIN_EMAIL || "saas@rapporti.it").trim().toLowerCase();
+      const mockPool = {
+        query: vi.fn(),
+      };
+
+      const postgresAdapter = Object.create(PostgresAdapter.prototype);
+      (postgresAdapter as any).pool = mockPool;
+
+      // 1. companies insert -> success
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+      // 2. users SELECT (0 rows) -> triggers Case A
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+      // 3. users INSERT -> fails with duplicate key 23505 (another worker inserted first)
+      const duplicateKeyErr: any = new Error('duplicate key value violates unique constraint "users_pkey"');
+      duplicateKeyErr.code = "23505";
+      mockPool.query.mockRejectedValueOnce(duplicateKeyErr);
+      // 4. recheck SELECT -> finds the concurrently inserted SuperAdmin record
+      mockPool.query.mockResolvedValueOnce({
+        rows: [{ id: "usr-superadmin-001", email: targetEmail, role: "superadmin" }],
+      });
+      // 5. UPDATE users -> reconciles safely
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      await expect(postgresAdapter.initDatabase()).resolves.not.toThrow();
+
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE users SET"),
+        expect.arrayContaining(["usr-superadmin-001"])
       );
     });
   });

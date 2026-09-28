@@ -11,7 +11,7 @@ import { runMigrations } from "./server/migrator";
 import { getRuntimeMode } from "./server/runtime-mode";
 
 const mode = getRuntimeMode();
-const isProd = mode === "production" || mode === "ai-studio" || process.env.NODE_ENV === "production";
+const isProd = mode === "production";
 
 async function startServer() {
   const app = createApp();

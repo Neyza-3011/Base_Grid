@@ -184,7 +184,7 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
         enableOfflineQueue: false,
       });
     } else {
-      const url = config.REDIS_URL;
+      const url = process.env.REDIS_URL || config.REDIS_URL;
       if (url) {
         this.client = new Redis(url, {
           lazyConnect: true,
@@ -192,8 +192,8 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
           enableOfflineQueue: false,
         });
       } else {
-        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-        if (isProd) {
+        const mode = getRuntimeMode();
+        if (mode === "production") {
           throw new Error("CRITICAL SECURITY ERROR: REDIS_URL is required in production for distributed token revocation.");
         }
         const host = config.REDIS_HOST;
@@ -699,7 +699,7 @@ export class RefreshTokenStore {
     const mode = getRuntimeMode();
     if (mode === "test") {
       this.adapter = new DistributedStorageEngine();
-    } else if (config.REDIS_URL || (config.REDIS_HOST && config.REDIS_HOST !== "127.0.0.1" && process.env.REDIS_HOST)) {
+    } else if (process.env.REDIS_URL || config.REDIS_URL || (config.REDIS_HOST && config.REDIS_HOST !== "127.0.0.1" && process.env.REDIS_HOST)) {
       this.adapter = new RedisTokenStorageAdapter();
     } else if (mode === "production") {
       throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");

@@ -1147,16 +1147,17 @@ export class DatabaseStore implements IDatabaseAdapter {
  * Database Provider Factory:
  * Strictly selects PostgresAdapter in production and DatabaseStore in development/test or AI Studio standalone without DATABASE_URL.
  */
-export function createDatabaseAdapter(envConfig: ServerConfig = config): IDatabaseAdapter {
-  const mode =
-    (envConfig as any).BASEGRID_RUNTIME_MODE ||
-    (envConfig.NODE_ENV === "production" ? "production" : getRuntimeMode());
+export function createDatabaseAdapter(envConfig?: ServerConfig): IDatabaseAdapter {
+  const isCustomConfig = Boolean(envConfig && envConfig !== config);
+  const mode = isCustomConfig ? getRuntimeMode(envConfig as any) : getRuntimeMode();
   if (mode === "production") {
-    return new PostgresAdapter();
+    const dbUrl = isCustomConfig ? (envConfig as any)?.DATABASE_URL : undefined;
+    return new PostgresAdapter(dbUrl);
   }
   if (mode === "ai-studio") {
-    if (envConfig.DATABASE_URL || process.env.DATABASE_URL) {
-      return new PostgresAdapter();
+    const dbUrl = (envConfig && envConfig?.DATABASE_URL) || process.env.DATABASE_URL;
+    if (dbUrl) {
+      return new PostgresAdapter(dbUrl);
     }
     return new DatabaseStore();
   }
