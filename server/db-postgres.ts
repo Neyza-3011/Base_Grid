@@ -16,6 +16,9 @@ import {
   AssetRecord,
   AssetType,
   AssetStatus,
+  InterventionRecord,
+  InterventionPriority,
+  InterventionStatus,
 } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
@@ -182,6 +185,30 @@ function mapInviteTokenRow(row: any): InviteTokenRecord {
   };
 }
 
+function mapInterventionRow(row: any): InterventionRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    customerId: row.customerId,
+    locationId: row.locationId,
+    assetId: row.assetId || undefined,
+    description: row.description,
+    problem: row.problem || undefined,
+    priority: row.priority as InterventionPriority,
+    status: row.status as InterventionStatus,
+    scheduledStart: row.scheduledStart instanceof Date ? row.scheduledStart.toISOString() : (row.scheduledStart ? String(row.scheduledStart) : undefined),
+    scheduledEnd: row.scheduledEnd instanceof Date ? row.scheduledEnd.toISOString() : (row.scheduledEnd ? String(row.scheduledEnd) : undefined),
+    technicianId: row.technicianId || undefined,
+    estimatedHours: row.estimatedHours !== null && row.estimatedHours !== undefined ? Number(row.estimatedHours) : undefined,
+    actualHours: row.actualHours !== null && row.actualHours !== undefined ? Number(row.actualHours) : undefined,
+    notes: row.notes || undefined,
+    createdBy: row.createdBy,
+    updatedBy: row.updatedBy,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
+  };
+}
+
 export type TransactionClient = PoolClient;
 
 export interface IDatabaseAdapter {
@@ -303,6 +330,40 @@ export interface IDatabaseAdapter {
   updateAsset(companyId: string, assetId: string, data: Partial<AssetRecord>): Promise<AssetRecord | null>;
   archiveAsset(companyId: string, assetId: string): Promise<AssetRecord | null>;
   reactivateAsset(companyId: string, assetId: string): Promise<AssetRecord | null>;
+
+  // --- Interventions Operations (P1.4) ---
+  getInterventionsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      status?: string;
+      priority?: string;
+      technicianId?: string;
+      customerId?: string;
+      locationId?: string;
+      assetId?: string;
+      scheduledStartFrom?: string;
+      scheduledStartTo?: string;
+      limit?: number;
+      cursor?: string;
+    }
+  ): Promise<{ items: InterventionRecord[]; nextCursor?: string; totalCount?: number }>;
+  getInterventionByIdAndCompany(interventionId: string, companyId: string): Promise<InterventionRecord | null>;
+  createIntervention(
+    companyId: string,
+    data: Partial<InterventionRecord> & {
+      customerId: string;
+      locationId: string;
+      description: string;
+      createdBy: string;
+      updatedBy: string;
+    }
+  ): Promise<InterventionRecord>;
+  updateIntervention(
+    companyId: string,
+    interventionId: string,
+    data: Partial<InterventionRecord> & { updatedBy: string }
+  ): Promise<InterventionRecord | null>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -1954,5 +2015,226 @@ export class PostgresAdapter implements IDatabaseAdapter {
     );
     if (!res.rows[0]) return null;
     return mapAssetRow(res.rows[0]);
+  }
+
+  // --- Interventions Operations (P1.4) ---
+
+  public async getInterventionsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      status?: string;
+      priority?: string;
+      technicianId?: string;
+      customerId?: string;
+      locationId?: string;
+      assetId?: string;
+      scheduledStartFrom?: string;
+      scheduledStartTo?: string;
+      limit?: number;
+      cursor?: string;
+    }
+  ): Promise<{ items: InterventionRecord[]; nextCursor?: string; totalCount?: number }> {
+    const boundedLimit = Math.min(Math.max(Number(filters?.limit) || 50, 1), 100);
+    const conditions: string[] = ['"companyId" = $1'];
+    const params: any[] = [companyId];
+    let paramIdx = 2;
+
+    if (filters?.status) {
+      conditions.push(`status = $${paramIdx}`);
+      params.push(filters.status);
+      paramIdx++;
+    }
+
+    if (filters?.priority) {
+      conditions.push(`priority = $${paramIdx}`);
+      params.push(filters.priority);
+      paramIdx++;
+    }
+
+    if (filters?.technicianId) {
+      conditions.push(`"technicianId" = $${paramIdx}`);
+      params.push(filters.technicianId);
+      paramIdx++;
+    }
+
+    if (filters?.customerId) {
+      conditions.push(`"customerId" = $${paramIdx}`);
+      params.push(filters.customerId);
+      paramIdx++;
+    }
+
+    if (filters?.locationId) {
+      conditions.push(`"locationId" = $${paramIdx}`);
+      params.push(filters.locationId);
+      paramIdx++;
+    }
+
+    if (filters?.assetId) {
+      conditions.push(`"assetId" = $${paramIdx}`);
+      params.push(filters.assetId);
+      paramIdx++;
+    }
+
+    if (filters?.scheduledStartFrom) {
+      conditions.push(`"scheduledStart" >= $${paramIdx}`);
+      params.push(filters.scheduledStartFrom);
+      paramIdx++;
+    }
+
+    if (filters?.scheduledStartTo) {
+      conditions.push(`"scheduledStart" <= $${paramIdx}`);
+      params.push(filters.scheduledStartTo);
+      paramIdx++;
+    }
+
+    if (filters?.search && filters.search.trim().length > 0) {
+      const searchPattern = `%${filters.search.trim()}%`;
+      conditions.push(`(description ILIKE $${paramIdx} OR problem ILIKE $${paramIdx} OR notes ILIKE $${paramIdx})`);
+      params.push(searchPattern);
+      paramIdx++;
+    }
+
+    if (filters?.cursor) {
+      try {
+        const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
+        const [cursorCreatedAt, cursorId] = decoded.split("::");
+        if (cursorCreatedAt && cursorId) {
+          conditions.push(`("createdAt", id) < ($${paramIdx}, $${paramIdx + 1})`);
+          params.push(cursorCreatedAt, cursorId);
+          paramIdx += 2;
+        }
+      } catch {
+        // Ignore invalid cursor
+      }
+    }
+
+    const whereClause = conditions.join(" AND ");
+    const fetchLimit = boundedLimit + 1;
+    params.push(fetchLimit);
+    const sql = `SELECT * FROM interventions WHERE ${whereClause} ORDER BY "createdAt" DESC, id DESC LIMIT $${paramIdx}`;
+
+    const res = await this.pool.query(sql, params);
+    const rows = res.rows;
+    let nextCursor: string | undefined = undefined;
+
+    if (rows.length > boundedLimit) {
+      const extra = rows.pop(); // remove extra item
+      const lastItem = rows[rows.length - 1];
+      if (lastItem) {
+        const cDate = lastItem.createdAt instanceof Date ? lastItem.createdAt.toISOString() : String(lastItem.createdAt);
+        nextCursor = Buffer.from(`${cDate}::${lastItem.id}`).toString("base64");
+      }
+    }
+
+    return {
+      items: rows.map(mapInterventionRow),
+      nextCursor,
+      totalCount: rows.length,
+    };
+  }
+
+  public async getInterventionByIdAndCompany(
+    interventionId: string,
+    companyId: string
+  ): Promise<InterventionRecord | null> {
+    const res = await this.pool.query(
+      `SELECT * FROM interventions WHERE id = $1 AND "companyId" = $2`,
+      [interventionId, companyId]
+    );
+    if (!res.rows[0]) return null;
+    return mapInterventionRow(res.rows[0]);
+  }
+
+  public async createIntervention(
+    companyId: string,
+    data: Partial<InterventionRecord> & {
+      customerId: string;
+      locationId: string;
+      description: string;
+      createdBy: string;
+      updatedBy: string;
+    }
+  ): Promise<InterventionRecord> {
+    const id = data.id || randomUUID();
+    const now = new Date().toISOString();
+    const priority = data.priority || "media";
+    const status = data.status || "nuovo";
+
+    const res = await this.pool.query(
+      `INSERT INTO interventions (
+        id, "companyId", "customerId", "locationId", "assetId",
+        description, problem, priority, status,
+        "scheduledStart", "scheduledEnd", "technicianId",
+        "estimatedHours", "actualHours", notes,
+        "createdBy", "updatedBy", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      RETURNING *`,
+      [
+        id,
+        companyId,
+        data.customerId,
+        data.locationId,
+        data.assetId || null,
+        data.description,
+        data.problem || null,
+        priority,
+        status,
+        data.scheduledStart || null,
+        data.scheduledEnd || null,
+        data.technicianId || null,
+        data.estimatedHours !== undefined && data.estimatedHours !== null ? data.estimatedHours : null,
+        data.actualHours !== undefined && data.actualHours !== null ? data.actualHours : null,
+        data.notes || null,
+        data.createdBy,
+        data.updatedBy,
+        data.createdAt || now,
+        data.updatedAt || now,
+      ]
+    );
+
+    return mapInterventionRow(res.rows[0]);
+  }
+
+  public async updateIntervention(
+    companyId: string,
+    interventionId: string,
+    data: Partial<InterventionRecord> & { updatedBy: string }
+  ): Promise<InterventionRecord | null> {
+    const now = new Date().toISOString();
+    const setClauses: string[] = ['"updatedAt" = $1', '"updatedBy" = $2'];
+    const params: any[] = [now, data.updatedBy];
+    let paramIdx = 3;
+
+    const fields = [
+      "customerId",
+      "locationId",
+      "assetId",
+      "description",
+      "problem",
+      "priority",
+      "status",
+      "scheduledStart",
+      "scheduledEnd",
+      "technicianId",
+      "estimatedHours",
+      "actualHours",
+      "notes",
+    ];
+
+    for (const field of fields) {
+      if ((data as any)[field] !== undefined) {
+        setClauses.push(`"${field}" = $${paramIdx}`);
+        params.push((data as any)[field]);
+        paramIdx++;
+      }
+    }
+
+    params.push(interventionId, companyId);
+    const sql = `UPDATE interventions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
+
+    const res = await this.pool.query(sql, params);
+    if (!res.rows[0]) return null;
+    return mapInterventionRow(res.rows[0]);
   }
 }

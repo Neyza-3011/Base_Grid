@@ -205,6 +205,125 @@ export interface UpdateAssetInput {
   notes?: string;
 }
 
+// ==============================================================================
+// Intervention Types (P1.4 Interventions Module)
+// ==============================================================================
+
+export type InterventionPriority = "bassa" | "media" | "alta" | "urgente";
+
+export type InterventionStatus =
+  | "nuovo"
+  | "da_assegnare"
+  | "assegnato"
+  | "in_viaggio"
+  | "sul_posto"
+  | "in_lavorazione"
+  | "in_attesa"
+  | "completato"
+  | "verificato"
+  | "pronto_per_fatturazione"
+  | "fatturato";
+
+export const VALID_INTERVENTION_PRIORITIES: readonly InterventionPriority[] = [
+  "bassa",
+  "media",
+  "alta",
+  "urgente",
+] as const;
+
+export const VALID_INTERVENTION_STATUSES: readonly InterventionStatus[] = [
+  "nuovo",
+  "da_assegnare",
+  "assegnato",
+  "in_viaggio",
+  "sul_posto",
+  "in_lavorazione",
+  "in_attesa",
+  "completato",
+  "verificato",
+  "pronto_per_fatturazione",
+  "fatturato",
+] as const;
+
+export const VALID_STATUS_TRANSITIONS: Record<InterventionStatus, readonly InterventionStatus[]> = {
+  nuovo: ["da_assegnare"],
+  da_assegnare: ["assegnato"],
+  assegnato: ["in_viaggio"],
+  in_viaggio: ["sul_posto"],
+  sul_posto: ["in_lavorazione"],
+  in_lavorazione: ["in_attesa", "completato"],
+  in_attesa: ["in_lavorazione", "completato"],
+  completato: ["verificato"],
+  verificato: ["pronto_per_fatturazione"],
+  pronto_per_fatturazione: ["fatturato"],
+  fatturato: [],
+};
+
+export interface InterventionRecord {
+  id: string;
+  companyId: string;
+  customerId: string;
+  locationId: string;
+  assetId?: string;
+  description: string;
+  problem?: string;
+  priority: InterventionPriority;
+  status: InterventionStatus;
+  scheduledStart?: string;
+  scheduledEnd?: string;
+  technicianId?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  notes?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterventionResponse extends Omit<InterventionRecord, "companyId"> {
+  customerName?: string;
+  locationName?: string;
+  assetName?: string;
+  technicianName?: string;
+}
+
+export interface CreateInterventionInput {
+  customerId: string;
+  locationId: string;
+  assetId?: string;
+  description: string;
+  problem?: string;
+  priority?: InterventionPriority;
+  scheduledStart?: string;
+  scheduledEnd?: string;
+  technicianId?: string;
+  estimatedHours?: number;
+  notes?: string;
+}
+
+export interface UpdateInterventionInput {
+  customerId?: string;
+  locationId?: string;
+  assetId?: string | null;
+  description?: string;
+  problem?: string | null;
+  priority?: InterventionPriority;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  technicianId?: string | null;
+  estimatedHours?: number | null;
+  actualHours?: number | null;
+  notes?: string | null;
+}
+
+export interface TransitionInterventionInput {
+  targetStatus: InterventionStatus;
+  technicianId?: string;
+  actualHours?: number;
+  notes?: string;
+}
+
 export interface ReportRecord {
   id: string;
   companyId: string;

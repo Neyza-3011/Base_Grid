@@ -13,6 +13,9 @@ import {
   AssetRecord,
   AssetType,
   AssetStatus,
+  InterventionRecord,
+  InterventionPriority,
+  InterventionStatus,
 } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
@@ -31,6 +34,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   private customers: Map<string, CustomerRecord> = new Map();
   private locations: Map<string, LocationRecord> = new Map();
   private assets: Map<string, AssetRecord> = new Map();
+  private interventions: Map<string, InterventionRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -50,6 +54,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.customers.clear();
     this.locations.clear();
     this.assets.clear();
+    this.interventions.clear();
     this.tokenStore.reset();
 
     const now = new Date().toISOString();
@@ -1130,6 +1135,179 @@ export class DatabaseStore implements IDatabaseAdapter {
 
     this.assets.set(assetId, updatedAsset);
     return updatedAsset;
+  }
+
+  // --- Interventions Operations (P1.4) ---
+
+  public async getInterventionsByCompany(
+    companyId: string,
+    filters?: {
+      search?: string;
+      status?: string;
+      priority?: string;
+      technicianId?: string;
+      customerId?: string;
+      locationId?: string;
+      assetId?: string;
+      scheduledStartFrom?: string;
+      scheduledStartTo?: string;
+      limit?: number;
+      cursor?: string;
+    }
+  ): Promise<{ items: InterventionRecord[]; nextCursor?: string; totalCount?: number }> {
+    const boundedLimit = Math.min(Math.max(Number(filters?.limit) || 50, 1), 100);
+
+    let list = Array.from(this.interventions.values()).filter((item) => item.companyId === companyId);
+
+    if (filters?.status) {
+      list = list.filter((item) => item.status === filters.status);
+    }
+    if (filters?.priority) {
+      list = list.filter((item) => item.priority === filters.priority);
+    }
+    if (filters?.technicianId) {
+      list = list.filter((item) => item.technicianId === filters.technicianId);
+    }
+    if (filters?.customerId) {
+      list = list.filter((item) => item.customerId === filters.customerId);
+    }
+    if (filters?.locationId) {
+      list = list.filter((item) => item.locationId === filters.locationId);
+    }
+    if (filters?.assetId) {
+      list = list.filter((item) => item.assetId === filters.assetId);
+    }
+    if (filters?.scheduledStartFrom) {
+      const fromDate = new Date(filters.scheduledStartFrom).getTime();
+      list = list.filter((item) => item.scheduledStart && new Date(item.scheduledStart).getTime() >= fromDate);
+    }
+    if (filters?.scheduledStartTo) {
+      const toDate = new Date(filters.scheduledStartTo).getTime();
+      list = list.filter((item) => item.scheduledStart && new Date(item.scheduledStart).getTime() <= toDate);
+    }
+    if (filters?.search && filters.search.trim().length > 0) {
+      const term = filters.search.trim().toLowerCase();
+      list = list.filter(
+        (item) =>
+          item.description.toLowerCase().includes(term) ||
+          (item.problem && item.problem.toLowerCase().includes(term)) ||
+          (item.notes && item.notes.toLowerCase().includes(term))
+      );
+    }
+
+    // Sort by createdAt DESC, id DESC
+    list.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      return b.id.localeCompare(a.id);
+    });
+
+    if (filters?.cursor) {
+      try {
+        const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
+        const [cursorDateStr, cursorId] = decoded.split("::");
+        const cursorTime = new Date(cursorDateStr).getTime();
+        const cursorIndex = list.findIndex((item) => {
+          const itemTime = new Date(item.createdAt).getTime();
+          if (itemTime < cursorTime) return true;
+          if (itemTime === cursorTime && item.id.localeCompare(cursorId) < 0) return true;
+          return false;
+        });
+        if (cursorIndex >= 0) {
+          list = list.slice(cursorIndex);
+        }
+      } catch {
+        // Ignore invalid cursor
+      }
+    }
+
+    let nextCursor: string | undefined = undefined;
+    if (list.length > boundedLimit) {
+      const itemsToReturn = list.slice(0, boundedLimit);
+      const lastItem = itemsToReturn[itemsToReturn.length - 1];
+      if (lastItem) {
+        nextCursor = Buffer.from(`${lastItem.createdAt}::${lastItem.id}`).toString("base64");
+      }
+      return {
+        items: itemsToReturn,
+        nextCursor,
+        totalCount: list.length,
+      };
+    }
+
+    return {
+      items: list,
+      nextCursor: undefined,
+      totalCount: list.length,
+    };
+  }
+
+  public async getInterventionByIdAndCompany(
+    interventionId: string,
+    companyId: string
+  ): Promise<InterventionRecord | null> {
+    const item = this.interventions.get(interventionId);
+    if (!item || item.companyId !== companyId) return null;
+    return item;
+  }
+
+  public async createIntervention(
+    companyId: string,
+    data: Partial<InterventionRecord> & {
+      customerId: string;
+      locationId: string;
+      description: string;
+      createdBy: string;
+      updatedBy: string;
+    }
+  ): Promise<InterventionRecord> {
+    const id = data.id || randomUUID();
+    const now = new Date().toISOString();
+
+    const newRecord: InterventionRecord = {
+      id,
+      companyId,
+      customerId: data.customerId,
+      locationId: data.locationId,
+      assetId: data.assetId || undefined,
+      description: data.description,
+      problem: data.problem || undefined,
+      priority: data.priority || "media",
+      status: data.status || "nuovo",
+      scheduledStart: data.scheduledStart || undefined,
+      scheduledEnd: data.scheduledEnd || undefined,
+      technicianId: data.technicianId || undefined,
+      estimatedHours: data.estimatedHours !== undefined && data.estimatedHours !== null ? Number(data.estimatedHours) : undefined,
+      actualHours: data.actualHours !== undefined && data.actualHours !== null ? Number(data.actualHours) : undefined,
+      notes: data.notes || undefined,
+      createdBy: data.createdBy,
+      updatedBy: data.updatedBy,
+      createdAt: data.createdAt || now,
+      updatedAt: data.updatedAt || now,
+    };
+
+    this.interventions.set(id, newRecord);
+    return newRecord;
+  }
+
+  public async updateIntervention(
+    companyId: string,
+    interventionId: string,
+    data: Partial<InterventionRecord> & { updatedBy: string }
+  ): Promise<InterventionRecord | null> {
+    const existing = await this.getInterventionByIdAndCompany(interventionId, companyId);
+    if (!existing) return null;
+
+    const updatedRecord: InterventionRecord = {
+      ...existing,
+      ...data,
+      updatedBy: data.updatedBy,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.interventions.set(interventionId, updatedRecord);
+    return updatedRecord;
   }
 
   private isExplicitlyDisabled = false;

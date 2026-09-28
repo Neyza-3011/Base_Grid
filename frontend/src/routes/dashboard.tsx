@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Mail,
   Cpu,
+  Wrench,
 } from "lucide-react";
 import { fetchServerSession, logoutUser, resendVerificationEmail, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ import { PdfPreviewModal } from "@/components/dashboard/PdfPreviewModal";
 import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
 import { AssetsView } from "@/components/dashboard/AssetsView";
+import { InterventionsView } from "@/components/dashboard/InterventionsView";
 import { BaseGridLogo } from "@/components/common/BaseGridLogo";
 
 import {
@@ -177,6 +179,21 @@ function Dashboard() {
 
         {currentUser.role !== "cliente" && (
           <>
+            <button
+              onClick={() => {
+                setActiveView("interventions");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+                activeView === "interventions"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Wrench className="h-4 w-4" />
+              <span>Interventi</span>
+            </button>
+
             <button
               onClick={() => {
                 setActiveView("customers");
@@ -438,6 +455,7 @@ function Dashboard() {
           {activeView === "team" && <TeamManagementView currentUser={currentUser} />}
           {activeView === "customers" && <CustomersView />}
           {activeView === "assets" && <AssetsView currentUser={currentUser} />}
+          {activeView === "interventions" && <InterventionsView currentUser={currentUser} />}
         </main>
       </div>
 
