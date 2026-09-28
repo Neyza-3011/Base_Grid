@@ -878,10 +878,18 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(sqlContent).toContain("fk_interventions_asset_hierarchy_consistency");
       expect(sqlContent).toContain('FOREIGN KEY ("assetId", "customerId", "locationId", "companyId")');
       expect(sqlContent).toContain('REFERENCES assets (id, "customerId", "locationId", "companyId")');
+      // Must specify column target for ON DELETE SET NULL to prevent wiping non-null tenant/customer/location columns
+      expect(sqlContent).toContain('ON DELETE SET NULL ("assetId")');
 
       expect(sqlContent).toContain("fk_interventions_technician_tenant_consistency");
       expect(sqlContent).toContain('FOREIGN KEY ("technicianId", "companyId")');
       expect(sqlContent).toContain('REFERENCES users (id, "companyId")');
+      // Must specify column target for ON DELETE SET NULL to prevent wiping non-null companyId
+      expect(sqlContent).toContain('ON DELETE SET NULL ("technicianId")');
+
+      // Verify that untargeted "ON DELETE SET NULL;" is NOT present for these composite constraints
+      expect(sqlContent).not.toMatch(/fk_interventions_asset_hierarchy_consistency[\s\S]*?ON DELETE SET NULL;/);
+      expect(sqlContent).not.toMatch(/fk_interventions_technician_tenant_consistency[\s\S]*?ON DELETE SET NULL;/);
 
       expect(sqlContent).toContain("fk_interventions_createdby_tenant_consistency");
       expect(sqlContent).toContain("fk_interventions_updatedby_tenant_consistency");

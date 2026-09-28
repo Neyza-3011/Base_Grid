@@ -100,7 +100,7 @@ BEGIN
     ALTER TABLE interventions
       ADD CONSTRAINT fk_interventions_asset_hierarchy_consistency
       FOREIGN KEY ("assetId", "customerId", "locationId", "companyId")
-      REFERENCES assets (id, "customerId", "locationId", "companyId") ON DELETE SET NULL;
+      REFERENCES assets (id, "customerId", "locationId", "companyId") ON DELETE SET NULL ("assetId");
   END IF;
 END $$;
 
@@ -113,7 +113,7 @@ BEGIN
     ALTER TABLE interventions
       ADD CONSTRAINT fk_interventions_technician_tenant_consistency
       FOREIGN KEY ("technicianId", "companyId")
-      REFERENCES users (id, "companyId") ON DELETE SET NULL;
+      REFERENCES users (id, "companyId") ON DELETE SET NULL ("technicianId");
   END IF;
 END $$;
 
