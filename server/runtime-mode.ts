@@ -12,11 +12,7 @@ export type RuntimeMode = "production" | "ai-studio" | "development" | "test";
  * 2. Automated detection fallback:
  *    - If NODE_ENV === "test" => "test"
  *    - If NODE_ENV === "development" || !NODE_ENV => "development"
- *    - If NODE_ENV === "production":
- *        Strict auto-detection for Google AI Studio Cloud Run preview/sharing container:
- *        Only resolves to "ai-studio" if Cloud Run environment is detected (K_SERVICE / K_REVISION),
- *        no DATABASE_URL is set, no REDIS_URL is set, and GEMINI_API_KEY (AI Studio indicator) is present.
- *        Otherwise stays strictly "production".
+ *    - If NODE_ENV === "production" => "production"
  */
 export function getRuntimeMode(env: NodeJS.ProcessEnv = process.env): RuntimeMode {
   const explicit = env.BASEGRID_RUNTIME_MODE?.trim().toLowerCase();
@@ -36,21 +32,6 @@ export function getRuntimeMode(env: NodeJS.ProcessEnv = process.env): RuntimeMod
   }
 
   if (nodeEnv === "production") {
-    // Restrictive auto-detection for Google AI Studio Cloud Run preview/share container
-    const isCloudRun = Boolean(env.K_SERVICE || env.K_REVISION || env.K_CONFIGURATION);
-    const hasNoDatabase = !env.DATABASE_URL || env.DATABASE_URL.trim() === "";
-    const hasNoRedis = !env.REDIS_URL || env.REDIS_URL.trim() === "";
-    const hasAiStudioIndicator = Boolean(
-      env.GEMINI_API_KEY ||
-      env.GOOGLE_AI_STUDIO_APPLET_ID ||
-      env.AI_STUDIO_APPLET_ID ||
-      env.AIS_APPLET_ID
-    );
-
-    if (isCloudRun && hasNoDatabase && hasNoRedis && hasAiStudioIndicator) {
-      return "ai-studio";
-    }
-
     return "production";
   }
 

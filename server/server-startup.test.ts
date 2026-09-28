@@ -94,4 +94,72 @@ describe("Production Startup Sequence", () => {
       });
     });
   }, 30000);
+
+  it("In ai-studio, the server selects Nitro frontend branch without requiring PostgreSQL or Redis", async () => {
+    await new Promise<void>((resolve) => {
+      const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
+      const child = spawn(tsxBin, ["server.ts"], {
+        env: {
+          ...process.env,
+          BASEGRID_RUNTIME_MODE: "ai-studio",
+          NODE_ENV: "production",
+          DATABASE_URL: "",
+          REDIS_URL: "",
+          PORT: "10009",
+          NITRO_PORT: "10019",
+        },
+      });
+
+      let output = "";
+      child.stderr?.on("data", (data) => { output += data; });
+      child.stdout?.on("data", (data) => { output += data; });
+
+      const checkInterval = setInterval(() => {
+        if (output.includes("[AI Studio] Standalone runtime environment initialized successfully.") &&
+            (output.includes("Waiting for Nitro frontend to become ready") || output.includes("Nitro frontend is ready."))) {
+          clearInterval(checkInterval);
+          child.kill("SIGKILL");
+          resolve();
+        }
+      }, 250);
+
+      child.on("exit", () => {
+        clearInterval(checkInterval);
+        resolve();
+      });
+    });
+  }, 30000);
+
+  it("In development, the server uses Vite dev middleware and does not start Nitro", async () => {
+    await new Promise<void>((resolve) => {
+      const tsxBin = path.resolve(process.cwd(), "node_modules/.bin/tsx");
+      const child = spawn(tsxBin, ["server.ts"], {
+        env: {
+          ...process.env,
+          NODE_ENV: "development",
+          PORT: "10010",
+          JWT_SECRET: "test-secret-at-least-32-chars-long-here",
+          SKIP_DB_INIT: "true",
+        },
+      });
+
+      let output = "";
+      child.stderr?.on("data", (data) => { output += data; });
+      child.stdout?.on("data", (data) => { output += data; });
+
+      const checkInterval = setInterval(() => {
+        if (output.includes("BaseGrid Server running on http://0.0.0.0:10010")) {
+          clearInterval(checkInterval);
+          expect(output).not.toContain("Waiting for Nitro frontend");
+          child.kill("SIGKILL");
+          resolve();
+        }
+      }, 250);
+
+      child.on("exit", () => {
+        clearInterval(checkInterval);
+        resolve();
+      });
+    });
+  }, 30000);
 });

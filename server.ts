@@ -98,7 +98,8 @@ async function startServer() {
   let nitroProcess: any = null;
 
   // --- Vite / Frontend Serving ---
-  if (!isProd) {
+  const serveBuiltFrontend = mode === "production" || mode === "ai-studio";
+  if (!serveBuiltFrontend) {
     // Dynamic import to avoid including Vite in production bundle
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({

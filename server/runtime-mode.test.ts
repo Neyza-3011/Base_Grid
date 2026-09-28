@@ -34,23 +34,17 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       expect(getRuntimeMode({ NODE_ENV: "production", DATABASE_URL: "", REDIS_URL: "" })).toBe("production");
     });
 
-    it("auto-detects ai-studio on Cloud Run only when no DB/Redis and GEMINI_API_KEY is present", () => {
+    it("remains strict production when NODE_ENV=production even with Cloud Run metadata, GEMINI_API_KEY, and DB/Redis absent", () => {
       const mode = getRuntimeMode({
         NODE_ENV: "production",
         K_SERVICE: "ais-preview",
+        K_REVISION: "ais-preview-00001",
+        K_CONFIGURATION: "ais-preview",
         GEMINI_API_KEY: "test-gemini-key",
+        DATABASE_URL: "",
+        REDIS_URL: "",
       });
-      expect(mode).toBe("ai-studio");
-    });
-
-    it("remains strict production if DATABASE_URL or REDIS_URL are present in Cloud Run", () => {
-      const modeWithDb = getRuntimeMode({
-        NODE_ENV: "production",
-        K_SERVICE: "ais-preview",
-        GEMINI_API_KEY: "test-gemini-key",
-        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
-      });
-      expect(modeWithDb).toBe("production");
+      expect(mode).toBe("production");
     });
   });
 
