@@ -459,7 +459,25 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
   public async reset(): Promise<void> {
     try {
       if (this.client.status === "ready" || this.client.status === "connect") {
-        await this.client.flushdb();
+        const patterns = ["token:*", "family:*:tokens", "user:*:tokens"];
+        for (const pattern of patterns) {
+          if (typeof this.client.scan === "function") {
+            let cursor = "0";
+            do {
+              const res = (await this.client.scan(cursor, "MATCH", pattern, "COUNT", 100)) as [string, string[]];
+              cursor = res[0];
+              const keys = res[1];
+              if (keys && keys.length > 0) {
+                await this.client.del(...keys);
+              }
+            } while (cursor !== "0");
+          } else if (typeof (this.client as any).keys === "function") {
+            const keys = (await (this.client as any).keys(pattern)) as string[];
+            if (keys && keys.length > 0) {
+              await this.client.del(...keys);
+            }
+          }
+        }
       }
     } catch (err) {
       console.warn("[RedisTokenStorageAdapter] reset warning:", err);

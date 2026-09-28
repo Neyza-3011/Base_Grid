@@ -66,7 +66,7 @@ export class RateLimiter {
       key = `ratelimit:${key}`;
 
       try {
-        if (this.redisClient && (this.redisClient.status === 'ready' || this.redisClient.status === 'connect' || this.redisClient.status === 'connecting' || this.redisClient.status === 'wait')) {
+        if (this.redisClient && this.redisClient.status === "ready") {
           const luaScript = `
             local current = redis.call("INCR", KEYS[1])
             if current == 1 then
@@ -75,7 +75,7 @@ export class RateLimiter {
             local ttl = redis.call("TTL", KEYS[1])
             return {current, ttl}
           `;
-          const result = await this.redisClient.eval(luaScript, 1, key, duration) as [number, number];
+          const result = (await this.redisClient.eval(luaScript, 1, key, duration)) as [number, number];
           const current = result[0];
           let ttl = result[1];
           if (ttl < 0) ttl = duration;
@@ -90,47 +90,75 @@ export class RateLimiter {
             });
             return;
           }
-        } else {
-          // Fallback logic
-          const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-          if (isProd) {
-            if (failClosed) {
-              res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-1)." });
-              return;
-            }
-          } else {
-            // Memory fallback for development and testing
-            const now = Date.now();
-            let entry = this.localFallback.get(key);
-            if (!entry || entry.expiresAt <= now) {
-              entry = { count: 0, expiresAt: now + duration * 1000 };
-            }
-            entry.count++;
-            this.localFallback.set(key, entry);
-
-            res.setHeader("X-RateLimit-Limit", String(points));
-            res.setHeader("X-RateLimit-Remaining", String(Math.max(0, points - entry.count)));
-
-            if (entry.count > points) {
-              const ttl = Math.ceil((entry.expiresAt - now) / 1000);
-              res.setHeader("Retry-After", String(ttl));
-              res.status(429).json({
-                detail: configOpts.errorMessage || "Troppe richieste. Riprova più tardi.",
-              });
-              return;
-            }
-          }
+          return next();
         }
+
+        // Redis is unavailable (not configured, null, or status !== 'ready')
+        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+        if (isProd) {
+          if (failClosed) {
+            res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-1)." });
+            return;
+          }
+          // True fail-open: call next() without applying memory rate limit
+          return next();
+        }
+
+        // Memory fallback exclusively for development and testing
+        const now = Date.now();
+        let entry = this.localFallback.get(key);
+        if (!entry || entry.expiresAt <= now) {
+          entry = { count: 0, expiresAt: now + duration * 1000 };
+        }
+        entry.count++;
+        this.localFallback.set(key, entry);
+
+        res.setHeader("X-RateLimit-Limit", String(points));
+        res.setHeader("X-RateLimit-Remaining", String(Math.max(0, points - entry.count)));
+
+        if (entry.count > points) {
+          const ttl = Math.ceil((entry.expiresAt - now) / 1000);
+          res.setHeader("Retry-After", String(ttl));
+          res.status(429).json({
+            detail: configOpts.errorMessage || "Troppe richieste. Riprova più tardi.",
+          });
+          return;
+        }
+        return next();
       } catch (err) {
+        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+        if (isProd) {
+          if (failClosed) {
+            res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-2)." });
+            return;
+          }
+          return next();
+        }
         if (failClosed) {
           res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-2)." });
           return;
         }
+        return next();
       }
-
-      next();
     });
   }
+  public async reset(): Promise<void> {
+    this.localFallback.clear();
+    if (this.redisClient && (this.redisClient.status === "ready" || this.redisClient.status === "connect")) {
+      try {
+        let cursor = "0";
+        do {
+          const res = (await this.redisClient.scan(cursor, "MATCH", "ratelimit:*", "COUNT", 100)) as [string, string[]];
+          cursor = res[0];
+          const keys = res[1];
+          if (keys && keys.length > 0) {
+            await this.redisClient.del(...keys);
+          }
+        } while (cursor !== "0");
+      } catch {}
+    }
+  }
+
   public async getRedisClient(): Promise<Redis | null> {
     if (this.redisClient) {
       try {

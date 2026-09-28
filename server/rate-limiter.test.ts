@@ -1,12 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
 import { rateLimiter } from "./rate-limiter";
 import { config } from "./config";
 
 describe("Rate Limiter Middleware", () => {
+  const originalEnv = config.NODE_ENV;
+  const originalRedis = (rateLimiter as any).redisClient;
+
   beforeEach(() => {
-    // Reset local fallback map for tests if any
+    config.NODE_ENV = "test";
+    (rateLimiter as any).localFallback.clear();
+  });
+
+  afterEach(() => {
+    config.NODE_ENV = originalEnv;
+    (rateLimiter as any).redisClient = originalRedis;
     (rateLimiter as any).localFallback.clear();
   });
 
@@ -111,18 +120,23 @@ describe("Rate Limiter Middleware", () => {
   it("6. general API fail-open - should fail open if Redis is offline in production", async () => {
     const app = express();
     app.set("trust proxy", 1);
-    const { generalApiLimiter } = await import("./rate-limiter");
-    app.get("/api", generalApiLimiter, (req, res) => { res.status(200).send("OK"); });
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: false });
+    app.get("/api", limiter, (req, res) => { res.status(200).send("OK"); });
     
     const originalEnv = config.NODE_ENV;
     const originalRedis = (rateLimiter as any).redisClient;
     config.NODE_ENV = "production";
     (rateLimiter as any).redisClient = null;
+    (rateLimiter as any).localFallback.clear();
     
     try {
-      const res = await request(app).get("/api").set("X-Test-RateLimit", "enable");
-      // Since it's failOpen (failClosed: false), it should proceed and return 200
-      expect(res.status).toBe(200);
+      // Send more requests than points (5 requests when points is 2)
+      for (let i = 0; i < 5; i++) {
+        const res = await request(app).get("/api").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.99");
+        expect(res.status).toBe(200);
+      }
+      // Memory fallback must NOT be used in production
+      expect((rateLimiter as any).localFallback.size).toBe(0);
     } finally {
       config.NODE_ENV = originalEnv;
       (rateLimiter as any).redisClient = originalRedis;
@@ -135,11 +149,12 @@ describe("Rate Limiter Middleware", () => {
     const limiter = rateLimiter.middleware({ points: 1, duration: 60 });
     app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
 
-    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "123.123.123.123");
+    const testIp = `123.123.${Date.now() % 200}.${Math.floor(Math.random() * 200) + 1}`;
+    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", testIp);
     expect(res1.status).toBe(200);
     
     // Using same IP should block
-    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "123.123.123.123");
+    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", testIp);
     expect(res2.status).toBe(429);
   });
 });
