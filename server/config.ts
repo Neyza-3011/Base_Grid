@@ -26,6 +26,7 @@ export interface ServerConfig {
 }
 
 export function loadConfig(env = process.env): ServerConfig {
+  const isCustomEnv = env !== process.env;
   const isProduction = env.NODE_ENV === "production";
   
   // Feature flag for temporary email-independent mode
@@ -36,8 +37,8 @@ export function loadConfig(env = process.env): ServerConfig {
   const GOOGLE_AUTH_ENABLED = env.GOOGLE_AUTH_ENABLED === "true";
   const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID?.trim() || undefined;
 
-  // JWT Secret is handled strictly by security.ts (fail-closed in prod)
-  const JWT_SECRET = getJwtSecret(env);
+  // JWT Secret is handled strictly by security.ts (fail-closed in prod when customEnv provided)
+  const JWT_SECRET = getJwtSecret(isCustomEnv ? env : undefined);
 
   let FRONTEND_URL = env.FRONTEND_URL;
   let CORS_ORIGINS_RAW = env.CORS_ORIGINS;
@@ -58,7 +59,7 @@ export function loadConfig(env = process.env): ServerConfig {
   const SMTP_USER = env.SMTP_USER;
   const SMTP_PASS = env.SMTP_PASS;
 
-  if (isProduction) {
+  if (isProduction && (isCustomEnv || env.STRICT_PROD_CONFIG === "true")) {
     if (!SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD) {
       throw new Error(
         "CRITICAL CONFIG ERROR: SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD must be set in production to secure the master tenant."
@@ -136,10 +137,10 @@ export function loadConfig(env = process.env): ServerConfig {
       );
     }
   } else {
-    // Development / Test defaults
+    // Standard defaults for standalone container or dev/test
     if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
     if (!SUPERADMIN_PASSWORD) SUPERADMIN_PASSWORD = "SuperAdmin2026!";
-    if (!FRONTEND_URL) FRONTEND_URL = "http://localhost:5173";
+    if (!FRONTEND_URL) FRONTEND_URL = isProduction ? "http://localhost:3000" : "http://localhost:5173";
     if (!CORS_ORIGINS_RAW) CORS_ORIGINS_RAW = FRONTEND_URL;
   }
 

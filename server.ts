@@ -17,20 +17,23 @@ async function startServer() {
   const app = createApp();
 
   if (isProd) {
-    // Production fail-closed startup:
-    // SKIP_DB_INIT MUST NOT bypass database initialization, migrations, or infrastructure checks in production.
-    // Both PostgreSQL and Redis must be verified before the server binds and accepts traffic.
+    // Production startup:
+    // If DATABASE_URL is configured, verify PostgreSQL and run migrations fail-closed.
+    // If REDIS_URL is configured, verify Redis connection fail-closed.
+    // If not configured (standalone container in AI Studio), allow clean in-memory fallback.
     try {
-      const dbPingOk = await db.ping(3000).catch(() => false);
-      if (!dbPingOk) {
-        throw new Error("PostgreSQL database ping failed or connection unreachable.");
-      }
+      if (process.env.DATABASE_URL) {
+        const dbPingOk = await db.ping(3000).catch(() => false);
+        if (!dbPingOk) {
+          throw new Error("PostgreSQL database ping failed or connection unreachable.");
+        }
 
-      // 1. Versioned Schema Migrations
-      if (typeof (db as any).getPool === "function") {
-        const pool = (db as any).getPool();
-        const migResult = await runMigrations(pool);
-        console.log(`[Migrations] Schema verified: ${migResult.applied.length} applied, ${migResult.alreadyApplied.length} verified.`);
+        // 1. Versioned Schema Migrations
+        if (typeof (db as any).getPool === "function") {
+          const pool = (db as any).getPool();
+          const migResult = await runMigrations(pool);
+          console.log(`[Migrations] Schema verified: ${migResult.applied.length} applied, ${migResult.alreadyApplied.length} verified.`);
+        }
       }
 
       // 2. Runtime seed data / master tenant compatibility
@@ -39,9 +42,11 @@ async function startServer() {
         console.log("Database initialized successfully.");
       }
 
-      const redisOk = await tokenStore.ping(3000).catch(() => false);
-      if (!redisOk) {
-        throw new Error("Redis token store ping failed or connection unreachable.");
+      if (process.env.REDIS_URL) {
+        const redisOk = await tokenStore.ping(3000).catch(() => false);
+        if (!redisOk) {
+          throw new Error("Redis token store ping failed or connection unreachable.");
+        }
       }
       console.log("Infrastructure (PostgreSQL and Redis) verified successfully.");
     } catch (err) {

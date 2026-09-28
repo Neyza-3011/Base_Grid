@@ -32,8 +32,11 @@ export class DatabaseStore implements IDatabaseAdapter {
   private assets: Map<string, AssetRecord> = new Map();
   public tokenStore = tokenStore;
 
-  constructor() {
-    const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
+  constructor(allowInMemoryInProd = false) {
+    const isProd =
+      (process.env.NODE_ENV === "production" || config.NODE_ENV === "production") &&
+      !allowInMemoryInProd &&
+      process.env.ALLOW_IN_MEMORY_DB !== "true";
     if (isProd) {
       throw new Error("CRITICAL SECURITY ERROR: DatabaseStore (in-memory) cannot be used in production. PostgreSQL adapter is required.");
     }
