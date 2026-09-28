@@ -435,18 +435,21 @@ export class PostgresAdapter implements IDatabaseAdapter {
     // Ensure SuperAdmin user exists in PostgreSQL if credentials configured
     if (config.SUPERADMIN_EMAIL && config.SUPERADMIN_PASSWORD) {
       const saEmail = normalizeEmail(config.SUPERADMIN_EMAIL);
-      const existingSa = await this.pool.query(
-        "SELECT id FROM users WHERE id = $1 OR email = $2 LIMIT 1",
-        ["usr-superadmin-001", saEmail],
+      const masterUserId = "usr-superadmin-001";
+
+      const usersRes = await this.pool.query(
+        'SELECT id, email, role FROM users WHERE id = $1 OR email = $2',
+        [masterUserId, saEmail],
       );
-      if (!existingSa || existingSa.rowCount === 0) {
+
+      if (usersRes.rows.length === 0) {
+        // CASE A: No matching user exists by ID or email -> create SuperAdmin
         const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
         await this.pool.query(
           `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-           ON CONFLICT (id) DO NOTHING`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
-            "usr-superadmin-001",
+            masterUserId,
             saEmail,
             "System SuperAdmin",
             "superadmin",
@@ -461,6 +464,31 @@ export class PostgresAdapter implements IDatabaseAdapter {
             now,
             now,
           ],
+        );
+      } else if (usersRes.rows.length === 1) {
+        const existing = usersRes.rows[0];
+        if (existing.id === masterUserId && existing.email === saEmail) {
+          // CASE B: Matching user exists with expected identity -> safe update/reconciliation
+          const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
+          await this.pool.query(
+            `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+            [hash, salt, now, masterUserId],
+          );
+        } else if (existing.id !== masterUserId && existing.email === saEmail) {
+          // CASE C: Same email exists with a different user ID -> fail controlled
+          throw new Error(
+            `CRITICAL BOOTSTRAP ERROR: SuperAdmin email (${saEmail}) is already assigned to a different user ID (${existing.id}).`,
+          );
+        } else if (existing.id === masterUserId && existing.email !== saEmail) {
+          // CASE D: Same ID exists with a different email -> fail controlled
+          throw new Error(
+            `CRITICAL BOOTSTRAP ERROR: SuperAdmin ID (${masterUserId}) is already assigned to a different email address (${existing.email}).`,
+          );
+        }
+      } else {
+        // Multiple collision records
+        throw new Error(
+          `CRITICAL BOOTSTRAP ERROR: SuperAdmin ID (${masterUserId}) and email (${saEmail}) conflict with separate existing user accounts.`,
         );
       }
     }

@@ -30,11 +30,12 @@ import {
   googleAuthLimiter
 } from "../rate-limiter";
 import { TeamService } from "../services/team.service";
+import { getRuntimeMode } from "../runtime-mode";
 
 export const authRouter = Router();
 const teamService = new TeamService(db);
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = getRuntimeMode() === "production";
 const cookieSettings = getCookieSettings(isProduction);
 
 /**

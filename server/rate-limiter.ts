@@ -95,8 +95,8 @@ export class RateLimiter {
         }
 
         // Redis is unavailable (not configured, null, or status !== 'ready')
-        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-        if (isProd) {
+        const mode = getRuntimeMode();
+        if (mode === "production") {
           if (failClosed) {
             res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-1)." });
             return;
@@ -127,8 +127,8 @@ export class RateLimiter {
         }
         return next();
       } catch (err) {
-        const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-        if (isProd) {
+        const mode = getRuntimeMode();
+        if (mode === "production") {
           if (failClosed) {
             res.status(503).json({ detail: "Servizio temporaneamente non disponibile (RL-2)." });
             return;

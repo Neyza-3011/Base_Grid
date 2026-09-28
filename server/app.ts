@@ -17,12 +17,14 @@ import { generalApiLimiter } from "./rate-limiter";
 import { db } from "./db";
 import { tokenStore } from "./token-store";
 import { asyncHandler } from "./async-handler";
+import { getRuntimeMode } from "./runtime-mode";
 
 export function createApp(): Express {
   // Validate JWT Secret configuration on application initialization / startup
   assertValidJwtSecret();
 
   const app = express();
+  const mode = getRuntimeMode();
   
   // Disable X-Powered-By header to avoid framework disclosure
   app.disable("x-powered-by");
@@ -36,7 +38,7 @@ export function createApp(): Express {
   // Basic security and parsing middlewares
   app.use(
     cors({
-      origin: config.NODE_ENV === "production" ? config.CORS_ORIGINS : true, // Restrict in production
+      origin: mode === "production" ? config.CORS_ORIGINS : true, // Restrict in production
       credentials: true, // Allow cookies
     }),
   );
@@ -60,10 +62,8 @@ export function createApp(): Express {
   app.get(
     "/ready",
     asyncHandler(async (_req: Request, res: Response) => {
-      const isProd = process.env.NODE_ENV === "production" || config.NODE_ENV === "production";
-
       // In production, DATABASE_URL and REDIS_URL are strictly required
-      if (isProd) {
+      if (mode === "production") {
         if (!config.DATABASE_URL || !config.REDIS_URL) {
           res.status(503).json({ status: "not_ready" });
           return;

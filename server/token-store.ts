@@ -512,8 +512,8 @@ export class DistributedStorageEngine implements ITokenStorageAdapter {
   private available = true;
 
   constructor() {
-    const isProd = config.NODE_ENV === "production" || process.env.NODE_ENV === "production";
-    if (isProd) {
+    const mode = getRuntimeMode();
+    if (mode === "production") {
       throw new Error("CRITICAL SECURITY ERROR: DistributedStorageEngine (in-memory) cannot be used in production. Redis is required.");
     }
   }
