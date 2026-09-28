@@ -1203,6 +1203,8 @@ export class DatabaseStore implements IDatabaseAdapter {
       return b.id.localeCompare(a.id);
     });
 
+    const totalCount = list.length;
+
     if (filters?.cursor) {
       try {
         const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
@@ -1232,14 +1234,14 @@ export class DatabaseStore implements IDatabaseAdapter {
       return {
         items: itemsToReturn,
         nextCursor,
-        totalCount: list.length,
+        totalCount,
       };
     }
 
     return {
       items: list,
       nextCursor: undefined,
-      totalCount: list.length,
+      totalCount,
     };
   }
 

@@ -2036,72 +2036,79 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
   ): Promise<{ items: InterventionRecord[]; nextCursor?: string; totalCount?: number }> {
     const boundedLimit = Math.min(Math.max(Number(filters?.limit) || 50, 1), 100);
-    const conditions: string[] = ['"companyId" = $1'];
-    const params: any[] = [companyId];
+    const filterConditions: string[] = ['"companyId" = $1'];
+    const filterParams: any[] = [companyId];
     let paramIdx = 2;
 
     if (filters?.status) {
-      conditions.push(`status = $${paramIdx}`);
-      params.push(filters.status);
+      filterConditions.push(`status = $${paramIdx}`);
+      filterParams.push(filters.status);
       paramIdx++;
     }
 
     if (filters?.priority) {
-      conditions.push(`priority = $${paramIdx}`);
-      params.push(filters.priority);
+      filterConditions.push(`priority = $${paramIdx}`);
+      filterParams.push(filters.priority);
       paramIdx++;
     }
 
     if (filters?.technicianId) {
-      conditions.push(`"technicianId" = $${paramIdx}`);
-      params.push(filters.technicianId);
+      filterConditions.push(`"technicianId" = $${paramIdx}`);
+      filterParams.push(filters.technicianId);
       paramIdx++;
     }
 
     if (filters?.customerId) {
-      conditions.push(`"customerId" = $${paramIdx}`);
-      params.push(filters.customerId);
+      filterConditions.push(`"customerId" = $${paramIdx}`);
+      filterParams.push(filters.customerId);
       paramIdx++;
     }
 
     if (filters?.locationId) {
-      conditions.push(`"locationId" = $${paramIdx}`);
-      params.push(filters.locationId);
+      filterConditions.push(`"locationId" = $${paramIdx}`);
+      filterParams.push(filters.locationId);
       paramIdx++;
     }
 
     if (filters?.assetId) {
-      conditions.push(`"assetId" = $${paramIdx}`);
-      params.push(filters.assetId);
+      filterConditions.push(`"assetId" = $${paramIdx}`);
+      filterParams.push(filters.assetId);
       paramIdx++;
     }
 
     if (filters?.scheduledStartFrom) {
-      conditions.push(`"scheduledStart" >= $${paramIdx}`);
-      params.push(filters.scheduledStartFrom);
+      filterConditions.push(`"scheduledStart" >= $${paramIdx}`);
+      filterParams.push(filters.scheduledStartFrom);
       paramIdx++;
     }
 
     if (filters?.scheduledStartTo) {
-      conditions.push(`"scheduledStart" <= $${paramIdx}`);
-      params.push(filters.scheduledStartTo);
+      filterConditions.push(`"scheduledStart" <= $${paramIdx}`);
+      filterParams.push(filters.scheduledStartTo);
       paramIdx++;
     }
 
     if (filters?.search && filters.search.trim().length > 0) {
       const searchPattern = `%${filters.search.trim()}%`;
-      conditions.push(`(description ILIKE $${paramIdx} OR problem ILIKE $${paramIdx} OR notes ILIKE $${paramIdx})`);
-      params.push(searchPattern);
+      filterConditions.push(`(description ILIKE $${paramIdx} OR problem ILIKE $${paramIdx} OR notes ILIKE $${paramIdx})`);
+      filterParams.push(searchPattern);
       paramIdx++;
     }
+
+    const countSql = `SELECT COUNT(*) AS total FROM interventions WHERE ${filterConditions.join(" AND ")}`;
+    const countRes = await this.pool.query(countSql, filterParams);
+    const totalCount = parseInt(countRes.rows[0]?.total || "0", 10);
+
+    const selectConditions = [...filterConditions];
+    const selectParams = [...filterParams];
 
     if (filters?.cursor) {
       try {
         const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
         const [cursorCreatedAt, cursorId] = decoded.split("::");
         if (cursorCreatedAt && cursorId) {
-          conditions.push(`("createdAt", id) < ($${paramIdx}, $${paramIdx + 1})`);
-          params.push(cursorCreatedAt, cursorId);
+          selectConditions.push(`("createdAt", id) < ($${paramIdx}, $${paramIdx + 1})`);
+          selectParams.push(cursorCreatedAt, cursorId);
           paramIdx += 2;
         }
       } catch {
@@ -2109,17 +2116,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
       }
     }
 
-    const whereClause = conditions.join(" AND ");
+    const whereClause = selectConditions.join(" AND ");
     const fetchLimit = boundedLimit + 1;
-    params.push(fetchLimit);
+    selectParams.push(fetchLimit);
     const sql = `SELECT * FROM interventions WHERE ${whereClause} ORDER BY "createdAt" DESC, id DESC LIMIT $${paramIdx}`;
 
-    const res = await this.pool.query(sql, params);
+    const res = await this.pool.query(sql, selectParams);
     const rows = res.rows;
     let nextCursor: string | undefined = undefined;
 
     if (rows.length > boundedLimit) {
-      const extra = rows.pop(); // remove extra item
+      rows.pop(); // remove extra item
       const lastItem = rows[rows.length - 1];
       if (lastItem) {
         const cDate = lastItem.createdAt instanceof Date ? lastItem.createdAt.toISOString() : String(lastItem.createdAt);
@@ -2130,7 +2137,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return {
       items: rows.map(mapInterventionRow),
       nextCursor,
-      totalCount: rows.length,
+      totalCount,
     };
   }
 

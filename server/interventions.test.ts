@@ -793,6 +793,7 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPage1.status).toBe(200);
       expect(resPage1.data.items.length).toBe(2);
       expect(resPage1.data.nextCursor).toBeDefined();
+      expect(resPage1.data.totalCount).toBe(5); // totalCount does NOT decrease when limit=2 is applied
 
       const resPage2 = await apiRequest(`/api/v1/interventions?limit=2&cursor=${resPage1.data.nextCursor}`, {
         method: "GET",
@@ -803,6 +804,87 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPage2.data.items.length).toBe(2);
       // Items on page 2 should be different from page 1
       expect(resPage2.data.items[0].id).not.toBe(resPage1.data.items[0].id);
+      expect(resPage2.data.totalCount).toBe(5); // Page 2 has the exact same totalCount as Page 1
+    });
+
+    it("ensures totalCount accurately reflects filtered dataset across paginated requests", async () => {
+      // 3 urgent, 2 low
+      for (let i = 1; i <= 3; i++) {
+        await db.createIntervention(companyA, {
+          customerId: customerA.id,
+          locationId: locationA.id,
+          description: `FilterCount Urgent ${i}`,
+          priority: "urgente",
+          status: "nuovo",
+          createdBy: adminA.user.id,
+          updatedBy: adminA.user.id,
+        });
+      }
+      for (let i = 1; i <= 2; i++) {
+        await db.createIntervention(companyA, {
+          customerId: customerA.id,
+          locationId: locationA.id,
+          description: `FilterCount Low ${i}`,
+          priority: "bassa",
+          status: "nuovo",
+          createdBy: adminA.user.id,
+          updatedBy: adminA.user.id,
+        });
+      }
+
+      const resFilteredPage1 = await apiRequest("/api/v1/interventions?priority=urgente&limit=2", {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(resFilteredPage1.status).toBe(200);
+      expect(resFilteredPage1.data.items.length).toBe(2);
+      expect(resFilteredPage1.data.totalCount).toBe(3); // 3 total matching the filter
+      expect(resFilteredPage1.data.nextCursor).toBeDefined();
+
+      const resFilteredPage2 = await apiRequest(`/api/v1/interventions?priority=urgente&limit=2&cursor=${resFilteredPage1.data.nextCursor}`, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(resFilteredPage2.status).toBe(200);
+      expect(resFilteredPage2.data.items.length).toBe(1);
+      expect(resFilteredPage2.data.totalCount).toBe(3); // totalCount remains 3 on page 2
+    });
+  });
+
+  describe("7. PostgreSQL Database Schema & Composite Constraint Verification (Migration 005)", () => {
+    it("verifies migration 005_interventions.sql contains all required composite unique and foreign key constraints", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const migrationPath = path.resolve(process.cwd(), "server/migrations/005_interventions.sql");
+      const sqlContent = fs.readFileSync(migrationPath, "utf-8");
+
+      // Check composite unique constraints
+      expect(sqlContent).toContain("uq_customers_id_company");
+      expect(sqlContent).toContain("uq_locations_id_customer_company");
+      expect(sqlContent).toContain("uq_assets_id_customer_location_company");
+      expect(sqlContent).toContain("uq_users_id_company");
+
+      // Check composite foreign key constraints on interventions
+      expect(sqlContent).toContain("fk_interventions_customer_tenant_consistency");
+      expect(sqlContent).toContain('FOREIGN KEY ("customerId", "companyId")');
+      expect(sqlContent).toContain('REFERENCES customers (id, "companyId")');
+
+      expect(sqlContent).toContain("fk_interventions_location_customer_tenant_consistency");
+      expect(sqlContent).toContain('FOREIGN KEY ("locationId", "customerId", "companyId")');
+      expect(sqlContent).toContain('REFERENCES locations (id, "customerId", "companyId")');
+
+      expect(sqlContent).toContain("fk_interventions_asset_hierarchy_consistency");
+      expect(sqlContent).toContain('FOREIGN KEY ("assetId", "customerId", "locationId", "companyId")');
+      expect(sqlContent).toContain('REFERENCES assets (id, "customerId", "locationId", "companyId")');
+
+      expect(sqlContent).toContain("fk_interventions_technician_tenant_consistency");
+      expect(sqlContent).toContain('FOREIGN KEY ("technicianId", "companyId")');
+      expect(sqlContent).toContain('REFERENCES users (id, "companyId")');
+
+      expect(sqlContent).toContain("fk_interventions_createdby_tenant_consistency");
+      expect(sqlContent).toContain("fk_interventions_updatedby_tenant_consistency");
     });
   });
 });
