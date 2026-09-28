@@ -509,4 +509,199 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       expect(allIds).toContain(archivedLoc.id);
     });
   });
+
+  describe("Canonical Location Item Endpoints (/api/v1/locations/:id)", () => {
+    it("1 & 7. supports GET canonical /api/v1/locations/:id and customer locations collection", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const cust = await db.createCustomer(companyA, { displayName: "Acme Corp" });
+      const loc = await db.createLocation(companyA, cust.id, {
+        name: "Cantiere Centrale",
+        address: "Via Roma 1",
+        city: "Milano",
+      });
+
+      // Collection route works
+      const collRes = await apiRequest(`/api/v1/customers/${cust.id}/locations`, { cookies: auth.cookies });
+      expect(collRes.status).toBe(200);
+      expect(collRes.data.length).toBe(1);
+      expect(collRes.data[0].id).toBe(loc.id);
+
+      // Canonical item GET works
+      const getRes = await apiRequest(`/api/v1/locations/${loc.id}`, { cookies: auth.cookies });
+      expect(getRes.status).toBe(200);
+      expect(getRes.data.id).toBe(loc.id);
+      expect(getRes.data.name).toBe("Cantiere Centrale");
+      expect(getRes.data.companyId).toBeUndefined(); // companyId not leaked
+    });
+
+    it("2. supports PUT canonical /api/v1/locations/:id", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const cust = await db.createCustomer(companyA, { displayName: "Acme Corp" });
+      const loc = await db.createLocation(companyA, cust.id, {
+        name: "Sede Iniziale",
+        address: "Via Roma 1",
+        city: "Milano",
+      });
+
+      const updateRes = await apiRequest(`/api/v1/locations/${loc.id}`, {
+        method: "PUT",
+        body: { name: "Sede Modificata", notes: "Nuova nota" },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.data.name).toBe("Sede Modificata");
+      expect(updateRes.data.notes).toBe("Nuova nota");
+
+      // Verify persistence via GET
+      const verifyRes = await apiRequest(`/api/v1/locations/${loc.id}`, { cookies: auth.cookies });
+      expect(verifyRes.data.name).toBe("Sede Modificata");
+    });
+
+    it("3 & 4. supports POST canonical /api/v1/locations/:id/archive and /reactivate", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const cust = await db.createCustomer(companyA, { displayName: "Acme Corp" });
+      const loc = await db.createLocation(companyA, cust.id, {
+        name: "Sede Operativa",
+        address: "Via Garibaldi 10",
+        city: "Torino",
+        isActive: true,
+      });
+
+      // Archive via canonical endpoint
+      const archRes = await apiRequest(`/api/v1/locations/${loc.id}/archive`, {
+        method: "POST",
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(archRes.status).toBe(200);
+      expect(archRes.data.isActive).toBe(false);
+
+      // Reactivate via canonical endpoint
+      const reactRes = await apiRequest(`/api/v1/locations/${loc.id}/reactivate`, {
+        method: "POST",
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(reactRes.status).toBe(200);
+      expect(reactRes.data.isActive).toBe(true);
+    });
+
+    it("5. enforces RBAC on canonical endpoints (technician read-only, cliente forbidden)", async () => {
+      const techAuth = await createTestUserAndLogin(companyA, "technician");
+      const clientAuth = await createTestUserAndLogin(companyA, "cliente");
+      const cust = await db.createCustomer(companyA, { displayName: "Acme Corp" });
+      const loc = await db.createLocation(companyA, cust.id, {
+        name: "Cantiere Nord",
+        address: "Via Po 5",
+        city: "Torino",
+      });
+
+      // Technician can read
+      const techGet = await apiRequest(`/api/v1/locations/${loc.id}`, { cookies: techAuth.cookies });
+      expect(techGet.status).toBe(200);
+
+      // Technician cannot write (403)
+      const techPut = await apiRequest(`/api/v1/locations/${loc.id}`, {
+        method: "PUT",
+        body: { name: "Tech Exploit" },
+        cookies: techAuth.cookies,
+        headers: techAuth.headers,
+      });
+      expect(techPut.status).toBe(403);
+
+      const techArch = await apiRequest(`/api/v1/locations/${loc.id}/archive`, {
+        method: "POST",
+        cookies: techAuth.cookies,
+        headers: techAuth.headers,
+      });
+      expect(techArch.status).toBe(403);
+
+      // Cliente forbidden completely (403)
+      const cliGet = await apiRequest(`/api/v1/locations/${loc.id}`, { cookies: clientAuth.cookies });
+      expect(cliGet.status).toBe(403);
+    });
+
+    it("6. prevents cross-tenant access on canonical endpoints", async () => {
+      const authB = await createTestUserAndLogin(companyB, "admin");
+      const custA = await db.createCustomer(companyA, { displayName: "Tenant A Customer" });
+      const locA = await db.createLocation(companyA, custA.id, {
+        name: "Tenant A Location",
+        address: "Via Roma",
+        city: "Milano",
+      });
+
+      // Tenant B GET -> 404
+      const getRes = await apiRequest(`/api/v1/locations/${locA.id}`, { cookies: authB.cookies });
+      expect(getRes.status).toBe(404);
+
+      // Tenant B PUT -> 404
+      const putRes = await apiRequest(`/api/v1/locations/${locA.id}`, {
+        method: "PUT",
+        body: { name: "Hijacked" },
+        cookies: authB.cookies,
+        headers: authB.headers,
+      });
+      expect(putRes.status).toBe(404);
+
+      // Tenant B archive -> 404
+      const archRes = await apiRequest(`/api/v1/locations/${locA.id}/archive`, {
+        method: "POST",
+        cookies: authB.cookies,
+        headers: authB.headers,
+      });
+      expect(archRes.status).toBe(404);
+
+      // Tenant B reactivate -> 404
+      const reactRes = await apiRequest(`/api/v1/locations/${locA.id}/reactivate`, {
+        method: "POST",
+        cookies: authB.cookies,
+        headers: authB.headers,
+      });
+      expect(reactRes.status).toBe(404);
+    });
+
+    it("8. ensures legacy alias /api/v1/customers/locations/:id continues to work equivalently", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const cust = await db.createCustomer(companyA, { displayName: "Acme Corp" });
+      const loc = await db.createLocation(companyA, cust.id, {
+        name: "Sede Alias Test",
+        address: "Via Duomo 1",
+        city: "Milano",
+      });
+
+      // Legacy GET works
+      const legacyGet = await apiRequest(`/api/v1/customers/locations/${loc.id}`, { cookies: auth.cookies });
+      expect(legacyGet.status).toBe(200);
+      expect(legacyGet.data.name).toBe("Sede Alias Test");
+
+      // Legacy PUT works
+      const legacyPut = await apiRequest(`/api/v1/customers/locations/${loc.id}`, {
+        method: "PUT",
+        body: { name: "Sede Alias Aggiornata" },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(legacyPut.status).toBe(200);
+      expect(legacyPut.data.name).toBe("Sede Alias Aggiornata");
+
+      // Legacy archive works
+      const legacyArch = await apiRequest(`/api/v1/customers/locations/${loc.id}/archive`, {
+        method: "POST",
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(legacyArch.status).toBe(200);
+      expect(legacyArch.data.isActive).toBe(false);
+
+      // Legacy reactivate works
+      const legacyReact = await apiRequest(`/api/v1/customers/locations/${loc.id}/reactivate`, {
+        method: "POST",
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(legacyReact.status).toBe(200);
+      expect(legacyReact.data.isActive).toBe(true);
+    });
+  });
 });

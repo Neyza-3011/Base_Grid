@@ -187,7 +187,7 @@ export async function fetchLocations(
 }
 
 export async function fetchLocation(id: string): Promise<Location> {
-  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}`, {
+  const res = await fetch(`/api/v1/locations/${encodeURIComponent(id)}`, {
     method: "GET",
     credentials: "include",
     headers: appendCsrfHeaders({ Accept: "application/json" }),
@@ -215,7 +215,7 @@ export async function updateLocation(
   id: string,
   payload: UpdateLocationPayload,
 ): Promise<Location> {
-  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}`, {
+  const res = await fetch(`/api/v1/locations/${encodeURIComponent(id)}`, {
     method: "PUT",
     credentials: "include",
     headers: appendCsrfHeaders({
@@ -228,7 +228,7 @@ export async function updateLocation(
 }
 
 export async function archiveLocation(id: string): Promise<Location> {
-  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}/archive`, {
+  const res = await fetch(`/api/v1/locations/${encodeURIComponent(id)}/archive`, {
     method: "POST",
     credentials: "include",
     headers: appendCsrfHeaders({
@@ -239,7 +239,7 @@ export async function archiveLocation(id: string): Promise<Location> {
 }
 
 export async function reactivateLocation(id: string): Promise<Location> {
-  const res = await fetch(`/api/v1/customers/locations/${encodeURIComponent(id)}/reactivate`, {
+  const res = await fetch(`/api/v1/locations/${encodeURIComponent(id)}/reactivate`, {
     method: "POST",
     credentials: "include",
     headers: appendCsrfHeaders({

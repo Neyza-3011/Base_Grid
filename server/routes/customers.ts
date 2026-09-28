@@ -14,6 +14,7 @@ import {
 } from "../types";
 
 export const customersRouter = Router();
+export const locationsRouter = Router();
 const customerService = new CustomerService(db);
 
 const READ_ROLES: UserRole[] = [
@@ -54,85 +55,65 @@ function toLocationResponse(record: any): LocationResponse {
 }
 
 // ==============================================================================
-// 1. Locations Specific Routes (placed before /:id parameter routes)
+// Shared Location Item Handlers (tenant-isolated via req.user.companyId)
 // ==============================================================================
 
-/**
- * GET /api/v1/customers/locations/:id
- * Gets a specific location
- */
-customersRouter.get(
-  "/locations/:id",
-  authenticate,
-  requireRole(READ_ROLES),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.user || !req.user.companyId) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
+const getLocationHandler = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user || !req.user.companyId) {
+    res.status(401).json({ detail: "Azienda non trovata." });
+    return;
+  }
 
-    const location = await customerService.getLocationById(req.user.companyId, req.params.id);
-    res.status(200).json(toLocationResponse(location));
-  })
-);
+  const location = await customerService.getLocationById(req.user.companyId, req.params.id);
+  res.status(200).json(toLocationResponse(location));
+});
 
-/**
- * PUT /api/v1/customers/locations/:id
- * Updates a specific location
- */
-customersRouter.put(
-  "/locations/:id",
-  authenticate,
-  requireRole(WRITE_ROLES),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.user || !req.user.companyId) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
+const updateLocationHandler = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user || !req.user.companyId) {
+    res.status(401).json({ detail: "Azienda non trovata." });
+    return;
+  }
 
-    const input: UpdateLocationInput = req.body;
-    const location = await customerService.updateLocation(req.user.companyId, req.params.id, input);
-    res.status(200).json(toLocationResponse(location));
-  })
-);
+  const input: UpdateLocationInput = req.body;
+  const location = await customerService.updateLocation(req.user.companyId, req.params.id, input);
+  res.status(200).json(toLocationResponse(location));
+});
 
-/**
- * POST /api/v1/customers/locations/:id/archive
- * Archives a specific location (isActive = false)
- */
-customersRouter.post(
-  "/locations/:id/archive",
-  authenticate,
-  requireRole(WRITE_ROLES),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.user || !req.user.companyId) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
+const archiveLocationHandler = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user || !req.user.companyId) {
+    res.status(401).json({ detail: "Azienda non trovata." });
+    return;
+  }
 
-    const location = await customerService.archiveLocation(req.user.companyId, req.params.id);
-    res.status(200).json(toLocationResponse(location));
-  })
-);
+  const location = await customerService.archiveLocation(req.user.companyId, req.params.id);
+  res.status(200).json(toLocationResponse(location));
+});
 
-/**
- * POST /api/v1/customers/locations/:id/reactivate
- * Reactivates a specific location (isActive = true)
- */
-customersRouter.post(
-  "/locations/:id/reactivate",
-  authenticate,
-  requireRole(WRITE_ROLES),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    if (!req.user || !req.user.companyId) {
-      res.status(401).json({ detail: "Azienda non trovata." });
-      return;
-    }
+const reactivateLocationHandler = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.user || !req.user.companyId) {
+    res.status(401).json({ detail: "Azienda non trovata." });
+    return;
+  }
 
-    const location = await customerService.reactivateLocation(req.user.companyId, req.params.id);
-    res.status(200).json(toLocationResponse(location));
-  })
-);
+  const location = await customerService.reactivateLocation(req.user.companyId, req.params.id);
+  res.status(200).json(toLocationResponse(location));
+});
+
+// ==============================================================================
+// 1. Canonical Locations Routes (/api/v1/locations/:id)
+// ==============================================================================
+locationsRouter.get("/:id", authenticate, requireRole(READ_ROLES), getLocationHandler);
+locationsRouter.put("/:id", authenticate, requireRole(WRITE_ROLES), updateLocationHandler);
+locationsRouter.post("/:id/archive", authenticate, requireRole(WRITE_ROLES), archiveLocationHandler);
+locationsRouter.post("/:id/reactivate", authenticate, requireRole(WRITE_ROLES), reactivateLocationHandler);
+
+// ==============================================================================
+// 2. Backward-Compatible Location Aliases (/api/v1/customers/locations/:id)
+// ==============================================================================
+customersRouter.get("/locations/:id", authenticate, requireRole(READ_ROLES), getLocationHandler);
+customersRouter.put("/locations/:id", authenticate, requireRole(WRITE_ROLES), updateLocationHandler);
+customersRouter.post("/locations/:id/archive", authenticate, requireRole(WRITE_ROLES), archiveLocationHandler);
+customersRouter.post("/locations/:id/reactivate", authenticate, requireRole(WRITE_ROLES), reactivateLocationHandler);
 
 // ==============================================================================
 // 2. Customers Main Routes
