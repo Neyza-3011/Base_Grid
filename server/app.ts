@@ -111,9 +111,10 @@ export function createApp(): Express {
     
     // Log the error safely (never log err.message or stack trace for 5xx to prevent leakage of credentials/SQL)
     if (status >= 500) {
-      console.error(`[ServerError] ${err?.name || "InternalServerError"} (status: ${status})`);
+      const errorId = crypto.randomUUID();
+      console.error(`[ServerError] ${err?.name || "Error"}: Internal Server Error (ID: ${errorId})`);
     } else {
-      console.error(`[ClientError] ${err?.name || "Error"}:`, err?.message || "Client error");
+      console.error(`[ServerError] ${err?.name || "Error"}:`, err?.message || "Client error");
     }
     
     // Only return the exact error message to the client for expected HTTP errors (status < 500)
