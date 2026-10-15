@@ -259,6 +259,14 @@ export const VALID_STATUS_TRANSITIONS: Record<InterventionStatus, readonly Inter
   fatturato: [],
 };
 
+export const TECHNICIAN_ALLOWED_STATUS_TRANSITIONS: Record<string, readonly InterventionStatus[]> = {
+  assegnato: ["in_viaggio"],
+  in_viaggio: ["sul_posto"],
+  sul_posto: ["in_lavorazione"],
+  in_lavorazione: ["in_attesa", "completato"],
+  in_attesa: ["in_lavorazione", "completato"],
+};
+
 export interface InterventionRecord {
   id: string;
   companyId: string;
@@ -283,7 +291,10 @@ export interface InterventionRecord {
 
 export interface InterventionResponse extends Omit<InterventionRecord, "companyId"> {
   customerName?: string;
+  customerPhone?: string;
   locationName?: string;
+  locationAddress?: string;
+  locationCity?: string;
   assetName?: string;
   technicianName?: string;
 }

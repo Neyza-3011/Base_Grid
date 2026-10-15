@@ -35,7 +35,10 @@ export interface Intervention {
   createdAt: string;
   updatedAt: string;
   customerName?: string;
+  customerPhone?: string;
   locationName?: string;
+  locationAddress?: string;
+  locationCity?: string;
   assetName?: string;
   technicianName?: string;
 }

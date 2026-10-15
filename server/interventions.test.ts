@@ -895,4 +895,271 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(sqlContent).toContain("fk_interventions_updatedby_tenant_consistency");
     });
   });
+
+  describe("8. Field Technician Workflow & Mobile-First RBAC (P1.5)", () => {
+    it("ensures technician GET /api/v1/interventions ONLY lists their assigned interventions, ignoring any attempted query manipulation", async () => {
+      // Create 3 interventions
+      // 1. Assigned to techA
+      const intTechA = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per Tecnico A1",
+        status: "assegnato",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 2. Assigned to techA2
+      await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per Tecnico A2",
+        status: "assegnato",
+        technicianId: techA2.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 3. Unassigned
+      await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Non Assegnato",
+        status: "da_assegnare",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // techA requests list with no filters
+      const resDefault = await apiRequest("/api/v1/interventions", {
+        method: "GET",
+        cookies: techA.cookies,
+      });
+      expect(resDefault.status).toBe(200);
+      expect(resDefault.data.items.length).toBe(1);
+      expect(resDefault.data.items[0].id).toBe(intTechA.id);
+      expect(resDefault.data.items[0].technicianId).toBe(techA.user.id);
+
+      // techA attempts to override filter with another technician's ID
+      const resManipulated = await apiRequest(`/api/v1/interventions?technicianId=${techA2.user.id}`, {
+        method: "GET",
+        cookies: techA.cookies,
+      });
+      expect(resManipulated.status).toBe(200);
+      expect(resManipulated.data.items.length).toBe(1);
+      expect(resManipulated.data.items[0].id).toBe(intTechA.id);
+    });
+
+    it("ensures technician can ONLY get detail by ID for interventions assigned to them (returns 404 for unassigned or other tech)", async () => {
+      const intTechA = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Assegnato A1",
+        status: "assegnato",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const intTechA2 = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Assegnato A2",
+        status: "assegnato",
+        technicianId: techA2.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const intUnassigned = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Senza Tecnico",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // Access assigned intervention -> 200 OK with enriched data
+      const resOk = await apiRequest(`/api/v1/interventions/${intTechA.id}`, {
+        method: "GET",
+        cookies: techA.cookies,
+      });
+      expect(resOk.status).toBe(200);
+      expect(resOk.data.id).toBe(intTechA.id);
+      expect(resOk.data.customerName).toBe(customerA.displayName);
+      expect(resOk.data.locationName).toBe(locationA.name);
+
+      // Access other technician's intervention -> 404 NotFound
+      const resForbiddenOther = await apiRequest(`/api/v1/interventions/${intTechA2.id}`, {
+        method: "GET",
+        cookies: techA.cookies,
+      });
+      expect(resForbiddenOther.status).toBe(404);
+
+      // Access unassigned intervention -> 404 NotFound
+      const resForbiddenUnassigned = await apiRequest(`/api/v1/interventions/${intUnassigned.id}`, {
+        method: "GET",
+        cookies: techA.cookies,
+      });
+      expect(resForbiddenUnassigned.status).toBe(404);
+    });
+
+    it("allows technician to advance authorized operational transitions end-to-end and record hours and notes", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Riparazione Climatizzatore",
+        status: "assegnato",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 1. assegnato -> in_viaggio
+      let res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "in_viaggio" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("in_viaggio");
+
+      // 2. in_viaggio -> sul_posto
+      res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "sul_posto" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("sul_posto");
+
+      // 3. sul_posto -> in_lavorazione
+      res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "in_lavorazione" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("in_lavorazione");
+
+      // 4. in_lavorazione -> in_attesa (with notes)
+      res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "in_attesa", notes: "Attesa fornitura filtro specifico" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("in_attesa");
+      expect(res.data.notes).toContain("Attesa fornitura filtro specifico");
+
+      // 5. in_attesa -> in_lavorazione (resume)
+      res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "in_lavorazione" },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("in_lavorazione");
+
+      // 6. in_lavorazione -> completato (with actualHours and notes)
+      res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "completato",
+          actualHours: 3.5,
+          notes: "Filtro installato e circuito igienizzato",
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("completato");
+      expect(res.data.actualHours).toBe(3.5);
+      expect(res.data.notes).toContain("Attesa fornitura filtro specifico");
+      expect(res.data.notes).toContain("Filtro installato e circuito igienizzato");
+    });
+
+    it("prevents technician from executing administrative transitions (verificato, pronto_per_fatturazione, fatturato) with 403", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento da verificare",
+        status: "completato",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // Attempt completato -> verificato
+      const resVerificato = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "verificato" },
+      });
+      expect(resVerificato.status).toBe(403);
+
+      // Attempt to pronto_per_fatturazione
+      const resFattura = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "pronto_per_fatturazione" },
+      });
+      expect(resFattura.status).toBe(403);
+    });
+
+    it("prevents technician from assigning or reassigning technicians during transition with 403", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Assegnato A1",
+        status: "assegnato",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "in_viaggio",
+          technicianId: techA2.user.id, // Attempt to reassign
+        },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.data.detail || res.data.error).toMatch(/non può assegnare o riassegnare/i);
+    });
+
+    it("prevents technician from transitioning an intervention assigned to another technician with 403", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Assegnato A2",
+        status: "assegnato",
+        technicianId: techA2.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "in_viaggio" },
+      });
+
+      expect(res.status).toBe(403);
+    });
+  });
 });

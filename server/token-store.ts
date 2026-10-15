@@ -697,9 +697,10 @@ export class RefreshTokenStore {
     }
 
     const mode = getRuntimeMode();
+    const hasRedis = Boolean(process.env.REDIS_URL || (process.env.REDIS_HOST && process.env.REDIS_HOST !== "127.0.0.1"));
     if (mode === "test") {
       this.adapter = new DistributedStorageEngine();
-    } else if (process.env.REDIS_URL || config.REDIS_URL || (config.REDIS_HOST && config.REDIS_HOST !== "127.0.0.1" && process.env.REDIS_HOST)) {
+    } else if (hasRedis) {
       this.adapter = new RedisTokenStorageAdapter();
     } else if (mode === "production") {
       throw new Error("CRITICAL SECURITY ERROR: REDIS_URL or REDIS_HOST must be provided in production for distributed token storage.");

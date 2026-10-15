@@ -8,6 +8,7 @@ const app = createApp();
 
 describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
   beforeEach(async () => {
+    delete process.env.BASEGRID_RUNTIME_MODE;
     await rateLimiter.reset();
   });
 

@@ -10,8 +10,10 @@ import {
   VALID_INTERVENTION_PRIORITIES,
   VALID_INTERVENTION_STATUSES,
   VALID_STATUS_TRANSITIONS,
+  TECHNICIAN_ALLOWED_STATUS_TRANSITIONS,
+  UserRole,
 } from "../types";
-import { BadRequestError, NotFoundError } from "../errors";
+import { BadRequestError, NotFoundError, ForbiddenError } from "../errors";
 
 export interface GetInterventionsFilter {
   search?: string;
@@ -32,27 +34,43 @@ export class InterventionService {
 
   public async getInterventions(
     companyId: string,
-    filters?: GetInterventionsFilter
+    filters?: GetInterventionsFilter,
+    actor?: { id: string; role: UserRole }
   ): Promise<{ items: InterventionResponse[]; nextCursor?: string; totalCount?: number }> {
-    const result = await this.db.getInterventionsByCompany(companyId, filters);
+    const effectiveFilters: GetInterventionsFilter = { ...filters };
+    if (actor && actor.role === "technician") {
+      effectiveFilters.technicianId = actor.id;
+    }
+
+    const result = await this.db.getInterventionsByCompany(companyId, effectiveFilters);
 
     // Enrich items with related names for UI convenience
     const enrichedItems: InterventionResponse[] = await Promise.all(
       result.items.map(async (item) => {
         const { companyId: _, ...rest } = item;
         let customerName: string | undefined;
+        let customerPhone: string | undefined;
         let locationName: string | undefined;
+        let locationAddress: string | undefined;
+        let locationCity: string | undefined;
         let assetName: string | undefined;
         let technicianName: string | undefined;
 
         try {
           if (item.customerId) {
             const cust = await this.db.getCustomerByIdAndCompany(item.customerId, companyId);
-            if (cust) customerName = cust.displayName;
+            if (cust) {
+              customerName = cust.displayName;
+              customerPhone = cust.phoneNumber;
+            }
           }
           if (item.locationId) {
             const loc = await this.db.getLocationByIdAndCompany(item.locationId, companyId);
-            if (loc) locationName = loc.name;
+            if (loc) {
+              locationName = loc.name;
+              locationAddress = loc.address;
+              locationCity = loc.city;
+            }
           }
           if (item.assetId) {
             const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
@@ -69,7 +87,10 @@ export class InterventionService {
         return {
           ...rest,
           customerName,
+          customerPhone,
           locationName,
+          locationAddress,
+          locationCity,
           assetName,
           technicianName,
         };
@@ -85,27 +106,43 @@ export class InterventionService {
 
   public async getInterventionById(
     companyId: string,
-    interventionId: string
+    interventionId: string,
+    actor?: { id: string; role: UserRole }
   ): Promise<InterventionResponse> {
     const item = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
     if (!item) {
       throw new NotFoundError("Intervento non trovato.");
     }
 
+    // A technician can only retrieve the details of an intervention assigned to them
+    if (actor && actor.role === "technician" && item.technicianId !== actor.id) {
+      throw new NotFoundError("Intervento non trovato.");
+    }
+
     const { companyId: _, ...rest } = item;
     let customerName: string | undefined;
+    let customerPhone: string | undefined;
     let locationName: string | undefined;
+    let locationAddress: string | undefined;
+    let locationCity: string | undefined;
     let assetName: string | undefined;
     let technicianName: string | undefined;
 
     try {
       if (item.customerId) {
         const cust = await this.db.getCustomerByIdAndCompany(item.customerId, companyId);
-        if (cust) customerName = cust.displayName;
+        if (cust) {
+          customerName = cust.displayName;
+          customerPhone = cust.phoneNumber;
+        }
       }
       if (item.locationId) {
         const loc = await this.db.getLocationByIdAndCompany(item.locationId, companyId);
-        if (loc) locationName = loc.name;
+        if (loc) {
+          locationName = loc.name;
+          locationAddress = loc.address;
+          locationCity = loc.city;
+        }
       }
       if (item.assetId) {
         const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
@@ -122,7 +159,10 @@ export class InterventionService {
     return {
       ...rest,
       customerName,
+      customerPhone,
       locationName,
+      locationAddress,
+      locationCity,
       assetName,
       technicianName,
     };
@@ -400,11 +440,33 @@ export class InterventionService {
     companyId: string,
     updatedBy: string,
     interventionId: string,
-    input: TransitionInterventionInput
+    input: TransitionInterventionInput,
+    actor?: { id: string; role: UserRole }
   ): Promise<InterventionRecord> {
     const existing = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
     if (!existing) {
       throw new NotFoundError("Intervento non trovato.");
+    }
+
+    // Role-specific enforcement for technicians
+    if (actor && actor.role === "technician") {
+      // 1. Technician can only update their own assigned intervention
+      if (existing.technicianId !== actor.id) {
+        throw new ForbiddenError("Non autorizzato ad aggiornare questo intervento.");
+      }
+
+      // 2. Technician cannot set, assign, or change technicianId
+      if (input.technicianId !== undefined) {
+        throw new ForbiddenError("Il tecnico non può assegnare o riassegnare tecnici.");
+      }
+
+      // 3. Technician can only execute permitted operational transitions
+      const allowedForTech = TECHNICIAN_ALLOWED_STATUS_TRANSITIONS[existing.status] || [];
+      if (!allowedForTech.includes(input.targetStatus)) {
+        throw new ForbiddenError(
+          `Transizione di stato a '${input.targetStatus}' non consentita per il ruolo tecnico.`
+        );
+      }
     }
 
     if (!input.targetStatus || !VALID_INTERVENTION_STATUSES.includes(input.targetStatus)) {
@@ -465,7 +527,16 @@ export class InterventionService {
     }
 
     if (input.notes !== undefined && input.notes !== null) {
-      updates.notes = input.notes.trim();
+      const trimmedNotes = input.notes.trim();
+      if (trimmedNotes.length > 0) {
+        if (actor && actor.role === "technician") {
+          const timestamp = new Date().toISOString();
+          const newEntry = `[${timestamp}] ${trimmedNotes}`;
+          updates.notes = existing.notes ? `${existing.notes}\n\n${newEntry}` : newEntry;
+        } else {
+          updates.notes = trimmedNotes;
+        }
+      }
     }
 
     const updated = await this.db.updateIntervention(companyId, interventionId, updates);

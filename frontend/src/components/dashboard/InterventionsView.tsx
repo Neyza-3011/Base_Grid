@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Receipt,
   RotateCcw,
+  Phone,
+  Navigation,
   LucideIcon,
 } from "lucide-react";
 import {
@@ -202,8 +204,19 @@ export const NEXT_TRANSITIONS_MAP: Record<
   fatturato: [],
 };
 
+const TECHNICIAN_ALLOWED_STATUS_TRANSITIONS: Record<string, readonly InterventionStatus[]> = {
+  assegnato: ["in_viaggio"],
+  in_viaggio: ["sul_posto"],
+  sul_posto: ["in_lavorazione"],
+  in_lavorazione: ["in_attesa", "completato"],
+  in_attesa: ["in_lavorazione", "completato"],
+};
+
 export function InterventionsView({ currentUser }: InterventionsViewProps) {
-  const canWrite = currentUser?.role !== "technician" && currentUser?.role !== "cliente";
+  const isTechnician = currentUser?.role === "technician";
+  const isClient = currentUser?.role === "cliente";
+  const canCreateAndManage = !isTechnician && !isClient;
+  const canTransition = !isClient;
 
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,15 +455,16 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
             <Wrench className="h-6 w-6 text-primary" />
-            Interventi
+            {isTechnician ? "I Miei Interventi" : "Interventi"}
           </h1>
           <p className="text-sm text-white/60 mt-1">
-            Gestisci le richieste di assistenza, le assegnazioni tecniche e il ciclo di vita degli
-            interventi.
+            {isTechnician
+              ? "Schede di lavoro assegnate a te: visualizza dettagli, naviga sul posto e aggiorna lo stato operativo."
+              : "Gestisci le richieste di assistenza, le assegnazioni tecniche e il ciclo di vita degli interventi."}
           </p>
         </div>
 
-        {canWrite && (
+        {canCreateAndManage && (
           <button
             onClick={handleOpenCreate}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition shadow-lg shadow-primary/20"
@@ -523,6 +537,28 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
               ))}
             </select>
           </div>
+
+          {/* Technician Filter or Indicator */}
+          {!isTechnician ? (
+            <div>
+              <select
+                value={filterTechnician}
+                onChange={(e) => setFilterTechnician(e.target.value)}
+                className="w-full bg-[#182030] text-white text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
+              >
+                <option value="">Tutti i tecnici</option>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center px-3 py-2 bg-primary/10 border border-primary/20 rounded-xl text-xs font-semibold text-primary">
+              <UserCheck className="h-4 w-4 mr-1.5 shrink-0" />I tuoi interventi
+            </div>
+          )}
         </div>
       </div>
 
@@ -545,7 +581,7 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                 : "Non sono presenti interventi registrati. Crea il primo intervento con il pulsante in alto."}
             </p>
           </div>
-          {canWrite && !query && !filterStatus && (
+          {canCreateAndManage && !query && !filterStatus && (
             <button
               onClick={handleOpenCreate}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition shadow-lg shadow-primary/20"
@@ -948,34 +984,76 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
             </div>
 
             {/* Relational chain box */}
-            <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-2 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <span className="text-white/40 block">Cliente:</span>
-                  <span className="font-medium text-white flex items-center gap-1.5 mt-0.5">
-                    <Building2 className="h-3.5 w-3.5 text-primary" />
-                    {selectedIntervention.customerName || selectedIntervention.customerId}
-                  </span>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="font-semibold text-white flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                      {selectedIntervention.customerName || selectedIntervention.customerId}
+                    </span>
+                    {selectedIntervention.customerPhone && (
+                      <a
+                        href={`tel:${selectedIntervention.customerPhone}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition shrink-0"
+                        title="Chiama cliente"
+                      >
+                        <Phone className="h-3 w-3" />
+                        Chiama
+                      </a>
+                    )}
+                  </div>
                 </div>
+
                 <div>
                   <span className="text-white/40 block">Sede / Cantiere:</span>
-                  <span className="font-medium text-white flex items-center gap-1.5 mt-0.5">
-                    <MapPin className="h-3.5 w-3.5 text-amber-400" />
-                    {selectedIntervention.locationName || selectedIntervention.locationId}
-                  </span>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="font-semibold text-white flex items-center gap-1.5 truncate">
+                      <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate">
+                        {selectedIntervention.locationName || selectedIntervention.locationId}
+                        {selectedIntervention.locationAddress
+                          ? ` · ${selectedIntervention.locationAddress}`
+                          : ""}
+                        {selectedIntervention.locationCity
+                          ? ` (${selectedIntervention.locationCity})`
+                          : ""}
+                      </span>
+                    </span>
+                    {(selectedIntervention.locationAddress ||
+                      selectedIntervention.locationCity) && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                          [selectedIntervention.locationAddress, selectedIntervention.locationCity]
+                            .filter(Boolean)
+                            .join(", "),
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-semibold transition shrink-0"
+                        title="Apri navigatore"
+                      >
+                        <Navigation className="h-3 w-3" />
+                        Mappa
+                      </a>
+                    )}
+                  </div>
                 </div>
+
                 {selectedIntervention.assetName && (
                   <div>
                     <span className="text-white/40 block">Impianto / Asset:</span>
-                    <span className="font-medium text-white flex items-center gap-1.5 mt-0.5">
+                    <span className="font-medium text-white flex items-center gap-1.5 mt-1">
                       <Cpu className="h-3.5 w-3.5 text-purple-400" />
                       {selectedIntervention.assetName}
                     </span>
                   </div>
                 )}
+
                 <div>
                   <span className="text-white/40 block">Tecnico Assegnato:</span>
-                  <span className="font-medium text-white flex items-center gap-1.5 mt-0.5">
+                  <span className="font-medium text-white flex items-center gap-1.5 mt-1">
                     <UserCheck className="h-3.5 w-3.5 text-emerald-400" />
                     {selectedIntervention.technicianName || "Nessun tecnico assegnato"}
                   </span>
@@ -1043,13 +1121,18 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
             )}
 
             {/* Status Transitions Section */}
-            {canWrite && (
+            {canTransition && (
               <div className="space-y-3 pt-3 border-t border-white/10">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <ArrowRight className="h-3.5 w-3.5 text-primary" />
-                    Avanzamento Stato Intervento
+                    {isTechnician
+                      ? "Avanzamento Operativo sul Campo"
+                      : "Avanzamento Stato Intervento"}
                   </h4>
+                  {isTechnician && (
+                    <span className="text-[11px] text-primary/80 font-medium">Ruolo Tecnico</span>
+                  )}
                 </div>
 
                 {/* Transition Form inline if target selected */}
@@ -1059,7 +1142,7 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                       Transizione a: {STATUS_CONFIG[transitionTarget]?.label || transitionTarget}
                     </h5>
 
-                    {transitionTarget === "assegnato" && (
+                    {!isTechnician && transitionTarget === "assegnato" && (
                       <div>
                         <label className="block text-xs font-medium text-white/70 mb-1">
                           Seleziona Tecnico da Assegnare *
@@ -1081,7 +1164,9 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                     )}
 
                     {(transitionTarget === "completato" ||
-                      transitionTarget === "in_lavorazione") && (
+                      transitionTarget === "in_lavorazione" ||
+                      transitionTarget === "in_attesa" ||
+                      isTechnician) && (
                       <div>
                         <label className="block text-xs font-medium text-white/70 mb-1">
                           Ore Effettive di Lavoro (opzionale)
@@ -1100,13 +1185,19 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
 
                     <div>
                       <label className="block text-xs font-medium text-white/70 mb-1">
-                        Note sul cambio di stato (opzionale)
+                        {isTechnician
+                          ? "Note operative sul campo (opzionale)"
+                          : "Note sul cambio di stato (opzionale)"}
                       </label>
                       <input
                         type="text"
                         value={transitionNotes}
                         onChange={(e) => setTransitionNotes(e.target.value)}
-                        placeholder="Es. Intervento completato con sostituzione componente..."
+                        placeholder={
+                          isTechnician
+                            ? "Es. Lavoro eseguito, sostituita valvola o attesa pezzi..."
+                            : "Es. Intervento completato con sostituzione componente..."
+                        }
                         className="w-full bg-[#182030] text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary placeholder:text-white/40"
                       />
                     </div>
@@ -1133,23 +1224,40 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {(NEXT_TRANSITIONS_MAP[selectedIntervention.status] || []).map((t) => (
-                      <button
-                        key={t.target}
-                        type="button"
-                        onClick={() => handleOpenTransition(t.target)}
-                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-white text-xs font-semibold transition active:scale-95 ${t.btnClass}`}
-                      >
-                        <ArrowRight className="h-3.5 w-3.5" />
-                        {t.label}
-                      </button>
-                    ))}
-                    {(NEXT_TRANSITIONS_MAP[selectedIntervention.status] || []).length === 0 && (
+                    {(NEXT_TRANSITIONS_MAP[selectedIntervention.status] || [])
+                      .filter((t) =>
+                        isTechnician
+                          ? (
+                              TECHNICIAN_ALLOWED_STATUS_TRANSITIONS[selectedIntervention.status] ||
+                              []
+                            ).includes(t.target)
+                          : true,
+                      )
+                      .map((t) => (
+                        <button
+                          key={t.target}
+                          type="button"
+                          onClick={() => handleOpenTransition(t.target)}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-xs sm:text-sm font-semibold transition active:scale-95 shadow-md ${t.btnClass}`}
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          {t.label}
+                        </button>
+                      ))}
+                    {(NEXT_TRANSITIONS_MAP[selectedIntervention.status] || []).filter((t) =>
+                      isTechnician
+                        ? (
+                            TECHNICIAN_ALLOWED_STATUS_TRANSITIONS[selectedIntervention.status] || []
+                          ).includes(t.target)
+                        : true,
+                    ).length === 0 && (
                       <span className="text-xs text-white/40 italic">
-                        Nessun avanzamento disponibile (stato finale:{" "}
-                        {STATUS_CONFIG[selectedIntervention.status]?.label ||
-                          selectedIntervention.status}
-                        ).
+                        {isTechnician && selectedIntervention.status === "completato"
+                          ? "Intervento completato. In attesa di verifica e approvazione dall'ufficio tecnico."
+                          : `Nessun avanzamento disponibile (stato attuale: ${
+                              STATUS_CONFIG[selectedIntervention.status]?.label ||
+                              selectedIntervention.status
+                            }).`}
                       </span>
                     )}
                   </div>

@@ -70,8 +70,10 @@ describe("Rate Limiter Middleware", () => {
     app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
     
     // Simulate redis offline and production env
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
     const originalEnv = config.NODE_ENV;
     const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
     config.NODE_ENV = "production";
     (rateLimiter as any).redisClient = null; // simulate no redis client 
     
@@ -80,6 +82,8 @@ describe("Rate Limiter Middleware", () => {
       expect(res.status).toBe(503);
       expect(res.body.detail).toContain("Servizio temporaneamente non disponibile");
     } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
       config.NODE_ENV = originalEnv;
       (rateLimiter as any).redisClient = originalRedis;
     }
@@ -102,8 +106,10 @@ describe("Rate Limiter Middleware", () => {
     const { refreshLimiter } = await import("./rate-limiter");
     app.post("/refresh", refreshLimiter, (req, res) => { res.status(200).send("OK"); });
     
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
     const originalEnv = config.NODE_ENV;
     const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
     config.NODE_ENV = "production";
     (rateLimiter as any).redisClient = null; // simulate offline
     
@@ -112,6 +118,8 @@ describe("Rate Limiter Middleware", () => {
       expect(res.status).toBe(503);
       expect(res.body.detail).toContain("Servizio temporaneamente non disponibile");
     } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
       config.NODE_ENV = originalEnv;
       (rateLimiter as any).redisClient = originalRedis;
     }
@@ -123,8 +131,10 @@ describe("Rate Limiter Middleware", () => {
     const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: false });
     app.get("/api", limiter, (req, res) => { res.status(200).send("OK"); });
     
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
     const originalEnv = config.NODE_ENV;
     const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
     config.NODE_ENV = "production";
     (rateLimiter as any).redisClient = null;
     (rateLimiter as any).localFallback.clear();
@@ -138,6 +148,8 @@ describe("Rate Limiter Middleware", () => {
       // Memory fallback must NOT be used in production
       expect((rateLimiter as any).localFallback.size).toBe(0);
     } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
       config.NODE_ENV = originalEnv;
       (rateLimiter as any).redisClient = originalRedis;
     }

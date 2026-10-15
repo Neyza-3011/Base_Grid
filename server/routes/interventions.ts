@@ -36,6 +36,11 @@ const WRITE_ROLES: UserRole[] = [
   "superadmin",
 ];
 
+const TRANSITION_ROLES: UserRole[] = [
+  ...WRITE_ROLES,
+  "technician",
+];
+
 /**
  * Format InterventionRecord to InterventionResponse (removing internal companyId)
  */
@@ -61,7 +66,7 @@ interventionsRouter.get(
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
     const priority = req.query.priority as string | undefined;
-    const technicianId = req.query.technicianId as string | undefined;
+    let technicianId = req.query.technicianId as string | undefined;
     const customerId = req.query.customerId as string | undefined;
     const locationId = req.query.locationId as string | undefined;
     const assetId = req.query.assetId as string | undefined;
@@ -70,19 +75,28 @@ interventionsRouter.get(
     const cursor = req.query.cursor as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
 
-    const result = await interventionService.getInterventions(req.user.companyId, {
-      search,
-      status,
-      priority,
-      technicianId,
-      customerId,
-      locationId,
-      assetId,
-      scheduledStartFrom,
-      scheduledStartTo,
-      limit,
-      cursor,
-    });
+    // Enforce that a technician can only query interventions assigned to themselves
+    if (req.user.role === "technician") {
+      technicianId = req.user.id;
+    }
+
+    const result = await interventionService.getInterventions(
+      req.user.companyId,
+      {
+        search,
+        status,
+        priority,
+        technicianId,
+        customerId,
+        locationId,
+        assetId,
+        scheduledStartFrom,
+        scheduledStartTo,
+        limit,
+        cursor,
+      },
+      { id: req.user.id, role: req.user.role }
+    );
 
     res.status(200).json(result);
   })
@@ -129,7 +143,8 @@ interventionsRouter.get(
 
     const intervention = await interventionService.getInterventionById(
       req.user.companyId,
-      req.params.id
+      req.params.id,
+      { id: req.user.id, role: req.user.role }
     );
 
     res.status(200).json(intervention);
@@ -169,7 +184,7 @@ interventionsRouter.put(
 interventionsRouter.post(
   "/:id/transition",
   authenticate,
-  requireRole(WRITE_ROLES),
+  requireRole(TRANSITION_ROLES),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
@@ -181,7 +196,8 @@ interventionsRouter.post(
       req.user.companyId,
       req.user.id,
       req.params.id,
-      input
+      input,
+      { id: req.user.id, role: req.user.role }
     );
 
     res.status(200).json(toInterventionResponse(transitioned));
