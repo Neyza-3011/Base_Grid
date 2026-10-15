@@ -418,7 +418,10 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
     setTransitionTarget(target);
     setTransitionTechId(selectedIntervention?.technicianId || "");
     setTransitionActualHours(
-      selectedIntervention?.actualHours ? String(selectedIntervention.actualHours) : "",
+      (target === "in_lavorazione" || target === "completato") &&
+        selectedIntervention?.actualHours !== undefined
+        ? String(selectedIntervention.actualHours)
+        : "",
     );
     setTransitionNotes("");
   };
@@ -428,10 +431,16 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
 
     setTransitioning(true);
     try {
+      const hoursToSend =
+        (transitionTarget === "in_lavorazione" || transitionTarget === "completato") &&
+        transitionActualHours.trim() !== ""
+          ? parseFloat(transitionActualHours)
+          : undefined;
+
       const updated = await transitionInterventionStatus(selectedIntervention.id, {
         targetStatus: transitionTarget,
         technicianId: transitionTechId || undefined,
-        actualHours: transitionActualHours ? parseFloat(transitionActualHours) : undefined,
+        actualHours: hoursToSend,
         notes: transitionNotes.trim() || undefined,
       });
 
@@ -1164,9 +1173,7 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                     )}
 
                     {(transitionTarget === "completato" ||
-                      transitionTarget === "in_lavorazione" ||
-                      transitionTarget === "in_attesa" ||
-                      isTechnician) && (
+                      transitionTarget === "in_lavorazione") && (
                       <div>
                         <label className="block text-xs font-medium text-white/70 mb-1">
                           Ore Effettive di Lavoro (opzionale)

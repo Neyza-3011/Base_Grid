@@ -520,6 +520,14 @@ export class InterventionService {
     }
 
     if (input.actualHours !== undefined && input.actualHours !== null) {
+      if (actor && actor.role === "technician") {
+        if (input.targetStatus !== "in_lavorazione" && input.targetStatus !== "completato") {
+          throw new BadRequestError(
+            "Le ore effettive possono essere registrate dal tecnico soltanto durante le transizioni a 'in_lavorazione' o 'completato'."
+          );
+        }
+      }
+
       if (typeof input.actualHours !== "number" || !isFinite(input.actualHours) || input.actualHours < 0) {
         throw new BadRequestError("Le ore effettive devono essere un numero maggiore o uguale a 0.");
       }

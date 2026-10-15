@@ -1161,5 +1161,147 @@ describe("Interventions Backend Module (P1.4)", () => {
 
       expect(res.status).toBe(403);
     });
+
+    it("rejects technician actualHours during 'assegnato -> in_viaggio' with 400 and preserves state/hours", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Test Ore In Viaggio",
+        status: "assegnato",
+        technicianId: techA.user.id,
+        actualHours: 1.0,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 1. Technician cannot send actualHours during assegnato -> in_viaggio
+      const res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "in_viaggio",
+          actualHours: 2.5,
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/ore effettive/i);
+
+      // 3. Rejected request preserves both state and previously recorded actualHours
+      const check = await db.getInterventionByIdAndCompany(intervention.id, companyA);
+      expect(check?.status).toBe("assegnato");
+      expect(check?.actualHours).toBe(1.0);
+    });
+
+    it("rejects technician actualHours during 'in_lavorazione -> in_attesa' with 400 and preserves state/hours", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Test Ore In Attesa",
+        status: "in_lavorazione",
+        technicianId: techA.user.id,
+        actualHours: 2.0,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 2. Technician cannot send actualHours during in_lavorazione -> in_attesa
+      const res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "in_attesa",
+          actualHours: 4.0,
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/ore effettive/i);
+
+      // 3. State and hours unchanged
+      const check = await db.getInterventionByIdAndCompany(intervention.id, companyA);
+      expect(check?.status).toBe("in_lavorazione");
+      expect(check?.actualHours).toBe(2.0);
+    });
+
+    it("allows technician to record valid actualHours when transitioning to 'completato' (or 'in_lavorazione')", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Completamento Ore Valide",
+        status: "in_lavorazione",
+        technicianId: techA.user.id,
+        actualHours: 1.5,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 4. Technician can record valid actualHours on transition to completato
+      const res = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "completato",
+          actualHours: 5.0,
+          notes: "Tutto completato e funzionante",
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.data.status).toBe("completato");
+      expect(res.data.actualHours).toBe(5.0);
+
+      const check = await db.getInterventionByIdAndCompany(intervention.id, companyA);
+      expect(check?.status).toBe("completato");
+      expect(check?.actualHours).toBe(5.0);
+    });
+
+    it("rejects negative and non-finite actualHours with 400 during transitions", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento Ore Negative Non-finite",
+        status: "in_lavorazione",
+        technicianId: techA.user.id,
+        actualHours: 2.0,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // 5a. Negative actualHours
+      const resNegative = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "completato",
+          actualHours: -3.5,
+        },
+      });
+      expect(resNegative.status).toBe(400);
+      expect(resNegative.data.detail || resNegative.data.error).toMatch(/maggiore o uguale a 0/i);
+
+      // 5b. Non-finite / invalid actualHours (string representing NaN/non-number in JSON)
+      const resNonFinite = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: {
+          targetStatus: "completato",
+          actualHours: "non-un-numero",
+        },
+      });
+      expect(resNonFinite.status).toBe(400);
+      expect(resNonFinite.data.detail || resNonFinite.data.error).toMatch(/maggiore o uguale a 0/i);
+
+      // Verify no changes were made to the record
+      const check = await db.getInterventionByIdAndCompany(intervention.id, companyA);
+      expect(check?.status).toBe("in_lavorazione");
+      expect(check?.actualHours).toBe(2.0);
+    });
   });
 });
+
