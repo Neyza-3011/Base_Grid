@@ -361,7 +361,6 @@ export class DatabaseStore implements IDatabaseAdapter {
       status: data.status || "submitted",
       customerId: data.customerId,
       locationId: data.locationId,
-      interventionId: data.interventionId,
       client: {
         name: data.client?.name || "Cliente",
         address: data.client?.address || "",

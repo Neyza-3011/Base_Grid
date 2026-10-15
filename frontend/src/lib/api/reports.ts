@@ -25,6 +25,9 @@ export type Report = {
   notes?: string;
   signature_base64?: string;
   created_at: string;
+  customer_id?: string;
+  location_id?: string;
+  intervention_id?: string;
 };
 
 export type CreateReportPayload = {
@@ -33,6 +36,7 @@ export type CreateReportPayload = {
   client_city?: string;
   customer_id?: string;
   location_id?: string;
+  intervention_id?: string;
   work_hours: number;
   travel_hours?: number;
   date: string; // YYYY-MM-DD
@@ -45,6 +49,9 @@ export type CreateReportPayload = {
 
 export type ApiReportResponse = {
   id: string;
+  customer_id?: string;
+  location_id?: string;
+  intervention_id?: string;
   date: string;
   time: string;
   work_hours: number;
@@ -103,7 +110,7 @@ export function formatReportDateTime(
  */
 export function mapDtoToReport(dto: ApiReportResponse): Report {
   const { date, time, dateTimeFormatted } = formatReportDateTime(dto.date, dto.time);
-  return {
+  const report: Report = {
     id: dto.id,
     date,
     time,
@@ -123,6 +130,18 @@ export function mapDtoToReport(dto: ApiReportResponse): Report {
     notes: dto.notes || "",
     created_at: dto.created_at || new Date().toISOString(),
   };
+
+  if (dto.customer_id) {
+    report.customer_id = dto.customer_id;
+  }
+  if (dto.location_id) {
+    report.location_id = dto.location_id;
+  }
+  if (dto.intervention_id) {
+    report.intervention_id = dto.intervention_id;
+  }
+
+  return report;
 }
 
 /**

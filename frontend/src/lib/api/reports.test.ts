@@ -58,6 +58,44 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
       expect(mapped.technician.full_name).toBe("Mario Rossi");
       expect(mapped.materials_used).toEqual([{ name: "Cavo", quantity: 5 }]);
     });
+
+    it("preserves intervention_id when present in server DTO", () => {
+      const serverDto = {
+        id: "rep-101",
+        date: "2026-09-26",
+        time: "15:00",
+        work_hours: 2,
+        travel_hours: 0,
+        status: "submitted" as const,
+        intervention_id: "int-uuid-123",
+        client: { name: "Acme SpA" },
+        technician: { full_name: "Mario Rossi" },
+        materials_used: [],
+        created_at: "2026-09-26T15:00:00.000Z",
+      };
+
+      const mapped = mapDtoToReport(serverDto);
+      expect(mapped.intervention_id).toBe("int-uuid-123");
+    });
+
+    it("handles server DTO without intervention_id correctly and leaves field undefined", () => {
+      const serverDto = {
+        id: "rep-102",
+        date: "2026-09-26",
+        time: "15:00",
+        work_hours: 2,
+        travel_hours: 0,
+        status: "submitted" as const,
+        client: { name: "Acme SpA" },
+        technician: { full_name: "Mario Rossi" },
+        materials_used: [],
+        created_at: "2026-09-26T15:00:00.000Z",
+      };
+
+      const mapped = mapDtoToReport(serverDto);
+      expect(mapped.intervention_id).toBeUndefined();
+      expect(mapped.id).toBe("rep-102");
+    });
   });
 
   describe("fetchReports & getReports (Server-Authoritative)", () => {
@@ -194,6 +232,77 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
           hours: 2,
         }),
       ).rejects.toThrow("Nome cliente non valido o vuoto.");
+    });
+
+    it("sends intervention_id in backend payload when interventionId is specified in AddReportInput", async () => {
+      let sentBody: any = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+        sentBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            id: "rep-with-intervention",
+            intervention_id: "int-uuid-888",
+            date: "2026-09-26",
+            time: "10:00",
+            work_hours: 3,
+            travel_hours: 0,
+            status: "submitted",
+            client: { name: "Cliente Intervento" },
+            technician: { full_name: "Tecnico" },
+            materials_used: [],
+            created_at: "2026-09-26T10:00:00.000Z",
+          }),
+        };
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Intervento",
+        interventionId: "int-uuid-888",
+        hours: 3,
+        date: "2026-09-26",
+        time: "10:00",
+      });
+
+      expect(sentBody).toBeDefined();
+      expect(sentBody.intervention_id).toBe("int-uuid-888");
+      expect(res.intervention_id).toBe("int-uuid-888");
+    });
+
+    it("maintains legacy payload without intervention_id when interventionId is omitted", async () => {
+      let sentBody: any = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+        sentBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            id: "rep-legacy-777",
+            date: "2026-09-26",
+            time: "10:00",
+            work_hours: 2,
+            travel_hours: 0,
+            status: "submitted",
+            client: { name: "Cliente Legacy" },
+            technician: { full_name: "Tecnico" },
+            materials_used: [],
+            created_at: "2026-09-26T10:00:00.000Z",
+          }),
+        };
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Legacy",
+        hours: 2,
+        date: "2026-09-26",
+        time: "10:00",
+      });
+
+      expect(sentBody).toBeDefined();
+      expect("intervention_id" in sentBody).toBe(false);
+      expect(sentBody.intervention_id).toBeUndefined();
+      expect(res.intervention_id).toBeUndefined();
     });
   });
 

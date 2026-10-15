@@ -97,7 +97,6 @@ function mapReportRow(row: any): ReportRecord {
     companyId: row.companyId,
     customerId: row.customerId || undefined,
     locationId: row.locationId || undefined,
-    interventionId: row.interventionId || undefined,
     date: row.date || "",
     time: row.time || "",
     workHours: Number(row.workHours) || 0,
@@ -998,7 +997,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
       status: data.status || "submitted",
       customerId: data.customerId,
       locationId: data.locationId,
-      interventionId: data.interventionId,
       client: {
         name: data.client?.name || "Cliente",
         address: data.client?.address || "",
@@ -1014,14 +1012,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
     };
 
     await this.pool.query(
-      `INSERT INTO reports (id, "companyId", "customerId", "locationId", "interventionId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      `INSERT INTO reports (id, "companyId", "customerId", "locationId", date, time, "workHours", "travelHours", status, client, technician, "materialsUsed", notes, "signatureBase64", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         newReport.id,
         newReport.companyId,
         newReport.customerId || null,
         newReport.locationId || null,
-        newReport.interventionId || null,
         newReport.date,
         newReport.time,
         newReport.workHours,

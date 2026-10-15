@@ -21,6 +21,7 @@ export interface AddReportInput {
   clientCity?: string;
   customerId?: string;
   locationId?: string;
+  interventionId?: string;
   technicianName?: string;
   hours: number;
   travelHours?: number;
@@ -79,6 +80,10 @@ export async function addReport(input: AddReportInput): Promise<Report> {
     materials_used: Array.isArray(input.materials) ? input.materials : [],
     signature_base64: input.signatureBase64 || undefined,
   };
+
+  if (input.interventionId && input.interventionId.trim() !== "") {
+    payload.intervention_id = input.interventionId.trim();
+  }
 
   return await apiCreateReport(payload);
 }

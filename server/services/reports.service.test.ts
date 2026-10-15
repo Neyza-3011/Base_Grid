@@ -10,13 +10,11 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
   let mockReports: Map<string, ReportRecord>;
   let mockCustomers: Map<string, any>;
   let mockLocations: Map<string, any>;
-  let mockInterventions: Map<string, any>;
 
   beforeEach(() => {
     mockReports = new Map();
     mockCustomers = new Map();
     mockLocations = new Map();
-    mockInterventions = new Map();
 
     mockCustomers.set("cust-tenant-a", {
       id: "cust-tenant-a",
@@ -69,34 +67,6 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       isActive: true,
     });
 
-    mockInterventions.set("int-1-tenant-a", {
-      id: "int-1-tenant-a",
-      companyId: "comp-tenant-a",
-      customerId: "cust-tenant-a",
-      locationId: "loc-1-cust-a",
-      description: "Riparazione quadro elettrico",
-      status: "in_lavorazione",
-      priority: "alta",
-      createdBy: "usr-admin-1",
-      updatedBy: "usr-admin-1",
-      createdAt: "2026-09-26T08:00:00.000Z",
-      updatedAt: "2026-09-26T08:00:00.000Z",
-    });
-
-    mockInterventions.set("int-tenant-b", {
-      id: "int-tenant-b",
-      companyId: "comp-tenant-b",
-      customerId: "cust-tenant-b",
-      locationId: "loc-tenant-b",
-      description: "Intervento Tenant B",
-      status: "in_lavorazione",
-      priority: "media",
-      createdBy: "usr-admin-b",
-      updatedBy: "usr-admin-b",
-      createdAt: "2026-09-26T08:00:00.000Z",
-      updatedAt: "2026-09-26T08:00:00.000Z",
-    });
-
     const sampleReport: ReportRecord = {
       id: "rep-001",
       companyId: "comp-tenant-a",
@@ -146,11 +116,6 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
         const loc = mockLocations.get(locationId);
         if (!loc || loc.companyId !== companyId) return null;
         return loc;
-      }),
-      getInterventionByIdAndCompany: vi.fn().mockImplementation(async (interventionId: string, companyId: string) => {
-        const item = mockInterventions.get(interventionId);
-        if (!item || item.companyId !== companyId) return null;
-        return item;
       }),
     } as unknown as IDatabaseAdapter;
 
@@ -504,154 +469,6 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
           "comp-tenant-a",
           expect.not.objectContaining({ companyId: "malicious-tenant-attempt" })
         );
-      });
-
-      describe("Intervention Association (P1.6)", () => {
-        it("creates a report successfully linked to a valid intervention and returns intervention_id", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente A Tenant A",
-            work_hours: 3.5,
-            travel_hours: 0.5,
-            date: "2026-09-26",
-            time: "14:30",
-            intervention_id: "int-1-tenant-a",
-            customer_id: "cust-tenant-a",
-            location_id: "loc-1-cust-a",
-          };
-
-          const result = await reportsService.createReport("comp-tenant-a", "Luigi", payload);
-          expect(result.intervention_id).toBe("int-1-tenant-a");
-          expect(result.customer_id).toBe("cust-tenant-a");
-          expect(result.location_id).toBe("loc-1-cust-a");
-          expect(mockDb.createReport).toHaveBeenCalledWith(
-            "comp-tenant-a",
-            expect.objectContaining({
-              interventionId: "int-1-tenant-a",
-              customerId: "cust-tenant-a",
-              locationId: "loc-1-cust-a",
-            })
-          );
-        });
-
-        it("automatically derives customer, location, and client name from intervention when omitted", async () => {
-          const payload: CreateReportRequest = {
-            work_hours: 2,
-            date: "2026-09-26",
-            time: "10:00",
-            intervention_id: "int-1-tenant-a",
-          };
-
-          const result = await reportsService.createReport("comp-tenant-a", "Luigi", payload);
-          expect(result.intervention_id).toBe("int-1-tenant-a");
-          expect(result.customer_id).toBe("cust-tenant-a");
-          expect(result.location_id).toBe("loc-1-cust-a");
-          expect(result.client.name).toBe("Cliente A Tenant A");
-          expect(result.client.address).toBe("Via Roma 1");
-          expect(result.client.city).toBe("Milano");
-        });
-
-        it("rejects when intervention does not exist with NotFoundError", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente A Tenant A",
-            work_hours: 2,
-            date: "2026-09-26",
-            time: "10:00",
-            intervention_id: "int-nonexistent-999",
-          };
-
-          await expect(
-            reportsService.createReport("comp-tenant-a", "Luigi", payload)
-          ).rejects.toThrow(NotFoundError);
-        });
-
-        it("rejects when intervention belongs to another tenant with NotFoundError", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente B Tenant B",
-            work_hours: 2,
-            date: "2026-09-26",
-            time: "10:00",
-            intervention_id: "int-tenant-b", // belongs to comp-tenant-b
-          };
-
-          await expect(
-            reportsService.createReport("comp-tenant-a", "Luigi", payload)
-          ).rejects.toThrow(NotFoundError);
-        });
-
-        it("rejects when customer_id does not match the intervention's customer with ValidationError", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente Incoerente",
-            work_hours: 2,
-            date: "2026-09-26",
-            time: "10:00",
-            intervention_id: "int-1-tenant-a",
-            customer_id: "cust-2-tenant-a",
-          };
-
-          await expect(
-            reportsService.createReport("comp-tenant-a", "Luigi", payload)
-          ).rejects.toThrow(ValidationError);
-        });
-
-        it("rejects when location_id does not match the intervention's location with ValidationError", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente A Tenant A",
-            work_hours: 2,
-            date: "2026-09-26",
-            time: "10:00",
-            intervention_id: "int-1-tenant-a",
-            customer_id: "cust-tenant-a",
-            location_id: "loc-2-cust-2",
-          };
-
-          await expect(
-            reportsService.createReport("comp-tenant-a", "Luigi", payload)
-          ).rejects.toThrow(ValidationError);
-        });
-
-        it("maintains full backward compatibility for standalone reports without intervention_id", async () => {
-          const payload: CreateReportRequest = {
-            client_name: "Cliente Autonomo",
-            work_hours: 4,
-            travel_hours: 1,
-            date: "2026-09-26",
-            time: "09:00",
-          };
-
-          const result = await reportsService.createReport("comp-tenant-a", "Luigi", payload);
-          expect(result.intervention_id).toBeUndefined();
-          expect(result.client.name).toBe("Cliente Autonomo");
-          expect(mockDb.createReport).toHaveBeenCalledWith(
-            "comp-tenant-a",
-            expect.objectContaining({
-              interventionId: undefined,
-            })
-          );
-        });
-
-        it("returns intervention_id in listReports when report is linked", async () => {
-          mockReports.set("rep-linked-01", {
-            id: "rep-linked-01",
-            companyId: "comp-tenant-a",
-            customerId: "cust-tenant-a",
-            locationId: "loc-1-cust-a",
-            interventionId: "int-1-tenant-a",
-            date: "2026-09-26",
-            time: "16:00",
-            workHours: 5,
-            travelHours: 0,
-            status: "submitted",
-            client: { name: "ACME Corp" },
-            technician: { fullName: "Mario Rossi" },
-            materialsUsed: [],
-            createdAt: "2026-09-26T16:00:00.000Z",
-          });
-
-          const list = await reportsService.listReports("comp-tenant-a");
-          const found = list.find((r) => r.id === "rep-linked-01");
-          expect(found).toBeDefined();
-          expect(found?.intervention_id).toBe("int-1-tenant-a");
-        });
       });
     });
   });

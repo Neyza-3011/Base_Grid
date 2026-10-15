@@ -340,7 +340,6 @@ export interface ReportRecord {
   companyId: string;
   customerId?: string;
   locationId?: string;
-  interventionId?: string;
   date: string;
   time: string;
   workHours: number;
@@ -361,12 +360,11 @@ export interface ReportRecord {
 }
 
 export interface CreateReportRequest {
-  client_name?: string;
+  client_name: string;
   client_address?: string;
   client_city?: string;
   customer_id?: string;
   location_id?: string;
-  intervention_id?: string;
   work_hours: number;
   travel_hours?: number;
   date: string;
@@ -381,7 +379,6 @@ export interface ReportResponseDTO {
   id: string;
   customer_id?: string;
   location_id?: string;
-  intervention_id?: string;
   date: string;
   time: string;
   work_hours: number;
