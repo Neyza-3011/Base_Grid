@@ -65,7 +65,115 @@ export class ReportsService {
       signature_base64,
       customer_id,
       location_id,
+      intervention_id,
     } = body || {};
+
+    // 1. Intervention validation (if specified)
+    let validatedInterventionId: string | undefined = undefined;
+    let interventionRecord: any = null;
+
+    if (intervention_id !== undefined && intervention_id !== null && String(intervention_id).trim() !== "") {
+      const rawInterventionId = typeof intervention_id === "string" ? intervention_id.trim() : String(intervention_id);
+      interventionRecord = await this.db.getInterventionByIdAndCompany(rawInterventionId, companyId);
+      if (!interventionRecord) {
+        throw new NotFoundError("Intervento non trovato o non accessibile.");
+      }
+      validatedInterventionId = interventionRecord.id;
+    }
+
+    // 2. Customer & Location resolution and consistency checks
+    let targetCustomerId: string | undefined = undefined;
+    let targetLocationId: string | undefined = undefined;
+
+    if (interventionRecord) {
+      if (customer_id !== undefined && customer_id !== null && String(customer_id).trim() !== "") {
+        const rawCid = typeof customer_id === "string" ? customer_id.trim() : String(customer_id);
+        if (rawCid !== interventionRecord.customerId) {
+          throw new ValidationError("Il cliente specificato non corrisponde a quello dell'intervento.");
+        }
+        targetCustomerId = rawCid;
+      } else {
+        targetCustomerId = interventionRecord.customerId;
+      }
+
+      if (location_id !== undefined && location_id !== null && String(location_id).trim() !== "") {
+        const rawLid = typeof location_id === "string" ? location_id.trim() : String(location_id);
+        if (rawLid !== interventionRecord.locationId) {
+          throw new ValidationError("La sede specificata non corrisponde a quella dell'intervento.");
+        }
+        targetLocationId = rawLid;
+      } else {
+        targetLocationId = interventionRecord.locationId;
+      }
+    } else {
+      if (customer_id !== undefined && customer_id !== null && String(customer_id).trim() !== "") {
+        targetCustomerId = typeof customer_id === "string" ? customer_id.trim() : String(customer_id);
+      }
+      if (location_id !== undefined && location_id !== null && String(location_id).trim() !== "") {
+        targetLocationId = typeof location_id === "string" ? location_id.trim() : String(location_id);
+      }
+    }
+
+    let validatedCustomerId: string | undefined = undefined;
+    let validatedLocationId: string | undefined = undefined;
+    let customerRecord = null;
+    let locationRecord = null;
+
+    if (targetCustomerId) {
+      customerRecord = await this.db.getCustomerByIdAndCompany(targetCustomerId, companyId);
+      if (!customerRecord) {
+        throw new NotFoundError("Cliente non trovato o non accessibile.");
+      }
+      validatedCustomerId = customerRecord.id;
+    }
+
+    if (targetLocationId) {
+      locationRecord = await this.db.getLocationByIdAndCompany(targetLocationId, companyId);
+      if (!locationRecord) {
+        throw new NotFoundError("Sede o cantiere non trovato o non accessibile.");
+      }
+      validatedLocationId = locationRecord.id;
+    }
+
+    if (customerRecord && locationRecord) {
+      if (locationRecord.customerId !== customerRecord.id) {
+        throw new ValidationError("La sede specificata non appartiene al cliente indicato.");
+      }
+    }
+
+    // 3. Client details resolution
+    let resolvedClientName = typeof client_name === "string" ? client_name.trim() : "";
+    if (!resolvedClientName && interventionRecord && customerRecord) {
+      resolvedClientName = customerRecord.displayName;
+    }
+    if (!resolvedClientName || resolvedClientName.length > 255) {
+      throw new ValidationError(
+        "Nome cliente non valido o mancante (massimo 255 caratteri)."
+      );
+    }
+    const clientName = resolvedClientName;
+
+    let clientAddress = "";
+    if (client_address !== undefined && client_address !== null) {
+      if (typeof client_address !== "string" || client_address.length > 500) {
+        throw new ValidationError(
+          "Indirizzo cliente non valido (massimo 500 caratteri)."
+        );
+      }
+      clientAddress = client_address.trim();
+    } else if (interventionRecord && locationRecord) {
+      clientAddress = locationRecord.address || "";
+    }
+
+    let clientCity = "";
+    if (client_city !== undefined && client_city !== null) {
+      if (typeof client_city !== "string" || client_city.length > 100) {
+        throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
+      }
+      clientCity = client_city.trim();
+    } else if (interventionRecord && locationRecord) {
+      clientCity = locationRecord.city || "";
+    }
 
     // work_hours: required, finite, >= 0, <= 1000
     if (work_hours === undefined || work_hours === null) {
@@ -98,38 +206,6 @@ export class ReportsService {
         );
       }
       travelHours = parsedTravel;
-    }
-
-    // client_name: required non-empty string, max 255 chars
-    if (
-      typeof client_name !== "string" ||
-      client_name.trim().length === 0 ||
-      client_name.trim().length > 255
-    ) {
-      throw new ValidationError(
-        "Nome cliente non valido o mancante (massimo 255 caratteri)."
-      );
-    }
-    const clientName = client_name.trim();
-
-    // client_address: optional string, max 500 chars
-    let clientAddress = "";
-    if (client_address !== undefined && client_address !== null) {
-      if (typeof client_address !== "string" || client_address.length > 500) {
-        throw new ValidationError(
-          "Indirizzo cliente non valido (massimo 500 caratteri)."
-        );
-      }
-      clientAddress = client_address.trim();
-    }
-
-    // client_city: optional string, max 100 chars
-    let clientCity = "";
-    if (client_city !== undefined && client_city !== null) {
-      if (typeof client_city !== "string" || client_city.length > 100) {
-        throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
-      }
-      clientCity = client_city.trim();
     }
 
     // date validation (real calendar date YYYY-MM-DD)
@@ -222,42 +298,10 @@ export class ReportsService {
       safeSignature = signature_base64;
     }
 
-    // Customer & Location reference and tenant consistency validation
-    let validatedCustomerId: string | undefined = undefined;
-    let validatedLocationId: string | undefined = undefined;
-    let customerRecord = null;
-    let locationRecord = null;
-
-    // Caso A: customer_id presente -> verifica esistenza nel tenant autenticato
-    if (customer_id !== undefined && customer_id !== null && String(customer_id).trim() !== "") {
-      const cid = typeof customer_id === "string" ? customer_id.trim() : String(customer_id);
-      customerRecord = await this.db.getCustomerByIdAndCompany(cid, companyId);
-      if (!customerRecord) {
-        throw new NotFoundError("Cliente non trovato o non accessibile.");
-      }
-      validatedCustomerId = customerRecord.id;
-    }
-
-    // Caso B: location_id presente -> verifica esistenza nel tenant autenticato
-    if (location_id !== undefined && location_id !== null && String(location_id).trim() !== "") {
-      const lid = typeof location_id === "string" ? location_id.trim() : String(location_id);
-      locationRecord = await this.db.getLocationByIdAndCompany(lid, companyId);
-      if (!locationRecord) {
-        throw new NotFoundError("Sede o cantiere non trovato o non accessibile.");
-      }
-      validatedLocationId = locationRecord.id;
-    }
-
-    // Caso C: entrambi presenti -> verifica coerenza tra customer e location
-    if (customerRecord && locationRecord) {
-      if (locationRecord.customerId !== customerRecord.id) {
-        throw new ValidationError("La sede specificata non appartiene al cliente indicato.");
-      }
-    }
-
     const newReport = await this.db.createReport(companyId, {
       customerId: validatedCustomerId,
       locationId: validatedLocationId,
+      interventionId: validatedInterventionId,
       date,
       time,
       workHours,
@@ -303,6 +347,7 @@ export class ReportsService {
       id: r.id,
       customer_id: r.customerId,
       location_id: r.locationId,
+      intervention_id: r.interventionId,
       date: r.date,
       time: r.time,
       work_hours: r.workHours,
