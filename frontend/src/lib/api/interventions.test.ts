@@ -172,6 +172,43 @@ describe("Frontend Interventions API Client (frontend/src/lib/api/interventions.
     expect(result.technicianId).toBe("usr-tech-1");
   });
 
+  it("triggers a status transition via API without technicianId", async () => {
+    const mockTransitioned = {
+      id: "int-123",
+      customerId: "cust-1",
+      locationId: "loc-1",
+      description: "Intervento",
+      priority: "media",
+      status: "in_viaggio",
+      technicianId: "usr-tech-1",
+      createdBy: "usr-1",
+      updatedBy: "usr-1",
+      createdAt: "2026-10-01T10:00:00.000Z",
+      updatedAt: "2026-10-01T11:00:00.000Z",
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => mockTransitioned,
+    });
+
+    const result = await transitionInterventionStatus("int-123", {
+      targetStatus: "in_viaggio",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/v1/interventions/int-123/transition",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          targetStatus: "in_viaggio",
+        }),
+      }),
+    );
+    expect(result.status).toBe("in_viaggio");
+  });
+
   it("throws InterventionsApiError with server detail when API returns error", async () => {
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,

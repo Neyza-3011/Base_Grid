@@ -439,7 +439,7 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
 
       const updated = await transitionInterventionStatus(selectedIntervention.id, {
         targetStatus: transitionTarget,
-        technicianId: transitionTechId || undefined,
+        ...(isTechnician ? {} : { technicianId: transitionTechId || undefined }),
         actualHours: hoursToSend,
         notes: transitionNotes.trim() || undefined,
       });
