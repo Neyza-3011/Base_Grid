@@ -74,6 +74,7 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
   // Reference data
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filterLocations, setFilterLocations] = useState<Location[]>([]);
+  const [locationsMap, setLocationsMap] = useState<Map<string, Location>>(new Map());
 
   // Modal form states
   const [showModal, setShowModal] = useState(false);
@@ -100,13 +101,28 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
     notes: "",
   });
 
-  // Load customers for select dropdowns
+  // Load customers and their locations for resolution & selects
   useEffect(() => {
-    fetchCustomers(undefined, false)
-      .then(setCustomers)
-      .catch((err) => {
-        console.error("Error loading customers:", err);
-      });
+    async function loadInitialRefData() {
+      try {
+        const custs = await fetchCustomers(undefined, false);
+        setCustomers(custs);
+
+        // Fetch locations for all retrieved customers to build resolution map
+        const locPromises = custs.map((c) =>
+          fetchLocations(c.id, undefined, false).catch(() => []),
+        );
+        const locResults = await Promise.all(locPromises);
+        const newLocMap = new Map<string, Location>();
+        locResults.flat().forEach((loc) => {
+          newLocMap.set(loc.id, loc);
+        });
+        setLocationsMap(newLocMap);
+      } catch (err) {
+        console.error("Error loading reference data for assets:", err);
+      }
+    }
+    loadInitialRefData();
   }, []);
 
   // When filter customer changes, update filter locations
@@ -549,8 +565,16 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
                       <span className="truncate font-medium text-white">{customerName}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5 text-white/40 shrink-0" />
-                      <span className="truncate text-white/60">ID Sede: {asset.locationId}</span>
+                      <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate text-white/80 font-medium">
+                        {locationsMap.get(asset.locationId)
+                          ? `${locationsMap.get(asset.locationId)?.name}${
+                              locationsMap.get(asset.locationId)?.city
+                                ? ` (${locationsMap.get(asset.locationId)?.city})`
+                                : ""
+                            }`
+                          : "Sede Operativa"}
+                      </span>
                     </div>
                   </div>
 
