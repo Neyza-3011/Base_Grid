@@ -7,24 +7,37 @@ import { db } from "./db";
 const app = createApp();
 
 describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
+  const originalRedis = (rateLimiter as any).redisClient;
+
   beforeEach(async () => {
     delete process.env.BASEGRID_RUNTIME_MODE;
+    (rateLimiter as any).redisClient = null;
     await rateLimiter.reset();
   });
 
   afterEach(async () => {
+    (rateLimiter as any).redisClient = originalRedis;
     await rateLimiter.reset();
   });
 
   it("should return 429 when login limit is exceeded", async () => {
     // loginLimiter: 10 requests per 15 minutes
+    const testIp = `192.168.250.${Math.floor(Math.random() * 100) + 1}`;
     for (let i = 0; i < 10; i++) {
-      const res = await request(app).post("/api/v1/auth/login").set("X-Test-RateLimit", "enable").send({ email: "tech@rossi.it", password: "wrong" });
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", testIp)
+        .send({ email: "login-limit-test@test.com", password: "wrong" });
       expect(res.status).not.toBe(429);
     }
     
     // 11th request should be 429
-    const res = await request(app).post("/api/v1/auth/login").set("X-Test-RateLimit", "enable").send({ email: "tech@rossi.it", password: "wrong" });
+    const res = await request(app)
+      .post("/api/v1/auth/login")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", testIp)
+      .send({ email: "login-limit-test@test.com", password: "wrong" });
     expect(res.status).toBe(429);
     expect(res.body.detail).toContain("Troppi tentativi di accesso");
   });
@@ -79,12 +92,13 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
 
   it("should return 429 when login email/account limit is exceeded independently of IP", async () => {
     // 10 requests from different IPs (spoofted via X-Forwarded-For) but same email
+    const uniqueAccountEmail = `account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@test.com`;
     for (let i = 0; i < 10; i++) {
       const res = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Test-RateLimit", "enable")
         .set("X-Forwarded-For", `192.168.2.${i}`)
-        .send({ email: "target@rossi.it", password: "wrong" });
+        .send({ email: uniqueAccountEmail, password: "wrong" });
       expect(res.status).not.toBe(429);
     }
     
@@ -93,7 +107,7 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
         .post("/api/v1/auth/login")
         .set("X-Test-RateLimit", "enable")
         .set("X-Forwarded-For", `192.168.2.11`)
-        .send({ email: "target@rossi.it", password: "wrong" });
+        .send({ email: uniqueAccountEmail, password: "wrong" });
         
     expect(res.status).toBe(429);
     expect(res.body.detail).toContain("account");
