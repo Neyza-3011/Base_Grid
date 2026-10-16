@@ -42,8 +42,9 @@ import { Asset, fetchAssets } from "@/lib/api/assets";
 import { fetchTeamMembers, TeamMember } from "@/lib/api/team";
 import { UserSession } from "@/lib/auth";
 
-interface InterventionsViewProps {
+export interface InterventionsViewProps {
   currentUser?: UserSession | null;
+  onCreateReport?: (intervention: Intervention) => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -212,7 +213,7 @@ const TECHNICIAN_ALLOWED_STATUS_TRANSITIONS: Record<string, readonly Interventio
   in_attesa: ["in_lavorazione", "completato"],
 };
 
-export function InterventionsView({ currentUser }: InterventionsViewProps) {
+export function InterventionsView({ currentUser, onCreateReport }: InterventionsViewProps) {
   const isTechnician = currentUser?.role === "technician";
   const isClient = currentUser?.role === "cliente";
   const canCreateAndManage = !isTechnician && !isClient;
@@ -981,15 +982,27 @@ export function InterventionsView({ currentUser }: InterventionsViewProps) {
                 </h3>
               </div>
 
-              <button
-                onClick={() => {
-                  setSelectedIntervention(null);
-                  setTransitionTarget(null);
-                }}
-                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedIntervention.status === "completato" && (
+                  <button
+                    type="button"
+                    onClick={() => onCreateReport?.(selectedIntervention)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition active:scale-95 shrink-0"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Crea rapportino
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedIntervention(null);
+                    setTransitionTarget(null);
+                  }}
+                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Relational chain box */}

@@ -12,11 +12,21 @@ import {
   Building2,
   AlertCircle,
   RefreshCw,
+  Wrench,
 } from "lucide-react";
 import { getReports, addReport, removeReport, Report } from "@/lib/reportsStorage";
+import { Intervention } from "@/lib/api/interventions";
 import { PdfPreviewModal } from "./PdfPreviewModal";
 
-export function ReportsView() {
+export interface ReportsViewProps {
+  initialIntervention?: Intervention | null;
+  onClearInitialIntervention?: () => void;
+}
+
+export function ReportsView({
+  initialIntervention,
+  onClearInitialIntervention,
+}: ReportsViewProps = {}) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +45,7 @@ export function ReportsView() {
   const [newNotes, setNewNotes] = useState("");
   const [newMaterialName, setNewMaterialName] = useState("");
   const [newMaterialQty, setNewMaterialQty] = useState("1");
+  const [linkedIntervention, setLinkedIntervention] = useState<Intervention | null>(null);
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -61,6 +72,64 @@ export function ReportsView() {
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  const resetForm = useCallback(() => {
+    setLinkedIntervention(null);
+    setNewClientName("");
+    setNewClientAddress("");
+    setNewHours("4.0");
+    setNewTravelHours("0.5");
+    setNewStatus("submitted");
+    setNewNotes("");
+    setNewMaterialName("");
+    setNewMaterialQty("1");
+  }, []);
+
+  const handleCancelModal = () => {
+    if (submitting) return;
+    setShowQuickCreate(false);
+    resetForm();
+  };
+
+  const handleOpenGenericCreate = () => {
+    resetForm();
+    setShowQuickCreate(true);
+  };
+
+  useEffect(() => {
+    if (initialIntervention) {
+      setShowQuickCreate(true);
+      setNewClientName(initialIntervention.customerName || "");
+
+      const addressParts = [
+        initialIntervention.locationAddress,
+        initialIntervention.locationCity,
+      ].filter(Boolean);
+      const address =
+        addressParts.length > 0 ? addressParts.join(", ") : initialIntervention.locationName || "";
+      setNewClientAddress(address);
+
+      const hasValidActualHours =
+        typeof initialIntervention.actualHours === "number" &&
+        Number.isFinite(initialIntervention.actualHours) &&
+        initialIntervention.actualHours > 0;
+
+      if (hasValidActualHours) {
+        setNewHours(String(initialIntervention.actualHours));
+      } else {
+        setNewHours("4.0");
+      }
+
+      setNewTravelHours("0.5");
+      setNewStatus("submitted");
+      setNewNotes("");
+      setNewMaterialName("");
+      setNewMaterialQty("1");
+
+      setLinkedIntervention(initialIntervention);
+      onClearInitialIntervention?.();
+    }
+  }, [initialIntervention, onClearInitialIntervention]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo rapportino?")) return;
@@ -95,6 +164,9 @@ export function ReportsView() {
       const created = await addReport({
         clientName: newClientName.trim(),
         clientAddress: newClientAddress.trim() || undefined,
+        customerId: linkedIntervention?.customerId,
+        locationId: linkedIntervention?.locationId,
+        interventionId: linkedIntervention?.id,
         hours: parseFloat(newHours) || 1,
         travelHours: parseFloat(newTravelHours) || 0,
         status: newStatus,
@@ -107,11 +179,7 @@ export function ReportsView() {
       });
 
       setShowQuickCreate(false);
-      setNewClientName("");
-      setNewClientAddress("");
-      setNewNotes("");
-      setNewMaterialName("");
-      setNewMaterialQty("1");
+      resetForm();
       setReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Errore nella creazione del rapportino.";
@@ -206,7 +274,7 @@ export function ReportsView() {
           </button>
 
           <button
-            onClick={() => setShowQuickCreate(true)}
+            onClick={handleOpenGenericCreate}
             className="h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all btn-glow inline-flex items-center justify-center gap-2 px-4 shadow-lg shadow-primary/20"
           >
             <Plus className="h-4 w-4" /> Nuovo Rapportino
@@ -397,7 +465,7 @@ export function ReportsView() {
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative text-white space-y-4 max-h-[90vh] overflow-y-auto">
             <button
-              onClick={() => !submitting && setShowQuickCreate(false)}
+              onClick={handleCancelModal}
               disabled={submitting}
               aria-label="Chiudi modal"
               className="absolute right-4 top-4 text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition disabled:opacity-40"
@@ -407,8 +475,31 @@ export function ReportsView() {
 
             <div className="flex items-center gap-2 border-b border-white/10 pb-3">
               <FileText className="h-5 w-5 text-blue-400" />
-              <h3 className="text-lg font-bold">Nuovo Rapportino Rapido</h3>
+              <h3 className="text-lg font-bold">
+                {linkedIntervention ? "Rapportino da Intervento" : "Nuovo Rapportino Rapido"}
+              </h3>
             </div>
+
+            {linkedIntervention && (
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3.5 text-xs text-blue-200 space-y-1.5">
+                <div className="flex items-center gap-2 font-semibold text-blue-300">
+                  <Wrench className="h-4 w-4 text-blue-400 shrink-0" />
+                  <span>Collegato all'intervento completato</span>
+                </div>
+                <p className="text-white font-medium pl-6 text-sm">
+                  {linkedIntervention.description}
+                </p>
+                {linkedIntervention.customerName && (
+                  <p className="text-blue-200/80 pl-6 text-xs">
+                    Cliente:{" "}
+                    <span className="font-semibold text-white">
+                      {linkedIntervention.customerName}
+                    </span>
+                    {linkedIntervention.locationName ? ` · ${linkedIntervention.locationName}` : ""}
+                  </p>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-3.5">
               <div className="space-y-1">
@@ -519,7 +610,7 @@ export function ReportsView() {
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={() => setShowQuickCreate(false)}
+                  onClick={handleCancelModal}
                   className="px-4 h-10 rounded-xl border border-white/10 text-xs font-medium hover:bg-white/5 transition disabled:opacity-50"
                 >
                   Annulla

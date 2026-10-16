@@ -31,6 +31,7 @@ import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
 import { AssetsView } from "@/components/dashboard/AssetsView";
 import { InterventionsView } from "@/components/dashboard/InterventionsView";
+import { Intervention } from "@/lib/api/interventions";
 import { BaseGridLogo } from "@/components/common/BaseGridLogo";
 
 import {
@@ -59,7 +60,14 @@ function Dashboard() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [selectedInterventionForReport, setSelectedInterventionForReport] =
+    useState<Intervention | null>(null);
   const navigate = useNavigate();
+
+  const handleCreateReportFromIntervention = (intervention: Intervention) => {
+    setSelectedInterventionForReport(intervention);
+    setActiveView("reports");
+  };
 
   useEffect(() => {
     async function initSession() {
@@ -451,11 +459,21 @@ function Dashboard() {
             />
           )}
           {activeView === "company_settings" && <CompanySettings />}
-          {activeView === "reports" && <ReportsView />}
+          {activeView === "reports" && (
+            <ReportsView
+              initialIntervention={selectedInterventionForReport}
+              onClearInitialIntervention={() => setSelectedInterventionForReport(null)}
+            />
+          )}
           {activeView === "team" && <TeamManagementView currentUser={currentUser} />}
           {activeView === "customers" && <CustomersView />}
           {activeView === "assets" && <AssetsView currentUser={currentUser} />}
-          {activeView === "interventions" && <InterventionsView currentUser={currentUser} />}
+          {activeView === "interventions" && (
+            <InterventionsView
+              currentUser={currentUser}
+              onCreateReport={handleCreateReportFromIntervention}
+            />
+          )}
         </main>
       </div>
 
