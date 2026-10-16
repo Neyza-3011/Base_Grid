@@ -395,10 +395,11 @@ export function ReportsView() {
       {/* Quick Create Modal */}
       {showQuickCreate && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative text-white space-y-4">
+          <div className="bg-slate-900 border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative text-white space-y-4 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => !submitting && setShowQuickCreate(false)}
               disabled={submitting}
+              aria-label="Chiudi modal"
               className="absolute right-4 top-4 text-white/50 hover:text-white p-1 rounded-lg hover:bg-white/10 transition disabled:opacity-40"
             >
               <X className="h-5 w-5" />
