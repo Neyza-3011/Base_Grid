@@ -235,27 +235,29 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
     });
 
     it("sends intervention_id in backend payload when interventionId is specified in AddReportInput", async () => {
-      let sentBody: any = null;
-      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-        sentBody = JSON.parse(options.body);
-        return {
-          ok: true,
-          status: 201,
-          json: async () => ({
-            id: "rep-with-intervention",
-            intervention_id: "int-uuid-888",
-            date: "2026-09-26",
-            time: "10:00",
-            work_hours: 3,
-            travel_hours: 0,
-            status: "submitted",
-            client: { name: "Cliente Intervento" },
-            technician: { full_name: "Tecnico" },
-            materials_used: [],
-            created_at: "2026-09-26T10:00:00.000Z",
-          }),
-        };
-      });
+      let sentBody: Record<string, unknown> | null = null;
+      global.fetch = vi
+        .fn()
+        .mockImplementation(async (_url: RequestInfo | URL, options?: RequestInit) => {
+          sentBody = JSON.parse((options?.body as string) || "{}");
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              id: "rep-with-intervention",
+              intervention_id: "int-uuid-888",
+              date: "2026-09-26",
+              time: "10:00",
+              work_hours: 3,
+              travel_hours: 0,
+              status: "submitted",
+              client: { name: "Cliente Intervento" },
+              technician: { full_name: "Tecnico" },
+              materials_used: [],
+              created_at: "2026-09-26T10:00:00.000Z",
+            }),
+          };
+        });
 
       const res = await addReport({
         clientName: "Cliente Intervento",
@@ -271,26 +273,28 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
     });
 
     it("maintains legacy payload without intervention_id when interventionId is omitted", async () => {
-      let sentBody: any = null;
-      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-        sentBody = JSON.parse(options.body);
-        return {
-          ok: true,
-          status: 201,
-          json: async () => ({
-            id: "rep-legacy-777",
-            date: "2026-09-26",
-            time: "10:00",
-            work_hours: 2,
-            travel_hours: 0,
-            status: "submitted",
-            client: { name: "Cliente Legacy" },
-            technician: { full_name: "Tecnico" },
-            materials_used: [],
-            created_at: "2026-09-26T10:00:00.000Z",
-          }),
-        };
-      });
+      let sentBody: Record<string, unknown> | null = null;
+      global.fetch = vi
+        .fn()
+        .mockImplementation(async (_url: RequestInfo | URL, options?: RequestInit) => {
+          sentBody = JSON.parse((options?.body as string) || "{}");
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              id: "rep-legacy-777",
+              date: "2026-09-26",
+              time: "10:00",
+              work_hours: 2,
+              travel_hours: 0,
+              status: "submitted",
+              client: { name: "Cliente Legacy" },
+              technician: { full_name: "Tecnico" },
+              materials_used: [],
+              created_at: "2026-09-26T10:00:00.000Z",
+            }),
+          };
+        });
 
       const res = await addReport({
         clientName: "Cliente Legacy",

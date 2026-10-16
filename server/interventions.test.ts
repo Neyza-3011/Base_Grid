@@ -853,12 +853,15 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
   });
 
-  describe("7. PostgreSQL Database Schema & Composite Constraint Verification (Migration 005)", () => {
-    it("verifies migration 005_interventions.sql contains all required composite unique and foreign key constraints", async () => {
+  describe("7. PostgreSQL Database Schema & Composite Constraint Verification (Migrations 003-006)", () => {
+    it("verifies migrations contain all required composite unique and foreign key constraints for interventions", async () => {
       const fs = await import("fs");
       const path = await import("path");
-      const migrationPath = path.resolve(process.cwd(), "server/migrations/005_interventions.sql");
-      const sqlContent = fs.readFileSync(migrationPath, "utf-8");
+      const m003 = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/003_customers_and_locations.sql"), "utf-8");
+      const m004 = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/004_assets.sql"), "utf-8");
+      const m005 = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/005_interventions.sql"), "utf-8");
+      const m006 = fs.readFileSync(path.resolve(process.cwd(), "server/migrations/006_interventions_composite_fk_and_set_null_targets.sql"), "utf-8");
+      const sqlContent = [m003, m004, m005, m006].join("\n");
 
       // Check composite unique constraints
       expect(sqlContent).toContain("uq_customers_id_company");
