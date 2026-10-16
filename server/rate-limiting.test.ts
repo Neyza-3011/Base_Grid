@@ -16,8 +16,8 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
   });
 
   afterEach(async () => {
-    (rateLimiter as any).redisClient = originalRedis;
     await rateLimiter.reset();
+    (rateLimiter as any).redisClient = originalRedis;
   });
 
   it("should return 429 when login limit is exceeded", async () => {
