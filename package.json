@@ -17,12 +17,18 @@
   },
   "dependencies": {
     "@types/ioredis": "^5.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "cross-env": "^10.1.0",
+    "esbuild": "^0.28.2",
     "express": "^4.21.0",
     "google-auth-library": "^11.1.0",
     "http-proxy": "^1.18.1",
     "ioredis": "^6.0.0",
-    "pg": "^8.23.0"
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.0",
+    "tsx": "^4.19.0",
+    "vite": "^8.2.1"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -31,13 +37,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
-    "cookie-parser": "^1.4.7",
-    "cross-env": "^10.1.0",
-    "esbuild": "^0.28.2",
-    "jsonwebtoken": "^9.0.3",
     "supertest": "^7.2.2",
-    "tsx": "^4.19.0",
-    "vite": "^8.2.1",
     "vitest": "^4.1.10"
   }
 }
