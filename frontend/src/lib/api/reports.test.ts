@@ -235,9 +235,9 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
     });
 
     it("sends intervention_id in backend payload when interventionId is specified in AddReportInput", async () => {
-      let sentBody: any = null;
-      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-        sentBody = JSON.parse(options.body);
+      let sentBody: Record<string, unknown> | null = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+        sentBody = JSON.parse((options?.body as string) || "{}");
         return {
           ok: true,
           status: 201,
@@ -266,14 +266,14 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
       });
 
       expect(sentBody).toBeDefined();
-      expect(sentBody.intervention_id).toBe("int-uuid-888");
+      expect(sentBody?.intervention_id).toBe("int-uuid-888");
       expect(res.intervention_id).toBe("int-uuid-888");
     });
 
     it("maintains legacy payload without intervention_id when interventionId is omitted", async () => {
-      let sentBody: any = null;
-      global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-        sentBody = JSON.parse(options.body);
+      let sentBody: Record<string, unknown> | null = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+        sentBody = JSON.parse((options?.body as string) || "{}");
         return {
           ok: true,
           status: 201,
