@@ -347,7 +347,99 @@ export function ReportsView({
           </div>
         </div>
 
-        <div className="overflow-x-auto flex-1">
+        {/* Mobile View (Card Layout for < md screens) */}
+        <div className="block md:hidden p-3 space-y-3 overflow-y-auto">
+          {loading ? (
+            <div className="text-center py-12 text-white/40 text-sm">
+              Caricamento archivio dal server in corso...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 text-white/40 text-sm">
+              {reports.length === 0
+                ? "Nessun rapportino salvato nel database. Crea il tuo primo rapportino!"
+                : "Nessun rapportino corrisponde ai criteri di ricerca o filtro."}
+            </div>
+          ) : (
+            filtered.map((r) => (
+              <div
+                key={r.id}
+                className="bg-slate-950/50 border border-white/10 rounded-xl p-4 space-y-3 text-sm shadow-sm hover:border-white/20 transition"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-bold text-white flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-blue-400 shrink-0" />
+                    <span>{r.dateTimeFormatted || `${r.date} ${r.time}`}</span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      r.status === "approved"
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : r.status === "submitted"
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                          : "bg-white/5 text-white/60 border border-white/10"
+                    }`}
+                  >
+                    {r.status === "approved"
+                      ? "Approvato"
+                      : r.status === "submitted"
+                        ? "Inviato"
+                        : "Bozza"}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="font-semibold text-white flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>{r.client?.name || "N/A"}</span>
+                  </div>
+                  {r.client?.address && (
+                    <p className="text-xs text-white/60 pl-5.5">{r.client.address}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-white/70 pt-2 border-t border-white/5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-6 w-6 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold shrink-0">
+                      {r.technician?.full_name ? r.technician.full_name[0].toUpperCase() : "T"}
+                    </div>
+                    <span className="font-medium text-white/90">
+                      {r.technician?.full_name || "Tecnico"}
+                    </span>
+                  </div>
+                  <div className="font-bold text-white flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{r.work_hours.toFixed(1)}h</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                  <span className="text-[11px] text-blue-400 font-mono">{r.id}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownload(r.id)}
+                      aria-label={`Anteprima e Stampa PDF per rapportino ${r.id}`}
+                      className="h-10 px-3.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 flex items-center gap-1.5 text-xs text-blue-300 font-medium transition active:scale-95"
+                      title="Anteprima e Stampa PDF"
+                    >
+                      <Download className="h-4 w-4" /> PDF
+                    </button>
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      aria-label={`Elimina rapportino ${r.id}`}
+                      className="h-10 w-10 rounded-lg hover:bg-red-500/20 bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-red-400 transition active:scale-95"
+                      title="Elimina Rapportino"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View (Table Layout for >= md screens) */}
+        <div className="hidden md:block overflow-x-auto flex-1">
           <table className="w-full text-left text-sm">
             <thead className="bg-white/5 text-white/60 border-b border-white/10 sticky top-0 backdrop-blur-md">
               <tr>
@@ -438,14 +530,16 @@ export function ReportsView({
                       <div className="flex items-center justify-end gap-2.5">
                         <button
                           onClick={() => handleDownload(r.id)}
-                          className="h-8 px-3 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 flex items-center gap-1.5 text-xs text-blue-300 font-medium transition active:scale-95"
+                          aria-label={`Anteprima e Stampa PDF per rapportino ${r.id}`}
+                          className="h-9 px-3 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 flex items-center gap-1.5 text-xs text-blue-300 font-medium transition active:scale-95"
                           title="Anteprima e Stampa PDF"
                         >
                           <Download className="h-3.5 w-3.5" /> PDF
                         </button>
                         <button
                           onClick={() => handleDelete(r.id)}
-                          className="h-8 w-8 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-white/40 hover:text-red-400 transition active:scale-95"
+                          aria-label={`Elimina rapportino ${r.id}`}
+                          className="h-9 w-9 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-white/40 hover:text-red-400 transition active:scale-95"
                           title="Elimina Rapportino"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
