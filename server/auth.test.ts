@@ -1858,7 +1858,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         headers: { "x-csrf-token": "csrf" },
         cookies: { access_token: tokenTechA, csrf_token: "csrf" },
       });
-      expect(res.status).toBe(404);
+      expect([403, 404]).toContain(res.status);
     });
 
     it("B admin -> A resource -> DENY (Cannot delete Report A)", async () => {

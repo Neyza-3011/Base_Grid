@@ -46,7 +46,14 @@ export function DashboardAnalyticsView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isClient = currentUser.role === "cliente";
+  const canCreate = currentUser.role !== "technician" && !isClient;
+
   const loadReportsData = useCallback(async () => {
+    if (isClient) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -58,7 +65,7 @@ export function DashboardAnalyticsView({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isClient]);
 
   useEffect(() => {
     loadReportsData();
@@ -159,19 +166,23 @@ export function DashboardAnalyticsView({
             </button>
           </div>
 
-          <button
-            onClick={onNavigateToReports}
-            className="h-10 px-4 bg-slate-800 hover:bg-slate-700 text-white border border-white/10 rounded-xl text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
-          >
-            <FileText className="h-4 w-4 text-blue-400" /> Vai ai Rapportini
-          </button>
+          {!isClient && (
+            <button
+              onClick={onNavigateToReports}
+              className="h-10 px-4 bg-slate-800 hover:bg-slate-700 text-white border border-white/10 rounded-xl text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
+            >
+              <FileText className="h-4 w-4 text-blue-400" /> Vai ai Rapportini
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToWizard}
-            className="h-10 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-semibold transition-all active:scale-95 btn-glow flex items-center gap-1.5 shadow-lg shadow-primary/20"
-          >
-            <Plus className="h-4 w-4" /> Nuovo Rapportino
-          </button>
+          {canCreate && (
+            <button
+              onClick={onNavigateToWizard}
+              className="h-10 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-semibold transition-all active:scale-95 btn-glow flex items-center gap-1.5 shadow-lg shadow-primary/20"
+            >
+              <Plus className="h-4 w-4" /> Nuovo Rapportino
+            </button>
+          )}
         </div>
       </div>
 
@@ -208,12 +219,14 @@ export function DashboardAnalyticsView({
             interventi e firme di cantiere, questa dashboard mostrerà in automatico i grafici di
             rendimento e l'analisi analitica.
           </p>
-          <button
-            onClick={onNavigateToWizard}
-            className="mt-2 h-11 px-6 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-semibold transition-all active:scale-95 btn-glow flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" /> Compila Primo Rapportino
-          </button>
+          {canCreate && (
+            <button
+              onClick={onNavigateToWizard}
+              className="mt-2 h-11 px-6 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-semibold transition-all active:scale-95 btn-glow flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Compila Primo Rapportino
+            </button>
+          )}
         </div>
       ) : (
         <>

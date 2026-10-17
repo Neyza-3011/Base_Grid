@@ -983,7 +983,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               </div>
 
               <div className="flex items-center gap-2">
-                {selectedIntervention.status === "completato" && (
+                {selectedIntervention.status === "completato" && canCreateAndManage && (
                   <button
                     type="button"
                     onClick={() => onCreateReport?.(selectedIntervention)}

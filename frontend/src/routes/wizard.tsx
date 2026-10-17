@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { addReport } from "@/lib/reportsStorage";
 import { fetchCustomers, fetchLocations, Customer, Location } from "@/lib/api/customers";
+import { fetchServerSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/wizard")({
   head: () => ({
@@ -43,6 +44,24 @@ function Wizard() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    async function checkAuth() {
+      const session = await fetchServerSession();
+      if (!session) {
+        toast.error("Sessione non valida o scaduta. Effettua l'accesso.");
+        navigate({ to: "/" });
+        return;
+      }
+      if (session.role === "technician" || session.role === "cliente") {
+        toast.error("Accesso negato: non hai i permessi per compilare o creare rapportini.");
+        navigate({ to: "/dashboard" });
+      }
+    }
+    checkAuth();
+  }, [navigate]);
 
   useEffect(() => {
     fetchCustomers("", true)
@@ -101,7 +120,6 @@ function Wizard() {
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
 
-  const navigate = useNavigate();
   const steps = ["Cliente", "Ore & Materiali", "Firma", "Rivedi & Invia"];
 
   const handleAddMaterial = () => {

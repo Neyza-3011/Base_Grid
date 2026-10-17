@@ -179,26 +179,25 @@ function Dashboard() {
           <span>Dashboard</span>
         </button>
 
-        {/* SEZIONE 2: RAPPORTINI (Diretta senza sottocategorie) */}
-        <button
-          onClick={() => {
-            setActiveView("reports");
-            setSidebarOpen(false);
-          }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-            activeView === "reports"
-              ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
-              : "text-white/70 hover:text-white hover:bg-white/5"
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <FileText className="h-4 w-4" />
-            <span>Rapportini</span>
-          </div>
-        </button>
-
         {currentUser.role !== "cliente" && (
           <>
+            {/* SEZIONE 2: RAPPORTINI (Diretta senza sottocategorie) */}
+            <button
+              onClick={() => {
+                setActiveView("reports");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
+                activeView === "reports"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                  : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FileText className="h-4 w-4" />
+                <span>Rapportini</span>
+              </div>
+            </button>
             <button
               onClick={() => {
                 setActiveView("interventions");
@@ -419,14 +418,16 @@ function Dashboard() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link
-              to="/wizard"
-              aria-label="Nuovo rapportino"
-              className="h-9 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 active:scale-95 transition btn-glow inline-flex items-center justify-center gap-1.5 w-9 sm:w-auto sm:px-4"
-            >
-              <Plus className="h-4 w-4 sm:hidden" />
-              <span className="hidden sm:inline">Nuovo rapportino</span>
-            </Link>
+            {currentUser.role !== "technician" && currentUser.role !== "cliente" && (
+              <Link
+                to="/wizard"
+                aria-label="Nuovo rapportino"
+                className="h-9 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 active:scale-95 transition btn-glow inline-flex items-center justify-center gap-1.5 w-9 sm:w-auto sm:px-4"
+              >
+                <Plus className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:inline">Nuovo rapportino</span>
+              </Link>
+            )}
           </div>
         </header>
 
@@ -476,6 +477,7 @@ function Dashboard() {
           {activeView === "company_settings" && <CompanySettings />}
           {activeView === "reports" && (
             <ReportsView
+              currentUser={currentUser}
               initialIntervention={selectedInterventionForReport}
               onClearInitialIntervention={() => setSelectedInterventionForReport(null)}
             />
