@@ -292,10 +292,11 @@ export function CustomersView() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleBackToCustomers}
-              className="grid h-10 w-10 place-items-center rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition"
+              className="h-10 px-3 flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition text-sm font-medium"
               title="Torna all'elenco clienti"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
+              <span>Torna ai clienti</span>
             </button>
             <div className="flex-1">
               <div className="flex items-center gap-3">
@@ -348,24 +349,66 @@ export function CustomersView() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="col-span-1 space-y-6">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-              <h3 className="text-sm font-semibold text-white mb-4">Dettagli Cliente</h3>
-              <div className="space-y-4">
-                {selectedCustomer.email && (
-                  <div className="flex items-center gap-3 text-sm text-white/70">
-                    <Mail className="h-4 w-4 text-white/40" /> {selectedCustomer.email}
-                  </div>
-                )}
-                {selectedCustomer.phoneNumber && (
-                  <div className="flex items-center gap-3 text-sm text-white/70">
-                    <Phone className="h-4 w-4 text-white/40" /> {selectedCustomer.phoneNumber}
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-primary" /> Dettagli Anagrafici
+              </h3>
+              <div className="space-y-3.5">
+                {selectedCustomer.legalName && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Ragione Sociale
+                    </span>
+                    <span className="text-sm text-white font-medium">
+                      {selectedCustomer.legalName}
+                    </span>
                   </div>
                 )}
                 {selectedCustomer.vatNumber && (
-                  <div className="flex items-center gap-3 text-sm text-white/70">
-                    <Briefcase className="h-4 w-4 text-white/40" /> P.IVA:{" "}
-                    {selectedCustomer.vatNumber}
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Partita IVA
+                    </span>
+                    <span className="text-sm text-white font-mono">
+                      {selectedCustomer.vatNumber}
+                    </span>
                   </div>
                 )}
+                {selectedCustomer.email && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Email
+                    </span>
+                    <a
+                      href={`mailto:${selectedCustomer.email}`}
+                      className="text-sm text-primary hover:underline flex items-center gap-1.5 mt-0.5"
+                    >
+                      <Mail className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                      <span className="truncate">{selectedCustomer.email}</span>
+                    </a>
+                  </div>
+                )}
+                {selectedCustomer.phoneNumber && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Telefono
+                    </span>
+                    <a
+                      href={`tel:${selectedCustomer.phoneNumber}`}
+                      className="text-sm text-white/80 hover:text-white flex items-center gap-1.5 mt-0.5"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                      <span>{selectedCustomer.phoneNumber}</span>
+                    </a>
+                  </div>
+                )}
+                {!selectedCustomer.legalName &&
+                  !selectedCustomer.vatNumber &&
+                  !selectedCustomer.email &&
+                  !selectedCustomer.phoneNumber && (
+                    <div className="text-xs text-white/40 italic py-2">
+                      Nessuna informazione di contatto aggiuntiva inserita.
+                    </div>
+                  )}
               </div>
             </div>
           </div>
@@ -636,20 +679,29 @@ export function CustomersView() {
                   <ChevronRight className="h-5 w-5 text-white/20 group-hover:text-primary transition-colors" />
                 </div>
               </div>
-              <h3 className="font-semibold text-lg text-white mb-1 truncate">{c.displayName}</h3>
+              <h3 className="font-semibold text-lg text-white mb-0.5 truncate">{c.displayName}</h3>
+              {c.legalName && c.legalName !== c.displayName && (
+                <p className="text-xs text-white/50 truncate font-medium">{c.legalName}</p>
+              )}
               <div className="space-y-1.5 mt-4">
+                {c.vatNumber && (
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Briefcase className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                    <span className="truncate">P.IVA: {c.vatNumber}</span>
+                  </div>
+                )}
                 {c.email && (
                   <div className="flex items-center gap-2 text-xs text-white/60">
-                    <Mail className="h-3.5 w-3.5" /> <span className="truncate">{c.email}</span>
+                    <Mail className="h-3.5 w-3.5 text-white/40 shrink-0" /> <span className="truncate">{c.email}</span>
                   </div>
                 )}
                 {c.phoneNumber && (
                   <div className="flex items-center gap-2 text-xs text-white/60">
-                    <Phone className="h-3.5 w-3.5" /> {c.phoneNumber}
+                    <Phone className="h-3.5 w-3.5 text-white/40 shrink-0" /> {c.phoneNumber}
                   </div>
                 )}
-                {!c.email && !c.phoneNumber && (
-                  <div className="text-xs text-white/30 italic">Nessun contatto registrato</div>
+                {!c.email && !c.phoneNumber && !c.vatNumber && (
+                  <div className="text-xs text-white/30 italic">Nessun contatto o P.IVA registrati</div>
                 )}
               </div>
             </div>
