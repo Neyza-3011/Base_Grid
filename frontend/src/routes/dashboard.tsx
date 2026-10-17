@@ -54,6 +54,17 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
+const VIEW_TITLES: Record<string, string> = {
+  dashboard: "Dashboard & Analytics",
+  reports: "Archivio Rapportini",
+  interventions: "Gestione Interventi",
+  customers: "Clienti & Cantieri",
+  assets: "Impianti & Asset",
+  team: "Collaboratori & Team",
+  company_settings: "Impostazioni Aziendali",
+  profile: "Profilo Utente",
+};
+
 function Dashboard() {
   const [activeView, setActiveView] = useState("dashboard");
   const [previewPdfId, setPreviewPdfId] = useState<string | null>(null);
@@ -323,7 +334,7 @@ function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex">
+    <div className="min-h-screen bg-[#090D16] text-white flex">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
@@ -341,62 +352,65 @@ function Dashboard() {
 
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* Topbar */}
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-4 sm:px-8 gap-3 sticky top-0 z-30 shrink-0">
+        <header className="h-16 border-b border-white/10 bg-[#090D16]/90 backdrop-blur-md flex items-center px-4 sm:px-8 gap-3 sticky top-0 z-30 shrink-0 text-white">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden grid h-9 w-9 place-items-center rounded-lg hover:bg-slate-100 shrink-0"
+            className="lg:hidden grid h-9 w-9 place-items-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition shrink-0"
+            title="Apri menu"
           >
-            <Menu className="h-5 w-5 text-slate-700" />
+            <Menu className="h-5 w-5" />
           </button>
 
           <div className="hidden lg:flex items-center gap-2 shrink-0">
-            <span className="font-semibold text-sm">Dashboard</span>
+            <span className="font-semibold text-sm text-white">
+              {VIEW_TITLES[activeView] || "Dashboard"}
+            </span>
           </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <button
               aria-label="Notifiche"
               onClick={() => toast.info("Nessuna nuova notifica.")}
-              className="grid h-9 w-9 place-items-center rounded-lg hover:bg-slate-100"
+              className="grid h-9 w-9 place-items-center rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition"
             >
-              <Bell className="h-4 w-4 text-slate-700" />
+              <Bell className="h-4 w-4" />
             </button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 hover:bg-slate-50 p-1 rounded-full outline-none">
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+                <button className="flex items-center gap-2 hover:bg-white/10 p-1 rounded-full outline-none transition">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/20 text-xs font-bold text-primary border border-primary/30">
                     {getInitials(currentUser.fullName)}
                   </span>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 bg-[#0f172a] border-white/10 text-white">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{currentUser.fullName}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
+                    <p className="text-sm font-medium leading-none text-white">{currentUser.fullName}</p>
+                    <p className="text-xs leading-none text-white/50">
                       {currentUser.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="bg-white/10" />
                 <DropdownMenuItem
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-white/10 focus:bg-white/10 text-white/80 focus:text-white"
                   onClick={() => setActiveView("profile")}
                 >
                   <UserIcon className="mr-2 h-4 w-4" />
                   <span>Profilo</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:bg-white/10 focus:bg-white/10 text-white/80 focus:text-white"
                   onClick={() => setActiveView("profile")}
                 >
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Impostazioni</span>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="bg-white/10" />
                 <DropdownMenuItem
-                  className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
+                  className="cursor-pointer text-rose-400 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-300"
                   onClick={handleLogout}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
