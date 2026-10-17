@@ -370,9 +370,9 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
   // P0.4.4-E.1 Dedicated Strict Validation & Server-Owned Fields Tests
   // =========================================================================
 
-  // 1. status=approved tampering
-  it("P0.4.4-E.1: should reject status=approved tampering from admin and technician", async () => {
-    // Admin attempting status: "approved"
+  // 1. status=approved tampering from authorized role
+  it("P0.4.4-E.1: should reject status=approved tampering from authorized role (admin)", async () => {
+    // Admin (authorized creation role) attempting status: "approved" -> rejected with 400 validation error
     const resAdmin = await request(app)
       .post("/api/v1/reports")
       .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
@@ -382,12 +382,15 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         time: "10:00",
         work_hours: 2,
         travel_hours: 1,
-        status: "approved"
+        status: "approved",
       });
     expect(resAdmin.status).toBe(400);
     expect(resAdmin.body.detail).toContain("approved");
+  });
 
-    // Technician attempting status: "approved"
+  // 1b. Unauthorized role attempting report creation
+  it("P0.4.4-E.1: should deny report creation from unauthorized role (technician) with 403 before validation", async () => {
+    // Technician attempting report creation -> rejected with 403 Forbidden by RBAC middleware
     const resTech = await request(app)
       .post("/api/v1/reports")
       .set("Cookie", techCookies).set("x-csrf-token", techCsrfToken)
@@ -397,14 +400,10 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         time: "10:00",
         work_hours: 2,
         travel_hours: 1,
-        status: "approved"
+        status: "approved",
       });
-    expect([400, 403]).toContain(resTech.status);
-    if (resTech.status === 400) {
-      expect(resTech.body.detail).toContain("approved");
-    } else {
-      expect(resTech.body.detail).toMatch(/Accesso negato|permessi insufficienti/i);
-    }
+    expect(resTech.status).toBe(403);
+    expect(resTech.body.detail).toMatch(/Accesso negato|permessi insufficienti/i);
   });
 
   // 2. invalid calendar date

@@ -16,14 +16,40 @@ import {
 } from "lucide-react";
 import { getReports, addReport, removeReport, Report } from "@/lib/reportsStorage";
 import { Intervention } from "@/lib/api/interventions";
+import { UserSession } from "@/lib/auth";
 import { PdfPreviewModal } from "./PdfPreviewModal";
 
+const READ_ROLES: readonly string[] = [
+  "owner",
+  "admin",
+  "responsabile_tecnico",
+  "dispatcher",
+  "technician",
+  "commerciale",
+  "amministrazione",
+  "superadmin",
+];
+
+const CREATE_ROLES: readonly string[] = [
+  "owner",
+  "admin",
+  "responsabile_tecnico",
+  "dispatcher",
+  "commerciale",
+  "amministrazione",
+  "superadmin",
+];
+
+const DELETE_ROLES: readonly string[] = ["owner", "admin", "superadmin"];
+
 export interface ReportsViewProps {
+  currentUser?: UserSession | null;
   initialIntervention?: Intervention | null;
   onClearInitialIntervention?: () => void;
 }
 
 export function ReportsView({
+  currentUser,
   initialIntervention,
   onClearInitialIntervention,
 }: ReportsViewProps = {}) {
@@ -47,7 +73,19 @@ export function ReportsView({
   const [newMaterialQty, setNewMaterialQty] = useState("1");
   const [linkedIntervention, setLinkedIntervention] = useState<Intervention | null>(null);
 
+  const userRole = (currentUser?.role || "") as string;
+  const isClient = userRole === "cliente";
+  // RBAC permissions strictly aligned with server/routes/reports.ts
+  const canRead = !isClient && (currentUser ? READ_ROLES.includes(userRole) : true);
+  const canCreate = !isClient && (currentUser ? CREATE_ROLES.includes(userRole) : false);
+  const canDelete = !isClient && (currentUser ? DELETE_ROLES.includes(userRole) : false);
+
   const loadAllData = useCallback(async () => {
+    // For client role or unauthorized roles, do not invoke getReports
+    if (isClient || !canRead) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -67,7 +105,7 @@ export function ReportsView({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isClient, canRead]);
 
   useEffect(() => {
     loadAllData();
@@ -92,12 +130,21 @@ export function ReportsView({
   };
 
   const handleOpenGenericCreate = () => {
+    if (!canCreate) {
+      toast.error("Non disponi dei permessi per creare rapportini.");
+      return;
+    }
     resetForm();
     setShowQuickCreate(true);
   };
 
   useEffect(() => {
     if (initialIntervention) {
+      if (!canCreate) {
+        toast.error("Non disponi dei permessi per creare o compilare rapportini.");
+        onClearInitialIntervention?.();
+        return;
+      }
       setShowQuickCreate(true);
       setNewClientName(initialIntervention.customerName || "");
 
@@ -129,9 +176,13 @@ export function ReportsView({
       setLinkedIntervention(initialIntervention);
       onClearInitialIntervention?.();
     }
-  }, [initialIntervention, onClearInitialIntervention]);
+  }, [initialIntervention, onClearInitialIntervention, canCreate]);
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) {
+      toast.error("Non disponi dei permessi per eliminare i rapportini.");
+      return;
+    }
     if (!confirm("Sei sicuro di voler eliminare questo rapportino?")) return;
     try {
       await removeReport(id);
@@ -150,6 +201,10 @@ export function ReportsView({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate) {
+      toast.error("Non disponi dei permessi per creare rapportini.");
+      return;
+    }
     if (!newClientName.trim()) {
       toast.error("Inserisci il nome del cliente");
       return;
@@ -247,6 +302,22 @@ export function ReportsView({
 
   const totalHoursFiltered = filtered.reduce((acc, r) => acc + (r.work_hours || 0), 0);
 
+  if (isClient || !canRead) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] h-full min-h-[360px] text-white">
+        <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h3 className="text-lg font-bold text-white mb-2">Accesso Riservato</h3>
+        <p className="text-sm text-white/60 max-w-md">
+          {isClient
+            ? "L'area rapportini è riservata al personale operativo dell'azienda. Il tuo profilo cliente non dispone dei permessi per consultare questa sezione."
+            : "Non disponi dei permessi necessari per visualizzare o gestire i rapportini d'intervento."}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col space-y-6 h-full text-white">
       {/* Header & Action Buttons */}
@@ -273,12 +344,14 @@ export function ReportsView({
             <Download className="h-4 w-4 text-emerald-400" /> Esporta CSV
           </button>
 
-          <button
-            onClick={handleOpenGenericCreate}
-            className="h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all btn-glow inline-flex items-center justify-center gap-2 px-4 shadow-lg shadow-primary/20"
-          >
-            <Plus className="h-4 w-4" /> Nuovo Rapportino
-          </button>
+          {canCreate && (
+            <button
+              onClick={handleOpenGenericCreate}
+              className="h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all btn-glow inline-flex items-center justify-center gap-2 px-4 shadow-lg shadow-primary/20"
+            >
+              <Plus className="h-4 w-4" /> Nuovo Rapportino
+            </button>
+          )}
         </div>
       </div>
 
@@ -423,14 +496,16 @@ export function ReportsView({
                     >
                       <Download className="h-4 w-4" /> PDF
                     </button>
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      aria-label={`Elimina rapportino ${r.id}`}
-                      className="h-10 w-10 rounded-lg hover:bg-red-500/20 bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-red-400 transition active:scale-95"
-                      title="Elimina Rapportino"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        aria-label={`Elimina rapportino ${r.id}`}
+                        className="h-10 w-10 rounded-lg hover:bg-red-500/20 bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-red-400 transition active:scale-95"
+                        title="Elimina Rapportino"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -448,7 +523,9 @@ export function ReportsView({
                 <th className="font-semibold px-6 py-4">Tecnico Operativo</th>
                 <th className="font-semibold px-6 py-4">Ore Lavoro</th>
                 <th className="font-semibold px-6 py-4">Stato</th>
-                <th className="font-semibold px-6 py-4 text-right">Azioni PDF / Elimina</th>
+                <th className="font-semibold px-6 py-4 text-right">
+                  Azioni PDF{canDelete ? " / Elimina" : ""}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-white/80">
@@ -536,14 +613,16 @@ export function ReportsView({
                         >
                           <Download className="h-3.5 w-3.5" /> PDF
                         </button>
-                        <button
-                          onClick={() => handleDelete(r.id)}
-                          aria-label={`Elimina rapportino ${r.id}`}
-                          className="h-9 w-9 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-white/40 hover:text-red-400 transition active:scale-95"
-                          title="Elimina Rapportino"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            aria-label={`Elimina rapportino ${r.id}`}
+                            className="h-9 w-9 rounded-lg hover:bg-red-500/20 flex items-center justify-center text-white/40 hover:text-red-400 transition active:scale-95"
+                            title="Elimina Rapportino"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
