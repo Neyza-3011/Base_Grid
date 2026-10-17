@@ -19,6 +19,7 @@ import {
   Mail,
   Cpu,
   Wrench,
+  Building2,
 } from "lucide-react";
 import { fetchServerSession, logoutUser, resendVerificationEmail, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
