@@ -1,0 +1,133 @@
+import express, { Express, Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import crypto from "crypto";
+import { authRouter } from "./routes/auth";
+import { usersRouter } from "./routes/users";
+import { companyRouter } from "./routes/company";
+import { adminRouter } from "./routes/admin";
+import { reportsRouter } from "./routes/reports";
+import { customersRouter, locationsRouter } from "./routes/customers";
+import { assetsRouter } from "./routes/assets";
+import { interventionsRouter } from "./routes/interventions";
+import { verifyCsrf } from "./middleware/auth";
+import { securityHeaders } from "./middleware/security-headers";
+import { assertValidJwtSecret } from "./security";
+import { config } from "./config";
+import { generalApiLimiter } from "./rate-limiter";
+import { db } from "./db";
+import { tokenStore } from "./token-store";
+import { asyncHandler } from "./async-handler";
+import { getRuntimeMode } from "./runtime-mode";
+
+export function createApp(): Express {
+  // Validate JWT Secret configuration on application initialization / startup
+  assertValidJwtSecret();
+
+  const app = express();
+  const mode = getRuntimeMode();
+  
+  // Disable X-Powered-By header to avoid framework disclosure
+  app.disable("x-powered-by");
+
+  // Trust the first proxy to safely use req.ip for rate limiting in production (e.g. Render/Cloud Run)
+  app.set("trust proxy", 1);
+
+  // Centralized HTTP Security Headers middleware (applied to API, health, and frontend routes)
+  app.use(securityHeaders);
+
+  // Basic security and parsing middlewares
+  app.use(
+    cors({
+      origin: mode === "production" ? config.CORS_ORIGINS : true, // Restrict in production
+      credentials: true, // Allow cookies
+    }),
+  );
+  app.use(cookieParser());
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true }));
+
+  // Global CSRF verification middleware for state-changing requests
+  app.use(verifyCsrf);
+
+  // Liveness check (process alive) - does NOT require DB or Redis
+  app.get("/health", (_req: Request, res: Response) => {
+    res.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      service: "BaseGrid Server-Authoritative Backend",
+    });
+  });
+
+  // Readiness check (PostgreSQL + Redis available) - fails closed (503) if any critical dependency is down
+  app.get(
+    "/ready",
+    asyncHandler(async (_req: Request, res: Response) => {
+      // In production, DATABASE_URL and REDIS_URL are strictly required
+      const currentMode = getRuntimeMode();
+      if (currentMode === "production") {
+        if (!config.DATABASE_URL || !config.REDIS_URL) {
+          res.status(503).json({ status: "not_ready" });
+          return;
+        }
+      }
+
+      try {
+        const [dbOk, redisOk] = await Promise.all([
+          db.ping(2000).catch(() => false),
+          tokenStore.ping(2000).catch(() => false),
+        ]);
+
+        if (dbOk && redisOk) {
+          res.status(200).json({ status: "ready" });
+        } else {
+          res.status(503).json({ status: "not_ready" });
+        }
+      } catch {
+        res.status(503).json({ status: "not_ready" });
+      }
+    }),
+  );
+
+  // Apply general API rate limiter to all /api routes
+  app.use("/api", generalApiLimiter);
+
+  // API V1 Routes
+  app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/users", usersRouter);
+  app.use("/api/v1/company", companyRouter);
+  app.use("/api/v1/admin", adminRouter);
+  app.use("/api/v1/reports", reportsRouter);
+  app.use("/api/v1/customers", customersRouter);
+  app.use("/api/v1/locations", locationsRouter);
+  app.use("/api/v1/assets", assetsRouter);
+  app.use("/api/v1/interventions", interventionsRouter);
+
+  // 404 for unhandled API endpoints
+  app.use("/api/*", (_req: Request, res: Response) => {
+    res.status(404).json({ detail: "Endpoint API non trovato." });
+  });
+
+  // Centralized safe error handler (never leaks stack traces, SQL, or internal secrets)
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err?.statusCode || err?.status || (typeof err === "number" ? err : 500);
+    
+    // Log the error safely (never log err.message or stack trace for 5xx to prevent leakage of credentials/SQL)
+    if (status >= 500) {
+      const errorId = crypto.randomUUID();
+      console.error(`[ServerError] ${err?.name || "Error"}: Internal Server Error (ID: ${errorId})`);
+    } else {
+      console.error(`[ServerError] ${err?.name || "Error"}:`, err?.message || "Client error");
+    }
+    
+    // Only return the exact error message to the client for expected HTTP errors (status < 500)
+    // For 500 Internal Server Errors, always mask the underlying cause to prevent leakage.
+    const safeMessage = status < 500 
+      ? (err.message || "Richiesta non valida.") 
+      : "Errore interno del server.";
+
+    res.status(status).json({ detail: safeMessage });
+  });
+
+  return app;
+}

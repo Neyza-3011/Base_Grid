@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: basegrid-production
+    runtime: node
+    region: frankfurt
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: "npm ci --include=dev && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: "production"
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: "false"
+      - key: GOOGLE_AUTH_ENABLED
+        value: "false"
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPERADMIN_EMAIL
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: SUPERADMIN_COMPANY_NAME
+        sync: false

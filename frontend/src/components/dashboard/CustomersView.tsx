@@ -1,0 +1,819 @@
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
+import {
+  Users,
+  Search,
+  Plus,
+  Building2,
+  MapPin,
+  ChevronRight,
+  Phone,
+  Mail,
+  Edit2,
+  ArrowLeft,
+  Briefcase,
+  Archive,
+  ArchiveRestore,
+  Loader2,
+  X,
+} from "lucide-react";
+import {
+  Customer,
+  Location,
+  fetchCustomers,
+  createCustomer,
+  updateCustomer,
+  archiveCustomer,
+  reactivateCustomer,
+  fetchLocations,
+  createLocation,
+  updateLocation,
+  archiveLocation,
+  reactivateLocation,
+} from "@/lib/api/customers";
+
+export function CustomersView() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [activeOnly, setActiveOnly] = useState(false);
+
+  // Navigation states
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+
+  // Modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  // Form states for Customer
+  const [cForm, setCForm] = useState({
+    id: "",
+    displayName: "",
+    legalName: "",
+    vatNumber: "",
+    email: "",
+    phoneNumber: "",
+    isActive: true,
+  });
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [submittingCustomer, setSubmittingCustomer] = useState(false);
+
+  // Form states for Location
+  const [lForm, setLForm] = useState({
+    id: "",
+    name: "",
+    address: "",
+    city: "",
+    province: "",
+    isActive: true,
+  });
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [submittingLocation, setSubmittingLocation] = useState(false);
+
+  // Action loading state
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const loadCustomers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchCustomers(query || undefined, activeOnly);
+      setCustomers(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Impossibile caricare i clienti.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [query, activeOnly]);
+
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      loadCustomers();
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [loadCustomers]);
+
+  const loadLocations = useCallback(async (customerId: string) => {
+    setLoadingLocations(true);
+    try {
+      const data = await fetchLocations(customerId, undefined, false);
+      setLocations(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Impossibile caricare i cantieri.";
+      toast.error(msg);
+    } finally {
+      setLoadingLocations(false);
+    }
+  }, []);
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    loadLocations(customer.id);
+  };
+
+  const handleBackToCustomers = () => {
+    setSelectedCustomer(null);
+    setLocations([]);
+    loadCustomers();
+  };
+
+  const openNewCustomerModal = () => {
+    setCForm({
+      id: "",
+      displayName: "",
+      legalName: "",
+      vatNumber: "",
+      email: "",
+      phoneNumber: "",
+      isActive: true,
+    });
+    setIsEditingCustomer(false);
+    setShowCustomerModal(true);
+  };
+
+  const openEditCustomerModal = (customer: Customer) => {
+    setCForm({
+      id: customer.id,
+      displayName: customer.displayName,
+      legalName: customer.legalName || "",
+      vatNumber: customer.vatNumber || "",
+      email: customer.email || "",
+      phoneNumber: customer.phoneNumber || "",
+      isActive: customer.isActive,
+    });
+    setIsEditingCustomer(true);
+    setShowCustomerModal(true);
+  };
+
+  const submitCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingCustomer(true);
+    try {
+      if (isEditingCustomer) {
+        const updated = await updateCustomer(cForm.id, {
+          displayName: cForm.displayName,
+          legalName: cForm.legalName,
+          vatNumber: cForm.vatNumber,
+          email: cForm.email,
+          phoneNumber: cForm.phoneNumber,
+        });
+        toast.success("Cliente aggiornato con successo.");
+        if (selectedCustomer?.id === updated.id) {
+          setSelectedCustomer(updated);
+        }
+      } else {
+        await createCustomer({
+          displayName: cForm.displayName,
+          legalName: cForm.legalName,
+          vatNumber: cForm.vatNumber,
+          email: cForm.email,
+          phoneNumber: cForm.phoneNumber,
+        });
+        toast.success("Cliente creato con successo.");
+      }
+      setShowCustomerModal(false);
+      loadCustomers();
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Errore durante il salvataggio del cliente.",
+      );
+    } finally {
+      setSubmittingCustomer(false);
+    }
+  };
+
+  const handleToggleArchiveCustomer = async (customer: Customer) => {
+    setActionLoadingId(customer.id);
+    try {
+      if (customer.isActive) {
+        const updated = await archiveCustomer(customer.id);
+        toast.success("Cliente archiviato.");
+        if (selectedCustomer?.id === customer.id) {
+          setSelectedCustomer(updated);
+        }
+      } else {
+        const updated = await reactivateCustomer(customer.id);
+        toast.success("Cliente riattivato.");
+        if (selectedCustomer?.id === customer.id) {
+          setSelectedCustomer(updated);
+        }
+      }
+      loadCustomers();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Operazione non riuscita.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const openNewLocationModal = () => {
+    setLForm({
+      id: "",
+      name: "",
+      address: "",
+      city: "",
+      province: "",
+      isActive: true,
+    });
+    setIsEditingLocation(false);
+    setShowLocationModal(true);
+  };
+
+  const openEditLocationModal = (location: Location) => {
+    setLForm({
+      id: location.id,
+      name: location.name,
+      address: location.address,
+      city: location.city,
+      province: location.province || "",
+      isActive: location.isActive,
+    });
+    setIsEditingLocation(true);
+    setShowLocationModal(true);
+  };
+
+  const submitLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomer) return;
+    setSubmittingLocation(true);
+    try {
+      if (isEditingLocation) {
+        await updateLocation(lForm.id, {
+          name: lForm.name,
+          address: lForm.address,
+          city: lForm.city,
+          province: lForm.province,
+        });
+        toast.success("Cantiere aggiornato con successo.");
+      } else {
+        await createLocation(selectedCustomer.id, {
+          name: lForm.name,
+          address: lForm.address,
+          city: lForm.city,
+          province: lForm.province,
+        });
+        toast.success("Cantiere creato con successo.");
+      }
+      setShowLocationModal(false);
+      loadLocations(selectedCustomer.id);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Errore durante il salvataggio del cantiere.",
+      );
+    } finally {
+      setSubmittingLocation(false);
+    }
+  };
+
+  const handleToggleArchiveLocation = async (location: Location) => {
+    if (!selectedCustomer) return;
+    setActionLoadingId(location.id);
+    try {
+      if (location.isActive) {
+        await archiveLocation(location.id);
+        toast.success("Sede/cantiere archiviato.");
+      } else {
+        await reactivateLocation(location.id);
+        toast.success("Sede/cantiere riattivato.");
+      }
+      loadLocations(selectedCustomer.id);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Operazione non riuscita.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  if (selectedCustomer) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleBackToCustomers}
+              className="h-10 px-3 flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition text-sm font-medium"
+              title="Torna all'elenco clienti"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Torna ai clienti</span>
+            </button>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                  <Building2 className="h-6 w-6 text-primary" /> {selectedCustomer.displayName}
+                </h1>
+                {selectedCustomer.isActive ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Attivo
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    Archiviato
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-white/50">
+                {selectedCustomer.legalName || "Nessuna ragione sociale"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleToggleArchiveCustomer(selectedCustomer)}
+              disabled={actionLoadingId === selectedCustomer.id}
+              className={`h-10 px-4 rounded-lg border text-sm font-medium transition inline-flex items-center gap-2 ${
+                selectedCustomer.isActive
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                  : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+              }`}
+            >
+              {actionLoadingId === selectedCustomer.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : selectedCustomer.isActive ? (
+                <Archive className="h-4 w-4" />
+              ) : (
+                <ArchiveRestore className="h-4 w-4" />
+              )}
+              {selectedCustomer.isActive ? "Archivia Cliente" : "Riattiva Cliente"}
+            </button>
+            <button
+              onClick={() => openEditCustomerModal(selectedCustomer)}
+              className="h-10 px-4 rounded-lg bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition inline-flex items-center gap-2 border border-white/10"
+            >
+              <Edit2 className="h-4 w-4" /> Modifica
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-1 space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-primary" /> Dettagli Anagrafici
+              </h3>
+              <div className="space-y-3.5">
+                {selectedCustomer.legalName && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Ragione Sociale
+                    </span>
+                    <span className="text-sm text-white font-medium">
+                      {selectedCustomer.legalName}
+                    </span>
+                  </div>
+                )}
+                {selectedCustomer.vatNumber && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Partita IVA
+                    </span>
+                    <span className="text-sm text-white font-mono">
+                      {selectedCustomer.vatNumber}
+                    </span>
+                  </div>
+                )}
+                {selectedCustomer.email && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Email
+                    </span>
+                    <a
+                      href={`mailto:${selectedCustomer.email}`}
+                      className="text-sm text-primary hover:underline flex items-center gap-1.5 mt-0.5"
+                    >
+                      <Mail className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                      <span className="truncate">{selectedCustomer.email}</span>
+                    </a>
+                  </div>
+                )}
+                {selectedCustomer.phoneNumber && (
+                  <div>
+                    <span className="text-[11px] text-white/40 block font-medium uppercase tracking-wider">
+                      Telefono
+                    </span>
+                    <a
+                      href={`tel:${selectedCustomer.phoneNumber}`}
+                      className="text-sm text-white/80 hover:text-white flex items-center gap-1.5 mt-0.5"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                      <span>{selectedCustomer.phoneNumber}</span>
+                    </a>
+                  </div>
+                )}
+                {!selectedCustomer.legalName &&
+                  !selectedCustomer.vatNumber &&
+                  !selectedCustomer.email &&
+                  !selectedCustomer.phoneNumber && (
+                    <div className="text-xs text-white/40 italic py-2">
+                      Nessuna informazione di contatto aggiuntiva inserita.
+                    </div>
+                  )}
+              </div>
+            </div>
+          </div>
+
+          <div className="col-span-1 md:col-span-2 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">Cantieri / Sedi</h2>
+              <button
+                onClick={openNewLocationModal}
+                className="h-9 px-4 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition inline-flex items-center gap-2 btn-glow"
+              >
+                <Plus className="h-4 w-4" /> Nuovo Cantiere
+              </button>
+            </div>
+
+            {loadingLocations ? (
+              <div className="text-center py-12 text-white/50">Caricamento cantieri...</div>
+            ) : locations.length === 0 ? (
+              <div className="text-center py-12 bg-white/5 border border-dashed border-white/10 rounded-2xl text-white/50">
+                Nessun cantiere trovato. Aggiungi il primo!
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {locations.map((loc) => (
+                  <div
+                    key={loc.id}
+                    className={`flex items-center justify-between p-4 rounded-xl border transition ${
+                      loc.isActive
+                        ? "border-white/10 bg-white/5 hover:bg-white/10"
+                        : "border-white/5 bg-white/[0.02] opacity-75 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`grid h-10 w-10 place-items-center rounded-lg ${
+                          loc.isActive
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-amber-500/20 text-amber-400"
+                        }`}
+                      >
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{loc.name}</span>
+                          {loc.isActive ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Attivo
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              Archiviato
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-white/60">
+                          {loc.address}, {loc.city} {loc.province && `(${loc.province})`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleToggleArchiveLocation(loc)}
+                        disabled={actionLoadingId === loc.id}
+                        className={`p-2 rounded-lg transition ${
+                          loc.isActive
+                            ? "text-white/40 hover:text-amber-400 hover:bg-amber-500/10"
+                            : "text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10"
+                        }`}
+                        title={loc.isActive ? "Archivia sede" : "Riattiva sede"}
+                      >
+                        {actionLoadingId === loc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : loc.isActive ? (
+                          <Archive className="h-4 w-4" />
+                        ) : (
+                          <ArchiveRestore className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => openEditLocationModal(loc)}
+                        className="text-white/40 hover:text-white p-2 rounded-lg hover:bg-white/5 transition"
+                        title="Modifica sede"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Cantiere (Location) */}
+        {showLocationModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-[#111622] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 text-white">
+              <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  <h3 className="font-bold text-lg text-white">
+                    {isEditingLocation ? "Modifica Cantiere" : "Nuovo Cantiere"}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(false)}
+                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
+                  aria-label="Chiudi"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <form onSubmit={submitLocation} className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/70">
+                    Nome Sede / Cantiere *
+                  </label>
+                  <input
+                    required
+                    value={lForm.name}
+                    onChange={(e) => setLForm({ ...lForm, name: e.target.value })}
+                    placeholder="Es. Sede Principale, Cantiere Roma..."
+                    className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/70">Indirizzo *</label>
+                  <input
+                    required
+                    value={lForm.address}
+                    onChange={(e) => setLForm({ ...lForm, address: e.target.value })}
+                    placeholder="Es. Via Garibaldi 10"
+                    className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-white/70">Città *</label>
+                    <input
+                      required
+                      value={lForm.city}
+                      onChange={(e) => setLForm({ ...lForm, city: e.target.value })}
+                      placeholder="Es. Roma"
+                      className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-white/70">Provincia (Sigla)</label>
+                    <input
+                      value={lForm.province}
+                      onChange={(e) => setLForm({ ...lForm, province: e.target.value })}
+                      placeholder="Es. RM"
+                      maxLength={2}
+                      className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition uppercase"
+                    />
+                  </div>
+                </div>
+                <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationModal(false)}
+                    className="px-4 py-2.5 text-sm text-white/70 hover:text-white font-medium transition rounded-xl hover:bg-white/5"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingLocation}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 shadow-lg shadow-primary/20"
+                  >
+                    {submittingLocation && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {submittingLocation ? "Salvataggio..." : "Salva Cantiere"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            <Users className="h-6 w-6 text-primary" /> Clienti
+          </h1>
+          <p className="text-sm text-white/50">Gestisci i tuoi clienti e le loro sedi operative</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveOnly((prev) => !prev)}
+            className={`h-10 px-3 rounded-xl border text-xs font-medium transition ${
+              activeOnly
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            {activeOnly ? "Solo Attivi" : "Tutti (inclusi archiviati)"}
+          </button>
+          <button
+            onClick={openNewCustomerModal}
+            className="h-10 px-4 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 active:scale-95 transition inline-flex items-center justify-center gap-2 btn-glow"
+          >
+            <Plus className="h-4 w-4" /> Nuovo Cliente
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center bg-white/5 border border-white/10 rounded-xl px-3 h-12">
+        <Search className="h-5 w-5 text-white/40" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cerca per nome, email o telefono..."
+          className="bg-transparent border-none outline-none flex-1 ml-3 text-white placeholder:text-white/40 text-sm"
+        />
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-white/50">Ricerca clienti...</div>
+      ) : customers.length === 0 ? (
+        <div className="text-center py-16 bg-white/5 border border-dashed border-white/10 rounded-2xl">
+          <Building2 className="h-12 w-12 text-white/20 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-white mb-2">Nessun cliente trovato</h3>
+          <p className="text-white/50 text-sm mb-6 max-w-md mx-auto">
+            {query
+              ? "Nessun risultato corrisponde alla tua ricerca."
+              : "Inizia aggiungendo il tuo primo cliente al database."}
+          </p>
+          {!query && (
+            <button
+              onClick={openNewCustomerModal}
+              className="h-9 px-4 rounded-lg bg-primary/20 text-primary text-sm font-medium hover:bg-primary/30 transition"
+            >
+              Aggiungi Cliente
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {customers.map((c) => (
+            <div
+              key={c.id}
+              onClick={() => handleSelectCustomer(c)}
+              className={`group cursor-pointer rounded-2xl border p-5 transition-all ${
+                c.isActive
+                  ? "border-white/10 bg-white/5 hover:bg-white/10 hover:border-primary/50"
+                  : "border-white/5 bg-white/[0.02] opacity-75 hover:opacity-100 hover:border-white/20"
+              }`}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div
+                  className={`grid h-12 w-12 place-items-center rounded-xl ${
+                    c.isActive ? "bg-primary/20 text-primary" : "bg-white/10 text-white/40"
+                  }`}
+                >
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {c.isActive ? (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Attivo
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      Archiviato
+                    </span>
+                  )}
+                  <ChevronRight className="h-5 w-5 text-white/20 group-hover:text-primary transition-colors" />
+                </div>
+              </div>
+              <h3 className="font-semibold text-lg text-white mb-0.5 truncate">{c.displayName}</h3>
+              {c.legalName && c.legalName !== c.displayName && (
+                <p className="text-xs text-white/50 truncate font-medium">{c.legalName}</p>
+              )}
+              <div className="space-y-1.5 mt-4">
+                {c.vatNumber && (
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Briefcase className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                    <span className="truncate">P.IVA: {c.vatNumber}</span>
+                  </div>
+                )}
+                {c.email && (
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Mail className="h-3.5 w-3.5 text-white/40 shrink-0" />{" "}
+                    <span className="truncate">{c.email}</span>
+                  </div>
+                )}
+                {c.phoneNumber && (
+                  <div className="flex items-center gap-2 text-xs text-white/60">
+                    <Phone className="h-3.5 w-3.5 text-white/40 shrink-0" /> {c.phoneNumber}
+                  </div>
+                )}
+                {!c.email && !c.phoneNumber && !c.vatNumber && (
+                  <div className="text-xs text-white/30 italic">
+                    Nessun contatto o P.IVA registrati
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal Cliente */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#111622] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 text-white">
+            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                <h3 className="font-bold text-lg text-white">
+                  {isEditingCustomer ? "Modifica Cliente" : "Nuovo Cliente"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCustomerModal(false)}
+                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
+                aria-label="Chiudi"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={submitCustomer} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-white/70">Nome Visualizzato *</label>
+                <input
+                  required
+                  value={cForm.displayName}
+                  onChange={(e) => setCForm({ ...cForm, displayName: e.target.value })}
+                  placeholder="Es. Mario Rossi"
+                  className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-white/70">
+                  Ragione Sociale (Opzionale)
+                </label>
+                <input
+                  value={cForm.legalName}
+                  onChange={(e) => setCForm({ ...cForm, legalName: e.target.value })}
+                  placeholder="Es. Rossi Impianti Srl"
+                  className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/70">Partita IVA</label>
+                  <input
+                    value={cForm.vatNumber}
+                    onChange={(e) => setCForm({ ...cForm, vatNumber: e.target.value })}
+                    placeholder="Es. IT12345678901"
+                    className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-white/70">Telefono</label>
+                  <input
+                    value={cForm.phoneNumber}
+                    onChange={(e) => setCForm({ ...cForm, phoneNumber: e.target.value })}
+                    placeholder="Es. +39 333 1234567"
+                    className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-white/70">Email</label>
+                <input
+                  type="email"
+                  value={cForm.email}
+                  onChange={(e) => setCForm({ ...cForm, email: e.target.value })}
+                  placeholder="Es. contatto@cliente.it"
+                  className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerModal(false)}
+                  className="px-4 py-2.5 text-sm text-white/70 hover:text-white font-medium transition rounded-xl hover:bg-white/5"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingCustomer}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 shadow-lg shadow-primary/20"
+                >
+                  {submittingCustomer && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {submittingCustomer ? "Salvataggio..." : "Salva Cliente"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

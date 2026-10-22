@@ -1,0 +1,6 @@
+{
+  "name": "BaseGrid",
+  "description": "BaseGrid - Multi-tenant SaaS per Gestione Rapportini Digitali, Cantieri e Interventi B2B.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

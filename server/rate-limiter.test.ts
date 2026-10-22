@@ -1,0 +1,172 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import request from "supertest";
+import express from "express";
+import { rateLimiter } from "./rate-limiter";
+import { config } from "./config";
+
+describe("Rate Limiter Middleware", () => {
+  const originalEnv = config.NODE_ENV;
+  const originalRedis = (rateLimiter as any).redisClient;
+
+  beforeEach(() => {
+    config.NODE_ENV = "test";
+    (rateLimiter as any).localFallback.clear();
+  });
+
+  afterEach(() => {
+    config.NODE_ENV = originalEnv;
+    (rateLimiter as any).redisClient = originalRedis;
+    (rateLimiter as any).localFallback.clear();
+  });
+
+  it("should allow requests under the limit", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: true });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+
+    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.1");
+    expect(res1.status).toBe(200);
+    expect(res1.header["x-ratelimit-remaining"]).toBe("1");
+
+    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.1");
+    expect(res2.status).toBe(200);
+    expect(res2.header["x-ratelimit-remaining"]).toBe("0");
+  });
+
+  it("should block requests over the limit and return 429", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, errorMessage: "Too many" });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+
+    await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.2");
+    await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.2");
+    const res3 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.2");
+    
+    expect(res3.status).toBe(429);
+    expect(res3.body.detail).toBe("Too many");
+    expect(res3.header["retry-after"]).toBeDefined();
+  });
+
+  it("should not share limits across different IPs", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 1, duration: 60 });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+
+    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "10.0.0.1");
+    expect(res1.status).toBe(200);
+
+    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "10.0.0.2");
+    expect(res2.status).toBe(200);
+  });
+  
+  it("should fail closed if Redis is offline in production and failClosed is true", async () => {
+    // Mock production environment behavior for fallback
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: true });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+    
+    // Simulate redis offline and production env
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = null; // simulate no redis client 
+    
+    try {
+      const res = await request(app).get("/").set("X-Test-RateLimit", "enable");
+      expect(res.status).toBe(503);
+      expect(res.body.detail).toContain("Servizio temporaneamente non disponibile");
+    } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
+  it("should allow health endpoint without limit", async () => {
+    // Import real app
+    const { createApp } = await import("./app");
+    const app = createApp();
+    
+    for (let i = 0; i < 15; i++) {
+      const res = await request(app).get("/health");
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("5. refresh Redis unavailable - should fail closed in production", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const { refreshLimiter } = await import("./rate-limiter");
+    app.post("/refresh", refreshLimiter, (req, res) => { res.status(200).send("OK"); });
+    
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = null; // simulate offline
+    
+    try {
+      const res = await request(app).post("/refresh").set("X-Test-RateLimit", "enable");
+      expect(res.status).toBe(503);
+      expect(res.body.detail).toContain("Servizio temporaneamente non disponibile");
+    } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
+  it("6. general API fail-open - should fail open if Redis is offline in production", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: false });
+    app.get("/api", limiter, (req, res) => { res.status(200).send("OK"); });
+    
+    const origMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = null;
+    (rateLimiter as any).localFallback.clear();
+    
+    try {
+      // Send more requests than points (5 requests when points is 2)
+      for (let i = 0; i < 5; i++) {
+        const res = await request(app).get("/api").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.99");
+        expect(res.status).toBe(200);
+      }
+      // Memory fallback must NOT be used in production
+      expect((rateLimiter as any).localFallback.size).toBe(0);
+    } finally {
+      if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
+      else delete process.env.BASEGRID_RUNTIME_MODE;
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
+  it("11. trusted proxy behavior - uses X-Forwarded-For when trust proxy is set", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 1, duration: 60 });
+    app.get("/", limiter, (req, res) => { res.status(200).send("OK"); });
+
+    const testIp = `123.123.${Date.now() % 200}.${Math.floor(Math.random() * 200) + 1}`;
+    const res1 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", testIp);
+    expect(res1.status).toBe(200);
+    
+    // Using same IP should block
+    const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", testIp);
+    expect(res2.status).toBe(429);
+  });
+});

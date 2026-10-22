@@ -1,0 +1,436 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  fetchReports,
+  createReport,
+  deleteReport,
+  fetchReportPdfBlob,
+  ReportsApiError,
+  mapDtoToReport,
+  formatReportDateTime,
+} from "./reports";
+import { getReports, addReport, removeReport } from "../reportsStorage";
+
+describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reportsStorage.ts)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe("formatReportDateTime & mapDtoToReport", () => {
+    it("formats ISO date string into DD/MM/YYYY and HH:mm", () => {
+      const res = formatReportDateTime("2026-09-26", "14:30");
+      expect(res.date).toBe("26/09/2026");
+      expect(res.time).toBe("14:30");
+      expect(res.dateTimeFormatted).toBe("26/09/2026 14:30");
+    });
+
+    it("correctly maps server DTO to frontend view model", () => {
+      const serverDto = {
+        id: "rep-100",
+        date: "2026-09-26",
+        time: "15:00",
+        work_hours: 4.5,
+        travel_hours: 1.0,
+        status: "submitted" as const,
+        client: {
+          name: "Acme SpA",
+          address: "Via Roma 1",
+          city: "Milano",
+        },
+        technician: {
+          full_name: "Mario Rossi",
+        },
+        materials_used: [{ name: "Cavo", quantity: 5 }],
+        notes: "Installazione completata",
+        created_at: "2026-09-26T15:00:00.000Z",
+      };
+
+      const mapped = mapDtoToReport(serverDto);
+      expect(mapped.id).toBe("rep-100");
+      expect(mapped.date).toBe("26/09/2026");
+      expect(mapped.time).toBe("15:00");
+      expect(mapped.work_hours).toBe(4.5);
+      expect(mapped.travel_hours).toBe(1.0);
+      expect(mapped.client.name).toBe("Acme SpA");
+      expect(mapped.technician.full_name).toBe("Mario Rossi");
+      expect(mapped.materials_used).toEqual([{ name: "Cavo", quantity: 5 }]);
+    });
+
+    it("preserves intervention_id when present in server DTO", () => {
+      const serverDto = {
+        id: "rep-101",
+        date: "2026-09-26",
+        time: "15:00",
+        work_hours: 2,
+        travel_hours: 0,
+        status: "submitted" as const,
+        intervention_id: "int-uuid-123",
+        client: { name: "Acme SpA" },
+        technician: { full_name: "Mario Rossi" },
+        materials_used: [],
+        created_at: "2026-09-26T15:00:00.000Z",
+      };
+
+      const mapped = mapDtoToReport(serverDto);
+      expect(mapped.intervention_id).toBe("int-uuid-123");
+    });
+
+    it("handles server DTO without intervention_id correctly and leaves field undefined", () => {
+      const serverDto = {
+        id: "rep-102",
+        date: "2026-09-26",
+        time: "15:00",
+        work_hours: 2,
+        travel_hours: 0,
+        status: "submitted" as const,
+        client: { name: "Acme SpA" },
+        technician: { full_name: "Mario Rossi" },
+        materials_used: [],
+        created_at: "2026-09-26T15:00:00.000Z",
+      };
+
+      const mapped = mapDtoToReport(serverDto);
+      expect(mapped.intervention_id).toBeUndefined();
+      expect(mapped.id).toBe("rep-102");
+    });
+  });
+
+  describe("fetchReports & getReports (Server-Authoritative)", () => {
+    it("fetches reports from /api/v1/reports and returns mapped array", async () => {
+      const mockReportsDto = [
+        {
+          id: "rep-001",
+          date: "2026-09-26",
+          time: "10:00",
+          work_hours: 3,
+          travel_hours: 0.5,
+          status: "approved",
+          client: { name: "Cliente Alpha", address: "Via 1" },
+          technician: { full_name: "Tecnico 1" },
+          materials_used: [],
+          created_at: "2026-09-26T10:00:00.000Z",
+        },
+      ];
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockReportsDto,
+      });
+
+      const result = await fetchReports();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/reports?limit=1000"),
+        expect.objectContaining({
+          method: "GET",
+          credentials: "include",
+        }),
+      );
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe("rep-001");
+      expect(result[0].client.name).toBe("Cliente Alpha");
+    });
+
+    it("returns empty array when server returns empty array (no mock seeds fallback)", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+
+      const result = await getReports();
+      expect(result).toEqual([]);
+    });
+
+    it("throws ReportsApiError on 500 server error without returning mock data", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: "Database connection failed" }),
+      });
+
+      await expect(getReports()).rejects.toThrow("Errore interno del server.");
+    });
+
+    it("throws ReportsApiError on network failure", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("Failed to fetch"));
+
+      await expect(getReports()).rejects.toThrow(/Failed to fetch|Impossibile connettersi/);
+    });
+  });
+
+  describe("createReport & addReport", () => {
+    it("sends POST with snake_case payload and returns server-created report", async () => {
+      const createdServerDto = {
+        id: "rep-created-999",
+        date: "2026-09-26",
+        time: "14:00",
+        work_hours: 5,
+        travel_hours: 1,
+        status: "submitted",
+        client: { name: "Nuova Impresa Srl", address: "Corso Francia 10" },
+        technician: { full_name: "Tecnico Server" },
+        materials_used: [{ name: "Tubi", quantity: 3 }],
+        notes: "Lavori eseguiti",
+        created_at: "2026-09-26T14:00:00.000Z",
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => createdServerDto,
+      });
+
+      const result = await addReport({
+        clientName: "Nuova Impresa Srl",
+        clientAddress: "Corso Francia 10",
+        hours: 5,
+        travelHours: 1,
+        date: "2026-09-26",
+        time: "14:00",
+        notes: "Lavori eseguiti",
+        materials: [{ name: "Tubi", quantity: 3 }],
+        status: "submitted",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports",
+        expect.objectContaining({
+          method: "POST",
+          credentials: "include",
+          body: JSON.stringify({
+            client_name: "Nuova Impresa Srl",
+            client_address: "Corso Francia 10",
+            work_hours: 5,
+            travel_hours: 1,
+            date: "2026-09-26",
+            time: "14:00",
+            status: "submitted",
+            notes: "Lavori eseguiti",
+            materials_status: "used",
+            materials_used: [{ name: "Tubi", quantity: 3 }],
+          }),
+        }),
+      );
+
+      expect(result.id).toBe("rep-created-999");
+      expect(result.client.name).toBe("Nuova Impresa Srl");
+    });
+
+    it("sends explicit materials_status 'none' when confirmed zero materials used", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: "rep-no-materials",
+          date: "2026-09-26",
+          time: "10:00",
+          work_hours: 2,
+          travel_hours: 0,
+          status: "submitted",
+          client: { name: "Cliente Alpha" },
+          technician: { full_name: "Tecnico" },
+          materials_status: "none",
+          materials_used: [],
+          created_at: "2026-09-26T10:00:00.000Z",
+        }),
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Alpha",
+        hours: 2,
+        date: "2026-09-26",
+        time: "10:00",
+        materialsStatus: "none",
+        materials: [],
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports",
+        expect.objectContaining({
+          body: expect.stringContaining('"materials_status":"none"'),
+        }),
+      );
+      expect(res.materials_status).toBe("none");
+    });
+
+    it("sends explicit materials_status 'unverified' when verification has not been performed", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: "rep-unverified-materials",
+          date: "2026-09-26",
+          time: "10:00",
+          work_hours: 2,
+          travel_hours: 0,
+          status: "submitted",
+          client: { name: "Cliente Alpha" },
+          technician: { full_name: "Tecnico" },
+          materials_status: "unverified",
+          materials_used: [],
+          created_at: "2026-09-26T10:00:00.000Z",
+        }),
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Alpha",
+        hours: 2,
+        date: "2026-09-26",
+        time: "10:00",
+        materialsStatus: "unverified",
+        materials: [],
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports",
+        expect.objectContaining({
+          body: expect.stringContaining('"materials_status":"unverified"'),
+        }),
+      );
+      expect(res.materials_status).toBe("unverified");
+    });
+
+    it("throws ReportsApiError on 400 validation failure and propagates server message", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ detail: "Nome cliente non valido o vuoto." }),
+      });
+
+      await expect(
+        addReport({
+          clientName: "",
+          hours: 2,
+        }),
+      ).rejects.toThrow("Nome cliente non valido o vuoto.");
+    });
+
+    it("sends intervention_id in backend payload when interventionId is specified in AddReportInput", async () => {
+      let sentBody: { intervention_id?: string; [key: string]: unknown } | null = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+        sentBody = JSON.parse((options?.body as string) || "{}");
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            id: "rep-with-intervention",
+            intervention_id: "int-uuid-888",
+            date: "2026-09-26",
+            time: "10:00",
+            work_hours: 3,
+            travel_hours: 0,
+            status: "submitted",
+            client: { name: "Cliente Intervento" },
+            technician: { full_name: "Tecnico" },
+            materials_used: [],
+            created_at: "2026-09-26T10:00:00.000Z",
+          }),
+        };
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Intervento",
+        interventionId: "int-uuid-888",
+        hours: 3,
+        date: "2026-09-26",
+        time: "10:00",
+      });
+
+      expect((sentBody as unknown as { intervention_id?: string }).intervention_id).toBe(
+        "int-uuid-888",
+      );
+      expect(res.intervention_id).toBe("int-uuid-888");
+    });
+
+    it("maintains legacy payload without intervention_id when interventionId is omitted", async () => {
+      let sentBody: { intervention_id?: string; [key: string]: unknown } | null = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+        sentBody = JSON.parse((options?.body as string) || "{}");
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            id: "rep-legacy-777",
+            date: "2026-09-26",
+            time: "10:00",
+            work_hours: 2,
+            travel_hours: 0,
+            status: "submitted",
+            client: { name: "Cliente Legacy" },
+            technician: { full_name: "Tecnico" },
+            materials_used: [],
+            created_at: "2026-09-26T10:00:00.000Z",
+          }),
+        };
+      });
+
+      const res = await addReport({
+        clientName: "Cliente Legacy",
+        hours: 2,
+        date: "2026-09-26",
+        time: "10:00",
+      });
+
+      expect("intervention_id" in ((sentBody || {}) as Record<string, unknown>)).toBe(false);
+      expect(
+        (sentBody as unknown as { intervention_id?: string })?.intervention_id,
+      ).toBeUndefined();
+      expect(res.intervention_id).toBeUndefined();
+    });
+  });
+
+  describe("deleteReport & removeReport", () => {
+    it("sends DELETE request to /api/v1/reports/:id and succeeds on 200", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ message: "Rapportino eliminato con successo" }),
+      });
+
+      const res = await removeReport("rep-delete-01");
+      expect(res).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports/rep-delete-01",
+        expect.objectContaining({
+          method: "DELETE",
+          credentials: "include",
+        }),
+      );
+    });
+
+    it("throws ReportsApiError when DELETE fails with 404", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ detail: "Rapportino non trovato" }),
+      });
+
+      await expect(removeReport("rep-nonexistent")).rejects.toThrow("Rapportino non trovato.");
+    });
+  });
+
+  describe("fetchReportPdfBlob", () => {
+    it("fetches PDF blob successfully", async () => {
+      const mockBlob = new Blob(["%PDF-1.4 mock content"], { type: "application/pdf" });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: async () => mockBlob,
+      });
+
+      const blob = await fetchReportPdfBlob("rep-001");
+      expect(blob).toBe(mockBlob);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports/rep-001/pdf",
+        expect.objectContaining({
+          method: "GET",
+          credentials: "include",
+        }),
+      );
+    });
+  });
+});

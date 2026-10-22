@@ -1,0 +1,742 @@
+import { Router, Request, Response } from "express";
+import { asyncHandler } from "../async-handler";
+import {
+  generateCsrfToken,
+  generateSecureToken,
+  generateTokens,
+  getCookieSettings,
+  hashPassword,
+  hashToken,
+  isValidEmail,
+  normalizeEmail,
+  toSafeUserSession,
+  validatePasswordPolicy,
+  verifyGoogleIdToken,
+  verifyPassword,
+  verifyRefreshToken,
+} from "../security";
+import { db } from "../db";
+import { tokenStore, StoreUnavailableError } from "../token-store";
+import { authenticate } from "../middleware/auth";
+import { emailService } from "../email-service";
+import { config } from "../config";
+import {
+  loginLimiter,
+  loginAccountLimiter,
+  registerLimiter,
+  refreshLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+  googleAuthLimiter
+} from "../rate-limiter";
+import { TeamService } from "../services/team.service";
+import { getRuntimeMode } from "../runtime-mode";
+
+export const authRouter = Router();
+const teamService = new TeamService(db);
+
+const isProduction = getRuntimeMode() === "production";
+const cookieSettings = getCookieSettings(isProduction);
+
+/**
+ * POST /api/v1/auth/register
+ * Creates a new user & company, creates persistent email verification token, sends verification email,
+ * issues HttpOnly session & refresh cookies with rotation registration.
+ */
+authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { email, password, full_name, company_name, phone_number } = req.body;
+
+    if (!email || typeof email !== "string" || !password || typeof password !== "string" || !full_name || typeof full_name !== "string" || full_name.trim().length < 2 || full_name.trim().length > 100 || !company_name || typeof company_name !== "string" || company_name.trim().length < 2 || company_name.trim().length > 100) {
+      res.status(400).json({
+        detail: "Campi obbligatori mancanti: email, password, full_name e company_name sono richiesti.",
+      });
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!isValidEmail(normalizedEmail)) {
+      res.status(400).json({ detail: "Formato email non valido." });
+      return;
+    }
+
+    const passwordValidation = validatePasswordPolicy(password);
+    if (phone_number !== undefined && (typeof phone_number !== "string" || phone_number.trim().length > 20)) {
+      res.status(400).json({ detail: "Numero di telefono non valido." });
+      return;
+    }
+    if (!passwordValidation.valid) {
+      res.status(400).json({ detail: passwordValidation.message || "Password non valida." });
+      return;
+    }
+
+    // Check email uniqueness
+    const existing = await db.findUserByEmail(normalizedEmail);
+    if (existing) {
+      res.status(409).json({ detail: "Email già registrata nel sistema. Effettua il login." });
+      return;
+    }
+
+    const { user } = await db.createUser({
+      email: normalizedEmail,
+      fullName: full_name.trim(),
+      password,
+      companyName: company_name.trim(),
+      phoneNumber: phone_number ? phone_number.trim() : undefined,
+      emailConfirmed: !config.EMAIL_VERIFICATION_ENABLED,
+      role: "owner",
+    });
+
+    if (config.EMAIL_VERIFICATION_ENABLED) {
+      // Create persistent email verification token (single-use, expires in 24h)
+      const rawVerificationToken = generateSecureToken();
+      const verificationTokenHash = hashToken(rawVerificationToken);
+      const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: verificationTokenHash,
+        type: "email_verification",
+        expiresAt: verificationExpiresAt,
+      });
+
+      // Dispatch verification email
+      const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
+      if (!emailRes.success) {
+        await db.revokeActiveAuthTokens(user.id, "email_verification");
+      }
+    }
+
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
+    const csrfToken = generateCsrfToken();
+
+    // Set secure HttpOnly cookies
+    res.cookie("access_token", accessToken, cookieSettings.accessCookie);
+    res.cookie("refresh_token", refreshToken, cookieSettings.refreshCookie);
+    res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
+
+    // Return safe user session (NO tokens in response body)
+    res.status(201).json(toSafeUserSession(user));
+  } catch (error: any) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
+    if (error.message?.includes("already registered") || error.code === "23505") {
+      res.status(409).json({ detail: "Email già registrata nel sistema. Effettua il login." });
+      return;
+    }
+    res.status(500).json({ detail: "Errore interno durante la registrazione." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/verify-email
+ * Verifies user's email address using single-use hashed verification token.
+ */
+authRouter.post("/verify-email", asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { token } = req.body;
+
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ detail: "Token di verifica mancante o non valido." });
+      return;
+    }
+
+    const tokenHash = hashToken(token);
+    const result = await db.verifyEmailWithToken(tokenHash);
+
+    if (!result.success) {
+      if (result.error === "already_used") {
+        res.status(400).json({ detail: "Il link di verifica è già stato utilizzato." });
+        return;
+      }
+      if (result.error === "expired_token") {
+        res.status(400).json({ detail: "Il link di verifica è scaduto. Richiedi una nuova email di conferma." });
+        return;
+      }
+      res.status(400).json({ detail: "Token di verifica non valido." });
+      return;
+    }
+
+    const updatedUser = await db.findUserById(result.userId!);
+    res.status(200).json({
+      message: "Email verificata con successo.",
+      emailConfirmed: true,
+      user: updatedUser ? toSafeUserSession(updatedUser) : undefined,
+    });
+  } catch (error) {
+    res.status(500).json({ detail: "Errore durante la verifica dell'email." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/resend-verification
+ * Resends verification email with new single-use token. Responds identically to prevent email enumeration.
+ */
+authRouter.post("/resend-verification", asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
+      const normalized = normalizeEmail(email);
+      const user = await db.findUserByEmail(normalized);
+
+      if (user && !user.emailConfirmed && user.isActive) {
+        // Invalidate previous verification tokens
+        await db.revokeActiveAuthTokens(user.id, "email_verification");
+
+        const rawToken = generateSecureToken();
+        const tokenHash = hashToken(rawToken);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        await db.createAuthToken({
+          userId: user.id,
+          tokenHash,
+          type: "email_verification",
+          expiresAt,
+        });
+
+        const emailRes = await emailService.sendVerificationEmail(user.email, rawToken, user.fullName);
+        if (!emailRes.success) {
+          await db.revokeActiveAuthTokens(user.id, "email_verification");
+          res.status(502).json({ detail: "Impossibile inviare l'email di verifica. Riprova più tardi." });
+          return;
+        }
+      }
+    }
+
+    // Always return 200 with uniform message to prevent enumeration
+    res.status(200).json({
+      message: "Se l'indirizzo email è registrato e non ancora verificato, riceverai a breve una nuova email di conferma.",
+    });
+  } catch (error) {
+    res.status(500).json({ detail: "Errore durante l'invio dell'email di verifica." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * Initiates password reset flow. Responds indistinguishably to prevent user enumeration.
+ */
+authRouter.post("/forgot-password", forgotPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== "string") {
+      res.status(400).json({ detail: "L'indirizzo email è obbligatorio." });
+      return;
+    }
+
+    const normalized = normalizeEmail(email);
+    const user = await db.findUserByEmail(normalized);
+
+    if (user && user.isActive && config.EMAIL_VERIFICATION_ENABLED) {
+      // Invalidate existing active reset tokens for this user
+      await db.revokeActiveAuthTokens(user.id, "password_reset");
+
+      const rawToken = generateSecureToken();
+      const tokenHash = hashToken(rawToken);
+
+      // Short 1-hour expiration for password reset tokens
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash,
+        type: "password_reset",
+        expiresAt,
+      });
+
+      const emailRes = await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName);
+      if (!emailRes.success) {
+        await db.revokeActiveAuthTokens(user.id, "password_reset");
+        res.status(502).json({ detail: "Impossibile inviare l'email di reset password. Riprova più tardi." });
+        return;
+      }
+    }
+
+    // Uniform indistinguishable response
+    res.status(200).json({
+      message: "Se l'indirizzo email è registrato nel sistema, riceverai a breve le istruzioni per reimpostare la password.",
+    });
+  } catch (error) {
+    res.status(500).json({ detail: "Errore durante la richiesta di reimpostazione password." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/reset-password
+ * Completes password reset using single-use hashed reset token.
+ * Updates password and revokes all existing refresh tokens/sessions across devices.
+ */
+authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { token } = req.body;
+    const newPassword = req.body.new_password || req.body.newPassword;
+
+    if (!token || typeof token !== "string" || !newPassword || typeof newPassword !== "string") {
+      res.status(400).json({ detail: "Token e nuova password sono obbligatori." });
+      return;
+    }
+
+    const passwordValidation = validatePasswordPolicy(newPassword);
+    if (!passwordValidation.valid) {
+      res.status(400).json({ detail: passwordValidation.message || "Password non valida." });
+      return;
+    }
+
+    // 1. Fail-closed: Verify tokenStore availability BEFORE making any changes
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+
+    const tokenHash = hashToken(token);
+
+    // 2. Validate reset token in DB before revoking sessions or changing password
+    const tokenRecord = await db.findAuthTokenByHash(tokenHash, "password_reset");
+    if (!tokenRecord) {
+      res.status(400).json({ detail: "Token di reset non valido." });
+      return;
+    }
+    if (tokenRecord.consumed) {
+      res.status(400).json({ detail: "Il link di reset password è già stato utilizzato." });
+      return;
+    }
+    const expiresAt = new Date(tokenRecord.expiresAt).getTime();
+    if (Date.now() > expiresAt) {
+      res.status(400).json({ detail: "Il link di reset password è scaduto. Richiedi un nuovo link." });
+      return;
+    }
+
+    // 3. Revoke all active sessions and refresh tokens for this user in tokenStore (Redis)
+    // If Redis fails or is unavailable, this throws StoreUnavailableError -> caught -> 503
+    // DB has NOT been touched, so password is NOT updated and token remains valid!
+
+    await tokenStore.revokeAllUserTokens(tokenRecord.userId);
+
+    // Note: authVersion is atomically incremented inside resetPasswordWithToken
+    // to invalidate existing access tokens globally.
+
+    // 4. Update user's password and consume reset token in DB
+
+    const { hash: newPasswordHash, salt: newSalt } = hashPassword(newPassword);
+    const result = await db.resetPasswordWithToken(tokenHash, newPasswordHash, newSalt);
+
+    if (!result.success) {
+      if (result.error === "already_used") {
+        res.status(400).json({ detail: "Il link di reset password è già stato utilizzato." });
+        return;
+      }
+      if (result.error === "expired_token") {
+        res.status(400).json({ detail: "Il link di reset password è scaduto. Richiedi un nuovo link." });
+        return;
+      }
+      res.status(400).json({ detail: "Token di reset non valido." });
+      return;
+    }
+
+    // 5. Clear current client cookies
+    res.clearCookie("access_token", { path: "/" });
+    res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+    res.clearCookie("csrf_token", { path: "/" });
+
+    res.status(200).json({
+      message: "Password reimpostata con successo. Effettua il login con la nuova password.",
+    });
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+    res.status(500).json({ detail: "Errore durante la reimpostazione della password." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/login
+ * Validates credentials, registers fresh refresh token, issues HttpOnly cookies, returns safe user session.
+ */
+authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+      res.status(400).json({ detail: "Email e password sono obbligatorie." });
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const user = await db.findUserByEmail(normalizedEmail);
+
+    if (!user) {
+      // Use uniform 401 to prevent user enumeration
+      res.status(401).json({ detail: "Email o password non corretti." });
+      return;
+    }
+
+    const valid = verifyPassword(password, user.passwordHash, user.salt);
+    if (!valid) {
+      res.status(401).json({ detail: "Email o password non corretti." });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(401).json({ detail: "Account disattivato. Contatta l'amministratore." });
+      return;
+    }
+
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
+    const csrfToken = generateCsrfToken();
+
+    res.cookie("access_token", accessToken, cookieSettings.accessCookie);
+    res.cookie("refresh_token", refreshToken, cookieSettings.refreshCookie);
+    res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
+
+    res.status(200).json(toSafeUserSession(user));
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
+    res.status(500).json({ detail: "Errore interno del server durante il login." });
+  }
+}));
+
+/**
+ * GET /api/v1/auth/session
+ * Server-authoritative session identification using verified access_token cookie.
+ */
+authRouter.get("/session", authenticate, asyncHandler(async (req: any, res: any): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ detail: "Sessione non valida." });
+    return;
+  }
+
+  // Refresh CSRF token on session check if missing
+  if (!req.cookies?.csrf_token) {
+    const csrfToken = generateCsrfToken();
+    res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
+  }
+
+  res.status(200).json(toSafeUserSession(req.user));
+}));
+
+/**
+ * POST /api/v1/auth/refresh
+ * Single-Use Refresh Token rotation with atomic consumption, replay attack detection, and fail-closed storage handling.
+ */
+authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    const refreshToken = req.cookies?.refresh_token;
+    if (!refreshToken) {
+      res.status(401).json({ detail: "Refresh token mancante o sessione scaduta." });
+      return;
+    }
+
+    // Fail-Closed check: if token storage is unavailable, refuse token issuance and return 503
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+
+    // Verify JWT cryptographic signature, expiry, and tokenType
+    const payload = verifyRefreshToken(refreshToken);
+    if (!payload || !payload.sub || payload.tokenType !== "refresh") {
+      res.status(401).json({ detail: "Refresh token non valido o scaduto." });
+      return;
+    }
+
+    // Verify user exists and is active
+    const user = await db.findUserById(payload.sub);
+    if (!user || !user.isActive) {
+      res.status(401).json({ detail: "Utente non trovato o account disattivato." });
+      return;
+    }
+
+    // authVersion security check: reject if token was issued prior to an authVersion increment
+    const tokenAuthVersion = payload.authVersion ?? 0;
+    const userAuthVersion = user.authVersion ?? 0;
+    if (tokenAuthVersion !== userAuthVersion) {
+      res.status(401).json({
+        detail: "Sessione invalidata per motivi di sicurezza. Effettua nuovamente l'accesso.",
+      });
+      return;
+    }
+
+    // Atomic single-use consumption: detects reuse and invalidates compromised families
+    const consumeResult = await tokenStore.consumeToken(refreshToken);
+    if (!consumeResult.success) {
+      if ("reason" in consumeResult && consumeResult.reason === "already_used") {
+        res.status(401).json({
+          detail: "Refresh token già utilizzato. Rilevato potenziale tentativo di replay.",
+        });
+        return;
+      }
+      res.status(401).json({ detail: "Refresh token non valido, scaduto o revocato." });
+      return;
+    }
+
+    // Issue new access token + new rotated refresh token belonging to the same lineage family
+    const { accessToken, refreshToken: newRefreshToken, jti: newJti } = generateTokens(user, {
+      familyId: consumeResult.familyId,
+    });
+
+    // Register new refresh token in store
+    await tokenStore.registerToken({
+      token: newRefreshToken,
+      jti: newJti,
+      userId: user.id,
+      familyId: consumeResult.familyId,
+    });
+
+    const csrfToken = generateCsrfToken();
+
+    res.cookie("access_token", accessToken, cookieSettings.accessCookie);
+    res.cookie("refresh_token", newRefreshToken, cookieSettings.refreshCookie);
+    res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
+
+    res.status(200).json(toSafeUserSession(user));
+  } catch (error) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+    res.status(500).json({ detail: "Errore durante il rinnovo della sessione." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/logout
+ * Atomically revokes refresh token in persistent store and clears HttpOnly cookies.
+ * Fail-closed: returns 503 if refresh_token was provided but store is unavailable.
+ */
+authRouter.post("/logout", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const refreshToken = req.cookies?.refresh_token;
+
+  // Always clear client-side auth and CSRF cookies
+  res.clearCookie("access_token", { path: "/" });
+  res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+  res.clearCookie("csrf_token", { path: "/" });
+
+  if (refreshToken) {
+    // Fail-closed: if token store is unavailable, cookies are cleared but 503 is returned
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. La revoca server-side della sessione non è riuscita.",
+      });
+      return;
+    }
+
+    try {
+      await tokenStore.revokeToken(refreshToken);
+    } catch (err) {
+      if (err instanceof StoreUnavailableError) {
+        res.status(503).json({
+          detail: "Servizio di autenticazione temporaneamente non disponibile. La revoca server-side della sessione non è riuscita.",
+        });
+        return;
+      }
+      throw err;
+    }
+  }
+
+  res.status(200).json({ message: "Logout effettuato con successo." });
+}));
+
+/**
+ * POST /api/v1/auth/google
+ * Server-authoritative Google OAuth authentication with token store registration.
+ * Requires genuine Google ID token verified with google-auth-library.
+ */
+authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  try {
+    // 1. Google Auth must be configured and enabled
+    if (!config.GOOGLE_AUTH_ENABLED || !config.GOOGLE_CLIENT_ID) {
+      res.status(403).json({
+        detail: "Autenticazione Google disabilitata o non configurata nel sistema.",
+      });
+      return;
+    }
+
+    // 2. Token store must be available (Fail-Closed)
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({
+        detail: "Servizio di autenticazione temporaneamente non disponibile. Riprova più tardi.",
+      });
+      return;
+    }
+
+    // 3. Extract Google ID token from request (reject plain email/fullName)
+    const rawIdToken =
+      req.body?.credential || req.body?.idToken || req.body?.id_token || req.body?.token;
+
+    if (!rawIdToken || typeof rawIdToken !== "string" || !rawIdToken.trim()) {
+      res.status(400).json({
+        detail: "Google ID token (credential) mancante o non valido. L'autenticazione richiede una credenziale verificata.",
+      });
+      return;
+    }
+
+    // 4. Server-side verification using google-auth-library
+    let googlePayload;
+    try {
+      googlePayload = await verifyGoogleIdToken(rawIdToken.trim(), config.GOOGLE_CLIENT_ID);
+    } catch (verifyErr: any) {
+      res.status(401).json({
+        detail: verifyErr.message || "Token Google non valido o non verificabile.",
+      });
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(googlePayload.email);
+
+    // 5. Check if user already exists
+    const existingUser = await db.findUserByEmail(normalizedEmail);
+    if (existingUser) {
+      // Do not automatically convert or link local accounts to Google without explicit verification
+      if (existingUser.provider !== "google") {
+        res.status(409).json({
+          detail: "Un account con questo indirizzo email esiste già con credenziali locali. L'accesso tramite Google non è consentito per questo account.",
+        });
+        return;
+      }
+
+      if (!existingUser.isActive) {
+        res.status(401).json({ detail: "Account disattivato." });
+        return;
+      }
+    }
+
+    // 6. Create or login Google user
+    const { user } = await db.createGoogleUser({
+      email: normalizedEmail,
+      fullName: googlePayload.fullName,
+      companyName: req.body?.companyName ? String(req.body.companyName).trim() : undefined,
+    });
+
+    if (!user.isActive) {
+      res.status(401).json({ detail: "Account disattivato." });
+      return;
+    }
+
+    // 7. Issue session tokens with rotation registration
+    const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
+    await tokenStore.registerToken({
+      token: refreshToken,
+      jti,
+      userId: user.id,
+      familyId,
+    });
+
+    const csrfToken = generateCsrfToken();
+
+    res.cookie("access_token", accessToken, cookieSettings.accessCookie);
+    res.cookie("refresh_token", refreshToken, cookieSettings.refreshCookie);
+    res.cookie("csrf_token", csrfToken, cookieSettings.csrfCookie);
+
+    res.status(200).json(toSafeUserSession(user));
+  } catch (error: any) {
+    if (error instanceof StoreUnavailableError) {
+      res.status(503).json({ detail: "Servizio di autenticazione temporaneamente non disponibile." });
+      return;
+    }
+    if (error?.message === "Account exists with non-Google provider") {
+      res.status(409).json({
+        detail: "Un account con questo indirizzo email esiste già con credenziali locali. L'accesso tramite Google non è consentito per questo account.",
+      });
+      return;
+    }
+    res.status(500).json({ detail: "Errore durante l'autenticazione Google." });
+  }
+}));
+
+/**
+ * GET /api/v1/auth/csrf-token
+ * Issues/returns current CSRF token cookie for frontend clients.
+ */
+authRouter.get("/csrf-token", asyncHandler(async (req: any, res: any): Promise<void> => {
+  let token = req.cookies?.csrf_token;
+  if (!token) {
+    token = generateCsrfToken();
+    res.cookie("csrf_token", token, cookieSettings.csrfCookie);
+  }
+  res.status(200).json({ csrfToken: token });
+}));
+
+/**
+ * GET /api/v1/auth/invite
+ * Validates and retrieves safe invitation details by token for onboarding UI.
+ * Does not require authentication.
+ */
+authRouter.get(["/invite", "/accept-invite"], asyncHandler(async (req: any, res: any): Promise<void> => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  if (!token) {
+    res.status(400).json({ detail: "Token di invito non fornito." });
+    return;
+  }
+
+  try {
+    const info = await teamService.getInviteInfo(token);
+    res.status(200).json({ valid: true, ...info });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ detail: err.message || "Invito non valido o scaduto." });
+  }
+}));
+
+/**
+ * POST /api/v1/auth/accept-invite
+ * Unauthenticated invite acceptance endpoint.
+ * Validates token, password policy, atomically consumes token, sets password,
+ * marks emailConfirmed, increments authVersion, and revokes other pending invites.
+ */
+authRouter.post(["/accept-invite", "/invite/accept"], resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+  const { token, password } = req.body || {};
+  if (!token || typeof token !== "string" || !token.trim()) {
+    res.status(400).json({ detail: "Token di invito non fornito." });
+    return;
+  }
+
+  if (!password || typeof password !== "string") {
+    res.status(400).json({ detail: "Password mancante o non valida." });
+    return;
+  }
+
+  const passwordValidation = validatePasswordPolicy(password);
+  if (!passwordValidation.valid) {
+    res.status(400).json({ detail: passwordValidation.message || "Password non valida." });
+    return;
+  }
+
+  try {
+    const result = await teamService.acceptInvite(token.trim(), password);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ detail: err.message || "Invito non valido, revocato o scaduto." });
+  }
+}));
+
+

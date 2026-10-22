@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.12.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: "npm"
+
+      - name: Install dependencies (clean install)
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run backend type-check
+        run: npm run typecheck:backend
+
+      - name: Run frontend type-check
+        run: npm run typecheck:frontend
+
+      - name: Run Vitest test suite
+        run: npm test
+
+      - name: Run build
+        run: npm run build
