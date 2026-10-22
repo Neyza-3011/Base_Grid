@@ -24,6 +24,7 @@ beforeEach(async () => {
     id: companyA,
     name: "Alpha Servizi Tecnici",
     isActive: true,
+    featurePdfExport: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -249,6 +250,25 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
   });
 
   describe("3. Technician Permissions (Read-Only: can read/pdf, cannot create or delete)", () => {
+    it("blocks PDF export when the authenticated company has the feature disabled", async () => {
+      const tech = await createTestUserAndLogin(companyA, "technician");
+      const report = await db.createReport(companyA, {
+        client: { name: "Cliente Mario", address: "Via Roma", city: "Milano" },
+        workHours: 2,
+        travelHours: 0.5,
+        status: "submitted",
+      });
+      (db as any).companies.get(companyA).featurePdfExport = false;
+
+      const res = await apiRequest("/api/v1/reports/" + report.id + "/pdf", {
+        cookies: tech.cookies,
+        headers: tech.headers,
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.data.detail).toContain("esportazione PDF");
+    });
+
     it("allows technician to read reports list (200)", async () => {
       const tech = await createTestUserAndLogin(companyA, "technician");
       const res = await apiRequest("/api/v1/reports", {
