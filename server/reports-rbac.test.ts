@@ -249,7 +249,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
     });
   });
 
-  describe("3. Technician Permissions (Read-Only: can read/pdf, cannot create or delete)", () => {
+  describe("3. Technician Permissions (can submit reports only for assigned interventions)", () => {
     it("blocks PDF export when the authenticated company has the feature disabled", async () => {
       const tech = await createTestUserAndLogin(companyA, "technician");
       const report = await db.createReport(companyA, {
@@ -310,7 +310,45 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect(pdfRes.data.trimEnd().endsWith("%%EOF")).toBe(true);
     });
 
-    it("strictly forbids technician from creating reports (403)", async () => {
+    it("allows a technician to submit a report for their own assigned intervention", async () => {
+      const tech = await createTestUserAndLogin(companyA, "technician");
+      const customer = await db.createCustomer(companyA, { displayName: "Cliente Consuntivo" });
+      const location = await db.createLocation(companyA, customer.id, {
+        name: "Sede Consuntivo",
+        address: "Via Roma 10",
+        city: "Roma",
+      });
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customer.id,
+        locationId: location.id,
+        description: "Manutenzione quadro elettrico",
+        status: "in_lavorazione",
+        technicianId: tech.user.id,
+        createdBy: "usr-admin",
+        updatedBy: "usr-admin",
+      });
+
+      const res = await apiRequest("/api/v1/reports", {
+        method: "POST",
+        cookies: tech.cookies,
+        headers: tech.headers,
+        body: {
+          ...validReportPayload,
+          intervention_id: intervention.id,
+        },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.data.intervention_id).toBe(intervention.id);
+      expect(res.data.customer_id).toBe(customer.id);
+      expect(res.data.location_id).toBe(location.id);
+      expect(res.data.technician.full_name).toBe(tech.user.fullName);
+      expect(res.data.work_hours).toBe(validReportPayload.work_hours);
+      expect(res.data.travel_hours).toBe(validReportPayload.travel_hours);
+      expect(res.data.materials_used).toEqual(validReportPayload.materials_used);
+    });
+
+    it("forbids a technician from creating a standalone report without an intervention", async () => {
       const tech = await createTestUserAndLogin(companyA, "technician");
       const res = await apiRequest("/api/v1/reports", {
         method: "POST",
@@ -319,7 +357,40 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
         body: validReportPayload,
       });
       expect(res.status).toBe(403);
-      expect(res.data.detail).toContain("Accesso negato");
+      expect(res.data.detail).toContain("intervento assegnato");
+    });
+
+    it("forbids a technician from submitting a report for another technician's intervention", async () => {
+      const tech = await createTestUserAndLogin(companyA, "technician");
+      const customer = await db.createCustomer(companyA, { displayName: "Cliente Altro Tecnico" });
+      const location = await db.createLocation(companyA, customer.id, {
+        name: "Sede Altro Tecnico",
+        address: "Via Verdi 3",
+        city: "Roma",
+      });
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customer.id,
+        locationId: location.id,
+        description: "Intervento assegnato ad altro tecnico",
+        status: "in_lavorazione",
+        technicianId: "usr-another-technician",
+        createdBy: "usr-admin",
+        updatedBy: "usr-admin",
+      });
+
+      const res = await apiRequest("/api/v1/reports", {
+        method: "POST",
+        cookies: tech.cookies,
+        headers: tech.headers,
+        body: {
+          ...validReportPayload,
+          intervention_id: intervention.id,
+        },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.data.detail).toContain("assegnato a sé");
+      expect(await db.getReportByInterventionId(companyA, intervention.id)).toBeNull();
     });
 
     it("strictly forbids technician from deleting reports (403)", async () => {
