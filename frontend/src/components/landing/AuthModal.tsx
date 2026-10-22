@@ -43,10 +43,12 @@ export function AuthModal({
         }
       } else if (mode === "signup") {
         const res = await signupUser(email, password, fullName);
-        if (res.success && res.user) {
-          toast.success(
-            "Account registrato! Email di conferma inviata con successo. Controlla la tua casella di posta.",
-          );
+        if (res.success && res.verificationRequired) {
+          toast.success(res.message || "Controlla la tua email per verificare l'account prima di accedere.");
+          onClose();
+          onSwitch("login");
+        } else if (res.success && res.user) {
+          toast.success("Account registrato.");
           onClose();
           navigate({ to: "/dashboard" });
         } else {
