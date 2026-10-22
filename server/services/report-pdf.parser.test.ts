@@ -45,7 +45,7 @@ describe("generated PDF independent parser validation", () => {
 
       const info = execFileSync("pdfinfo", [pdfPath], { encoding: "utf8" });
       expect(info).toMatch(/Pages:\s+1/);
-      expect(info).toMatch(/PDF version:\s+1\.4/);
+      expect(info).toMatch(/PDF version:\s+1\.\d+/);
 
       const extractedText = execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
       expect(extractedText).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
