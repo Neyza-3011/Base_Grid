@@ -66,22 +66,22 @@ describe("generateReportPdf", () => {
   it("writes correct byte offsets for the PDF cross-reference table", () => {
     const pdf = generateReportPdf(sampleReport());
     const text = pdf.toString("ascii");
-    const startXrefMatch = text.match(/startxref\\s+(\\d+)\\s+%%EOF/);
+    const startXrefMatch = text.match(/startxref\s+(\d+)\s+%%EOF/);
 
     expect(startXrefMatch).not.toBeNull();
     const xrefOffset = Number(startXrefMatch?.[1]);
-    expect(text.slice(xrefOffset, xrefOffset + 5)).toBe("xref\\n");
+    expect(text.slice(xrefOffset, xrefOffset + 5)).toBe("xref\n");
 
     const xrefSection = text.slice(xrefOffset);
-    const entries = xrefSection.match(/\\nxref\\n0 (\\d+)\\n([\\s\\S]*?)trailer\\n/);
+    const entries = xrefSection.match(/^xref\n0 (\d+)\n([\s\S]*?)trailer\n/);
     expect(entries).not.toBeNull();
     const objectCount = Number(entries?.[1]);
-    const offsets = (entries?.[2] || "").trimEnd().split("\\n").slice(1);
+    const offsets = (entries?.[2] || "").trimEnd().split("\n").slice(1);
 
     expect(offsets).toHaveLength(objectCount - 1);
     offsets.forEach((entry, index) => {
       const objectOffset = Number(entry.slice(0, 10));
-      expect(text.slice(objectOffset)).toMatch(new RegExp("^" + (index + 1) + " 0 obj\\\\n"));
+      expect(text.slice(objectOffset)).toMatch(new RegExp("^" + (index + 1) + " 0 obj\n"));
     });
   });
 });
