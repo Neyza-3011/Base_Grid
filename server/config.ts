@@ -6,6 +6,7 @@ export interface ServerConfig {
   NODE_ENV: "development" | "production" | "test";
   JWT_SECRET: string;
   DATABASE_URL?: string;
+  DATABASE_SSL_CA?: string;
   REDIS_URL?: string;
   REDIS_HOST: string;
   REDIS_PORT: number;
@@ -44,6 +45,8 @@ export function loadConfig(env = process.env): ServerConfig {
   let FRONTEND_URL = env.FRONTEND_URL;
   let CORS_ORIGINS_RAW = env.CORS_ORIGINS;
   let DATABASE_URL = env.DATABASE_URL;
+  // Optional PEM CA bundle for PostgreSQL providers whose CA is not in Node.js's default trust store.
+  const DATABASE_SSL_CA = env.DATABASE_SSL_CA?.replace(/\\n/g, "\n").trim() || undefined;
   let REDIS_URL = env.REDIS_URL;
   const REDIS_HOST = env.REDIS_HOST || "127.0.0.1";
   const REDIS_PORT = Number(env.REDIS_PORT) || 6379;
@@ -184,6 +187,7 @@ export function loadConfig(env = process.env): ServerConfig {
     NODE_ENV: (env.NODE_ENV as any) || (mode === "production" ? "production" : "development"),
     JWT_SECRET,
     DATABASE_URL,
+    DATABASE_SSL_CA,
     REDIS_URL,
     REDIS_HOST,
     REDIS_PORT,
