@@ -87,12 +87,28 @@ function configureTestEmailEnvironment(): () => void {
     EMAIL_FROM: process.env.EMAIL_FROM,
     EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
   };
+  const originalFetch = globalThis.fetch;
 
   process.env.EMAIL_API_KEY = "re_valid_key_123";
   process.env.EMAIL_FROM = "no-reply@basegrid.io";
   process.env.EMAIL_PROVIDER = "resend";
 
+  // Keep API requests in-process, but never let auth integration tests call
+  // the real Resend service. Individual ProductionEmailService unit tests can
+  // still replace fetch to exercise provider success and failure responses.
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url === "https://api.resend.com/emails") {
+      return new Response(JSON.stringify({ id: "test-email-message-id" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
   return () => {
+    globalThis.fetch = originalFetch;
     for (const key of ["EMAIL_API_KEY", "EMAIL_FROM", "EMAIL_PROVIDER"] as const) {
       const value = original[key];
       if (value === undefined) delete process.env[key];
