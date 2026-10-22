@@ -47,7 +47,7 @@ describe("generateReportPdf", () => {
   });
 
   it("embeds a valid PNG signature as a PDF image", async () => {
-    const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+    const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==";
     const pdf = await generateReportPdf(sampleReport({ signatureBase64 }));
     const parsed = await PDFDocument.load(pdf);
     const text = extractText(pdf);
