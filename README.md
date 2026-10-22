@@ -87,6 +87,7 @@ L'architettura adotta un modello **Server-Authoritative** rigoroso:
 
 Il backend interagisce con **PostgreSQL** mediante un adapter dedicato (`PostgresAdapter`):
 - **Pool di connessioni** configurabile con supporto SSL.
+- In produzione la verifica del certificato TLS resta obbligatoria; per provider con CA privata, configurare `DATABASE_SSL_CA` con il bundle PEM attendibile. Non usare `rejectUnauthorized: false`.
 - **Transazioni atomiche** esplicite (`withTransaction` con `BEGIN`, `COMMIT` e `ROLLBACK`).
 - **Tabelle principali**:
   - `companies`: anagrafica azienda, tariffa oraria di default, limiti utenti, stato sottoscrizione.
