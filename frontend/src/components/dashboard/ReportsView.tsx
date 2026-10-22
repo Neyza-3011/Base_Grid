@@ -35,6 +35,7 @@ const CREATE_ROLES: readonly string[] = [
   "admin",
   "responsabile_tecnico",
   "dispatcher",
+  "technician",
   "commerciale",
   "amministrazione",
   "superadmin",
@@ -79,6 +80,7 @@ export function ReportsView({
   // RBAC permissions strictly aligned with server/routes/reports.ts
   const canRead = !isClient && (currentUser ? READ_ROLES.includes(userRole) : true);
   const canCreate = !isClient && (currentUser ? CREATE_ROLES.includes(userRole) : false);
+  const canCreateStandalone = canCreate && userRole !== "technician";
   const canDelete = !isClient && (currentUser ? DELETE_ROLES.includes(userRole) : false);
 
   const loadAllData = useCallback(async () => {
@@ -132,8 +134,10 @@ export function ReportsView({
   };
 
   const handleOpenGenericCreate = () => {
-    if (!canCreate) {
-      toast.error("Non disponi dei permessi per creare rapportini.");
+    if (!canCreateStandalone) {
+      toast.error(userRole === "technician"
+        ? "Apri il rapportino da un intervento assegnato a te."
+        : "Non disponi dei permessi per creare rapportini.");
       return;
     }
     resetForm();
@@ -204,8 +208,10 @@ export function ReportsView({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCreate) {
-      toast.error("Non disponi dei permessi per creare rapportini.");
+    if (!canCreate || (userRole === "technician" && !linkedIntervention)) {
+      toast.error(userRole === "technician"
+        ? "Il rapportino deve essere collegato a un intervento assegnato a te."
+        : "Non disponi dei permessi per creare rapportini.");
       return;
     }
     if (!newClientName.trim()) {
@@ -362,7 +368,7 @@ export function ReportsView({
             <Download className="h-4 w-4 text-emerald-400" /> Esporta CSV
           </button>
 
-          {canCreate && (
+          {canCreateStandalone && (
             <button
               onClick={handleOpenGenericCreate}
               className="h-10 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all btn-glow inline-flex items-center justify-center gap-2 px-4 shadow-lg shadow-primary/20"
