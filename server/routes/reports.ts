@@ -4,6 +4,7 @@ import { reportsService } from "../services";
 import { asyncHandler } from "../async-handler";
 import { ValidationError, UnauthorizedError } from "../errors";
 import { UserRole } from "../types";
+import { generateReportPdf } from "../services/report-pdf";
 
 export const reportsRouter = Router();
 
@@ -78,7 +79,7 @@ reportsRouter.post(
 
 /**
  * GET /api/v1/reports/:id/pdf
- * Generates/returns PDF preview info
+ * Generates a valid PDF document for a report belonging to the authenticated company.
  */
 reportsRouter.get(
   "/:id/pdf",
@@ -93,8 +94,13 @@ reportsRouter.get(
       throw new ValidationError("ID non valido.");
     }
     const report = await reportsService.getReportById(req.user.companyId, reportId);
+    const pdf = generateReportPdf(report);
+    const safeFilenameId = report.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+    res.status(200);
     res.setHeader("Content-Type", "application/pdf");
-    res.send(Buffer.from("%PDF-1.4 Mock BaseGrid PDF Document per Rapportino " + report.id));
+    res.setHeader("Content-Disposition", `attachment; filename="rapportino-${safeFilenameId}.pdf"`);
+    res.setHeader("Content-Length", String(pdf.length));
+    res.send(pdf);
   })
 );
 
