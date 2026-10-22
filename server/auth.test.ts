@@ -81,6 +81,26 @@ async function apiRequest(
   };
 }
 
+function configureTestEmailEnvironment(): () => void {
+  const original = {
+    EMAIL_API_KEY: process.env.EMAIL_API_KEY,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+  };
+
+  process.env.EMAIL_API_KEY = "re_valid_key_123";
+  process.env.EMAIL_FROM = "no-reply@basegrid.io";
+  process.env.EMAIL_PROVIDER = "resend";
+
+  return () => {
+    for (const key of ["EMAIL_API_KEY", "EMAIL_FROM", "EMAIL_PROVIDER"] as const) {
+      const value = original[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+}
+
 describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async () => {
   beforeEach(() => { (rateLimiter as any).localFallback.clear(); });
 
@@ -988,6 +1008,15 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("10. Production Email & Resend Integration Suite (P0.3.1)", async () => {
+    let restoreEmailEnvironment: (() => void) | undefined;
+    beforeEach(() => {
+      restoreEmailEnvironment = configureTestEmailEnvironment();
+    });
+    afterEach(() => {
+      restoreEmailEnvironment?.();
+      restoreEmailEnvironment = undefined;
+    });
+
     it("fails startup in production if EMAIL_API_KEY, EMAIL_FROM, or FRONTEND_URL is missing", async () => {
       const { ProductionEmailService } = await import("./email-service");
 
@@ -1073,8 +1102,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         );
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
@@ -1106,8 +1137,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         expect(res.error).toBe("provider_error_422");
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
@@ -1137,8 +1170,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         expect(res.error).toBe("provider_timeout");
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
@@ -1157,6 +1192,15 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("11. Email Verification Security Suite (P0.3.1)", async () => {
+    let restoreEmailEnvironment: (() => void) | undefined;
+    beforeEach(() => {
+      restoreEmailEnvironment = configureTestEmailEnvironment();
+    });
+    afterEach(() => {
+      restoreEmailEnvironment?.();
+      restoreEmailEnvironment = undefined;
+    });
+
     it("confirms user email when valid token is submitted", async () => {
       // 1. Register a new user
       const regRes = await apiRequest("/api/v1/auth/register", {
@@ -1434,6 +1478,15 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("13. Email Template Hardening & Provider Failure Resilience Suite (P0.3.2)", async () => {
+    let restoreEmailEnvironment: (() => void) | undefined;
+    beforeEach(() => {
+      restoreEmailEnvironment = configureTestEmailEnvironment();
+    });
+    afterEach(() => {
+      restoreEmailEnvironment?.();
+      restoreEmailEnvironment = undefined;
+    });
+
     it("escapes special HTML characters in fullName and verification/reset links", async () => {
       const { DevEmailService, escapeHtml } = await import("./email-service");
       const emailSvc = new DevEmailService();
