@@ -24,7 +24,11 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
 
 describe("generateReportPdf", () => {
   it("returns a structurally complete PDF containing report details", () => {
-    const pdf = generateReportPdf(sampleReport());
+    const pdf = generateReportPdf(sampleReport({
+      customerId: "customer-123",
+      locationId: "location-456",
+      interventionId: "intervention-789",
+    }));
     const text = pdf.toString("ascii");
 
     expect(text.startsWith("%PDF-1.4")).toBe(true);
@@ -32,6 +36,9 @@ describe("generateReportPdf", () => {
     expect(text).toContain("/Type /Pages");
     expect(text).toContain("/BaseFont /Helvetica");
     expect(text).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
+    expect(text).toContain("Cliente ID: customer-123");
+    expect(text).toContain("Sede ID: location-456");
+    expect(text).toContain("Intervento ID: intervention-789");
     expect(text).toContain("Elettro Rossi \\(S.r.l.\\)");
     expect(text).toContain("Mario Rossi");
     expect(text).toContain("Ore di lavoro: 2.5");
