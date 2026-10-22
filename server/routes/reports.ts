@@ -24,6 +24,7 @@ const CREATE_ROLES: UserRole[] = [
   "admin",
   "responsabile_tecnico",
   "dispatcher",
+  "technician",
   "commerciale",
   "amministrazione",
   "superadmin",
@@ -71,7 +72,8 @@ reportsRouter.post(
     const responseData = await reportsService.createReport(
       req.user.companyId,
       req.user.fullName || "Tecnico",
-      req.body
+      req.body,
+      { id: req.user.id, role: req.user.role }
     );
     res.status(201).json(responseData);
   })
