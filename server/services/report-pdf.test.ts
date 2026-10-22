@@ -18,7 +18,7 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
     technician: { fullName: "Mario Rossi" },
     materialsStatus: "used",
     materialsUsed: [{ name: "Cavo (3x2.5)", quantity: 12 }],
-    notes: "Verificato quadro elettrico\\nSostituita una presa",
+    notes: "Verificato quadro elettrico\nSostituita una presa",
     signatureBase64: undefined,
     createdAt: "2026-10-22T09:35:00.000Z",
     ...overrides,
