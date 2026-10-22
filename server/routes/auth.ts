@@ -523,6 +523,11 @@ authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: a
       return;
     }
 
+    if (config.EMAIL_VERIFICATION_ENABLED && !user.emailConfirmed) {
+      res.status(403).json({ detail: "Conferma l'indirizzo email prima di accedere." });
+      return;
+    }
+
     // authVersion security check: reject if token was issued prior to an authVersion increment
     const tokenAuthVersion = payload.authVersion ?? 0;
     const userAuthVersion = user.authVersion ?? 0;
