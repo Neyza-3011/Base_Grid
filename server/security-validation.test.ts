@@ -388,9 +388,10 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     expect(resAdmin.body.detail).toContain("approved");
   });
 
-  // 1b. Unauthorized role attempting report creation
-  it("P0.4.4-E.1: should deny report creation from unauthorized role (technician) with 403 before validation", async () => {
-    // Technician attempting report creation -> rejected with 403 Forbidden by RBAC middleware
+  // 1b. Technician must link a report to an assigned intervention
+  it("P0.4.4-E.1: should reject a technician report without an assigned intervention before field validation", async () => {
+    // Technicians may create reports only through an intervention assigned to their authenticated account.
+    // With no intervention_id, the service must reject the request before validating status tampering.
     const resTech = await request(app)
       .post("/api/v1/reports")
       .set("Cookie", techCookies).set("x-csrf-token", techCsrfToken)
@@ -403,7 +404,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
         status: "approved",
       });
     expect(resTech.status).toBe(403);
-    expect(resTech.body.detail).toMatch(/Accesso negato|permessi insufficienti/i);
+    expect(resTech.body.detail).toMatch(/solo per un intervento assegnato/i);
   });
 
   // 2. invalid calendar date
