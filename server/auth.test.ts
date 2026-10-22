@@ -21,7 +21,7 @@ const TEST_JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long
 beforeEach(async () => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
   const { config } = await import("./config");
-  config.EMAIL_VERIFICATION_ENABLED = true;
+  config.EMAIL_VERIFICATION_ENABLED = false;
   db.seedInitialData();
   const app = createApp();
   await new Promise<void>((resolve) => {
@@ -121,6 +121,13 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   beforeEach(() => { (rateLimiter as any).localFallback.clear(); });
 
   describe("1. Registration (/api/v1/auth/register)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      const { emailService } = await import("./email-service");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+      vi.spyOn(emailService, "sendVerificationEmail").mockResolvedValue({ success: true });
+    });
+    afterEach(() => vi.restoreAllMocks());
     it("creates new user and requires email verification before issuing a session", async () => {
       const res = await apiRequest("/api/v1/auth/register", {
         method: "POST",
@@ -195,6 +202,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("2. Login (/api/v1/auth/login)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     it("authenticates valid credentials, sets HttpOnly cookies, and returns safe user session", async () => {
       const res = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -281,6 +292,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("3. Server-Authoritative Session (/api/v1/auth/session)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     it("rejects an unverified account's existing access token when email verification is enabled", async () => {
       const { user } = await db.createUser({
         email: "unverified.session@azienda.it",
@@ -335,6 +350,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("4. Refresh Token Rotation & Replay Protection (/api/v1/auth/refresh)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     it("rejects refresh of an unverified account when email verification is enabled", async () => {
       const { user } = await db.createUser({
         email: "unverified.refresh@azienda.it",
@@ -1081,6 +1100,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("10. Production Email & Resend Integration Suite (P0.3.1)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     let restoreEmailEnvironment: (() => void) | undefined;
     beforeEach(() => {
       restoreEmailEnvironment = configureTestEmailEnvironment();
@@ -1265,6 +1288,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("11. Email Verification Security Suite (P0.3.1)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     let restoreEmailEnvironment: (() => void) | undefined;
     beforeEach(() => {
       restoreEmailEnvironment = configureTestEmailEnvironment();
@@ -1399,6 +1426,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("12. Fail-Closed Password Reset Security Suite (P0.3.1)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     it("successfully resets password, revokes sessions across devices, and enforces new password login", async () => {
       const user = (await db.findUserByEmail("tech@rossi.it"))!;
       
@@ -1551,6 +1582,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("13. Email Template Hardening & Provider Failure Resilience Suite (P0.3.2)", async () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
     let restoreEmailEnvironment: (() => void) | undefined;
     beforeEach(() => {
       restoreEmailEnvironment = configureTestEmailEnvironment();
