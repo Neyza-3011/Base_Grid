@@ -20,13 +20,13 @@ afterEach(() => {
   config.EMAIL_VERIFICATION_ENABLED = previousEmailVerificationEnabled;
 });
 
-async function createKnownAccount() {
+async function createKnownAccount(emailConfirmed = true) {
   const { user } = await db.createUser({
     email: "reset-enumeration-" + randomUUID() + "@example.com",
     fullName: "Password Reset Test",
     password: "Password123!",
     companyName: "Reset Test Company",
-    emailConfirmed: true,
+    emailConfirmed,
     role: "owner",
   });
   return user;
@@ -69,4 +69,39 @@ describe("Password reset account enumeration protection", () => {
     expect(unknownAccount.status).toBe(200);
     expect(knownAccount.body).toEqual(unknownAccount.body);
   });
+  it("returns the same response if reset-token persistence fails", async () => {
+    const user = await createKnownAccount();
+    vi.spyOn(db, "createAuthToken").mockRejectedValue(new Error("database unavailable"));
+
+    const knownAccount = await request(app)
+      .post("/api/v1/auth/forgot-password")
+      .send({ email: user.email });
+    const unknownAccount = await request(app)
+      .post("/api/v1/auth/forgot-password")
+      .send({ email: "not-registered@example.com" });
+
+    expect(knownAccount.status).toBe(200);
+    expect(unknownAccount.status).toBe(200);
+    expect(knownAccount.body).toEqual(unknownAccount.body);
+  });
+
+  it("returns the same response when verification email delivery fails", async () => {
+    const user = await createKnownAccount(false);
+    vi.spyOn(emailService, "sendVerificationEmail").mockResolvedValue({
+      success: false,
+      error: "provider unavailable",
+    });
+
+    const knownAccount = await request(app)
+      .post("/api/v1/auth/resend-verification")
+      .send({ email: user.email });
+    const unknownAccount = await request(app)
+      .post("/api/v1/auth/resend-verification")
+      .send({ email: "not-registered@example.com" });
+
+    expect(knownAccount.status).toBe(200);
+    expect(unknownAccount.status).toBe(200);
+    expect(knownAccount.body).toEqual(unknownAccount.body);
+  });
+
 });

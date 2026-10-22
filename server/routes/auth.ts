@@ -205,11 +205,19 @@ authRouter.post("/resend-verification", asyncHandler(async (req: any, res: any):
           expiresAt,
         });
 
-        const emailRes = await emailService.sendVerificationEmail(user.email, rawToken, user.fullName);
-        if (!emailRes.success) {
-          await db.revokeActiveAuthTokens(user.id, "email_verification");
-          res.status(502).json({ detail: "Impossibile inviare l'email di verifica. Riprova più tardi." });
-          return;
+        let emailSent = false;
+        try {
+          const emailRes = await emailService.sendVerificationEmail(user.email, rawToken, user.fullName);
+          emailSent = emailRes.success;
+        } catch {
+          emailSent = false;
+        }
+        if (!emailSent) {
+          try {
+            await db.revokeActiveAuthTokens(user.id, "email_verification");
+          } catch {
+            // Keep the public response indistinguishable if provider/storage fails.
+          }
         }
       }
     }
@@ -218,8 +226,11 @@ authRouter.post("/resend-verification", asyncHandler(async (req: any, res: any):
     res.status(200).json({
       message: "Se l'indirizzo email è registrato e non ancora verificato, riceverai a breve una nuova email di conferma.",
     });
-  } catch (error) {
-    res.status(500).json({ detail: "Errore durante l'invio dell'email di verifica." });
+  } catch {
+    // Keep account state and provider/storage failures from becoming an enumeration signal.
+    res.status(200).json({
+      message: "Se l'indirizzo email è registrato e non ancora verificato, riceverai a breve una nuova email di conferma.",
+    });
   }
 }));
 
@@ -279,8 +290,11 @@ authRouter.post("/forgot-password", forgotPasswordLimiter, asyncHandler(async (r
     res.status(200).json({
       message: "Se l'indirizzo email è registrato nel sistema, riceverai a breve le istruzioni per reimpostare la password.",
     });
-  } catch (error) {
-    res.status(500).json({ detail: "Errore durante la richiesta di reimpostazione password." });
+  } catch {
+    // Keep account state and provider/storage failures from becoming an enumeration signal.
+    res.status(200).json({
+      message: "Se l'indirizzo email è registrato nel sistema, riceverai a breve le istruzioni per reimpostare la password.",
+    });
   }
 }));
 
