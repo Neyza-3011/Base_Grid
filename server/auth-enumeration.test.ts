@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { createApp } from "./app";
@@ -21,7 +22,7 @@ afterEach(() => {
 
 async function createKnownAccount() {
   const { user } = await db.createUser({
-    email: \`reset-enumeration-\${crypto.randomUUID()}@example.com\`,
+    email: \`reset-enumeration-\${randomUUID()}@example.com\`,
     fullName: "Password Reset Test",
     password: "Password123!",
     companyName: "Reset Test Company",
