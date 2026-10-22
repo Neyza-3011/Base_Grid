@@ -16,6 +16,12 @@ import {
 } from "../types";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../errors";
 
+function validateInputObject(input: unknown): void {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new BadRequestError("Dati intervento non validi.");
+  }
+}
+
 function validateOptionalStringField(value: unknown, field: string, nullable = false): void {
   if (value === undefined || (nullable && value === null)) return;
   if (typeof value !== "string") {
@@ -196,6 +202,7 @@ export class InterventionService {
     createdBy: string,
     input: CreateInterventionInput
   ): Promise<InterventionRecord> {
+    validateInputObject(input);
     // Validate runtime input types before calling string methods or date parsing.
     validateOptionalStringField(input.assetId, "L'impianto", true);
     validateOptionalStringField(input.problem, "Il problema", true);
@@ -323,6 +330,7 @@ export class InterventionService {
     interventionId: string,
     input: UpdateInterventionInput
   ): Promise<InterventionRecord> {
+    validateInputObject(input);
     // Request bodies are untrusted at runtime even when TypeScript interfaces are used.
     validateOptionalStringField(input.customerId, "Il cliente");
     validateOptionalStringField(input.locationId, "La sede/cantiere");
@@ -534,6 +542,7 @@ export class InterventionService {
     input: TransitionInterventionInput,
     actor?: { id: string; role: UserRole }
   ): Promise<InterventionRecord> {
+    validateInputObject(input);
     const existing = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
     if (!existing) {
       throw new NotFoundError("Intervento non trovato.");
