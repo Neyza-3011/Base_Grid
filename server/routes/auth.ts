@@ -101,11 +101,28 @@ authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res:
         expiresAt: verificationExpiresAt,
       });
 
-      // Dispatch verification email
-      const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
-      if (!emailRes.success) {
-        await db.revokeActiveAuthTokens(user.id, "email_verification");
+      // Do not issue a session until the email address has been verified.
+      let emailSent = false;
+      try {
+        const emailRes = await emailService.sendVerificationEmail(user.email, rawVerificationToken, user.fullName);
+        emailSent = emailRes.success;
+      } catch {
+        emailSent = false;
       }
+
+      if (!emailSent) {
+        await db.revokeActiveAuthTokens(user.id, "email_verification");
+        res.status(503).json({
+          detail: "Account creato, ma non è stato possibile inviare l'email di verifica. Riprova a richiedere l'invio.",
+        });
+        return;
+      }
+
+      res.status(201).json({
+        message: "Registrazione completata. Controlla la tua email per verificare l'account prima di accedere.",
+        emailVerificationRequired: true,
+      });
+      return;
     }
 
     const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
@@ -421,6 +438,11 @@ authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(asyn
 
     if (!user.isActive) {
       res.status(401).json({ detail: "Account disattivato. Contatta l'amministratore." });
+      return;
+    }
+
+    if (config.EMAIL_VERIFICATION_ENABLED && !user.emailConfirmed) {
+      res.status(403).json({ detail: "Conferma l'indirizzo email prima di accedere." });
       return;
     }
 
