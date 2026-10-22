@@ -930,7 +930,9 @@ export function ReportsView({
                   onPointerDown={handleSignaturePointerDown}
                   onPointerMove={handleSignaturePointerMove}
                   onPointerUp={handleSignaturePointerUp}
-                  onPointerCancel={() => { isDrawingSignatureRef.current = false; }}
+                  onPointerCancel={() => {
+                    isDrawingSignatureRef.current = false;
+                  }}
                   className="block w-full h-32 rounded-xl bg-white border border-white/20 cursor-crosshair"
                   style={{ touchAction: "none" }}
                 />
