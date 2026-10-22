@@ -543,6 +543,11 @@ export class InterventionService {
     actor?: { id: string; role: UserRole }
   ): Promise<InterventionRecord> {
     validateInputObject(input);
+    if (typeof input.targetStatus !== "string") {
+      throw new BadRequestError("Lo stato di destinazione deve essere una stringa valida.");
+    }
+    validateOptionalStringField(input.technicianId, "Il tecnico", true);
+    validateOptionalStringField(input.notes, "Le note", true);
     const existing = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
     if (!existing) {
       throw new NotFoundError("Intervento non trovato.");
