@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   Search,
@@ -74,6 +74,9 @@ export function ReportsView({
   const [newMaterialQty, setNewMaterialQty] = useState("1");
   const [materialsMode, setMaterialsMode] = useState<"used" | "none" | "unverified">("used");
   const [linkedIntervention, setLinkedIntervention] = useState<Intervention | null>(null);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingSignatureRef = useRef(false);
+  const [signatureBase64, setSignatureBase64] = useState("");
 
   const userRole = (currentUser?.role || "") as string;
   const isClient = userRole === "cliente";
@@ -116,6 +119,12 @@ export function ReportsView({
 
   const resetForm = useCallback(() => {
     setLinkedIntervention(null);
+    setSignatureBase64("");
+    const signatureCanvas = signatureCanvasRef.current;
+    if (signatureCanvas) {
+      const context = signatureCanvas.getContext("2d");
+      context?.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+    }
     setNewClientName("");
     setNewClientAddress("");
     setNewHours("4.0");
@@ -126,6 +135,62 @@ export function ReportsView({
     setNewMaterialQty("1");
     setMaterialsMode("used");
   }, []);
+
+  const handleSignaturePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (submitting) return;
+    event.preventDefault();
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    canvas.setPointerCapture(event.pointerId);
+    context.beginPath();
+    context.moveTo(x, y);
+    context.strokeStyle = "#111827";
+    context.lineWidth = 3;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    isDrawingSignatureRef.current = true;
+  };
+
+  const handleSignaturePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingSignatureRef.current || submitting) return;
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    context.lineTo(x, y);
+    context.stroke();
+  };
+
+  const handleSignaturePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingSignatureRef.current) return;
+    isDrawingSignatureRef.current = false;
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+    if (context) {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+      const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+      context.lineTo(x, y);
+      context.stroke();
+      setSignatureBase64(canvas.toDataURL("image/png"));
+    }
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setSignatureBase64("");
+  };
 
   const handleCancelModal = () => {
     if (submitting) return;
@@ -255,6 +320,7 @@ export function ReportsView({
         notes: newNotes.trim() || undefined,
         materialsStatus,
         materials,
+        signatureBase64: signatureBase64 || undefined,
       });
 
       toast.success(`Rapportino ${created.id} creato con successo!`, {
@@ -842,6 +908,37 @@ export function ReportsView({
                   <option value="submitted">Inviato (In attesa)</option>
                   <option value="draft">Bozza</option>
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-semibold text-white/70">Firma cliente</label>
+                  <button
+                    type="button"
+                    disabled={submitting || !signatureBase64}
+                    onClick={clearSignature}
+                    className="text-xs text-white/60 hover:text-white disabled:opacity-40"
+                  >
+                    Cancella firma
+                  </button>
+                </div>
+                <canvas
+                  ref={signatureCanvasRef}
+                  width={600}
+                  height={160}
+                  aria-label="Area per la firma del cliente"
+                  onPointerDown={handleSignaturePointerDown}
+                  onPointerMove={handleSignaturePointerMove}
+                  onPointerUp={handleSignaturePointerUp}
+                  onPointerCancel={() => {
+                    isDrawingSignatureRef.current = false;
+                  }}
+                  className="block w-full h-32 rounded-xl bg-white border border-white/20 cursor-crosshair"
+                  style={{ touchAction: "none" }}
+                />
+                <p className="text-[11px] text-white/45">
+                  Firma con mouse o dito. La firma viene inclusa nel PDF del rapportino.
+                </p>
               </div>
 
               <div className="space-y-1">
