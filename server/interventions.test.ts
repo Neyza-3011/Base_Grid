@@ -276,6 +276,27 @@ describe("Interventions Backend Module (P1.4)", () => {
         expect(response.status).toBe(400);
       }
 
+      const nullTransitionBody = await apiRequest(`/api/v1/interventions/${created.id}/transition`, {
+        method: "POST",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: null,
+      });
+      expect(nullTransitionBody.status).toBe(400);
+
+      for (const body of [
+        { targetStatus: "da_assegnare", notes: { unexpected: "object" } },
+        { targetStatus: "da_assegnare", technicianId: ["not", "a", "string"] },
+      ]) {
+        const response = await apiRequest(`/api/v1/interventions/${created.id}/transition`, {
+          method: "POST",
+          cookies: adminA.cookies,
+          headers: adminA.headers,
+          body,
+        });
+        expect(response.status).toBe(400);
+      }
+
       const unchanged = await db.getInterventionByIdAndCompany(created.id, companyA);
       expect(unchanged?.description).toBe("Intervento per test input");
     });
