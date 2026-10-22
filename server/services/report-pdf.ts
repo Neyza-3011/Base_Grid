@@ -74,6 +74,7 @@ function reportLines(report: ReportRecord): string[] {
     `Nome: ${client.name || "-"}`,
     `Indirizzo: ${client.address || "-"}`,
     `Citta: ${client.city || "-"}`,
+    `Sede/cantiere: ${report.locationName || "-"}`,
     "",
     "TECNICO E DURATA",
     `Tecnico: ${technician.fullName || "-"}`,
