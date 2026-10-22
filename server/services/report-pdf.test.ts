@@ -68,6 +68,12 @@ describe("generateReportPdf", () => {
     expect(text).toContain("Nota 160");
   });
 
+  it("rejects JPEG data with matching magic bytes but an invalid image body", async () => {
+    await expect(generateReportPdf(sampleReport({
+      signatureBase64: "data:image/jpeg;base64,/9j/AA==",
+    }))).rejects.toThrow();
+  });
+
   it("rejects malformed signature data rather than silently omitting the image", async () => {
     await expect(generateReportPdf(sampleReport({
       signatureBase64: "data:image/png;base64,not-an-image",
