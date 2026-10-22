@@ -55,7 +55,6 @@ describe("generateReportPdf", () => {
     expect(await parsed.getPageCount()).toBe(1);
     expect(pdf.toString("latin1")).toContain("/Subtype /Image");
     expect(text).toContain("Firma cliente: immagine inclusa sotto");
-    expect(text).not.toContain("immagine inclusa sotto");
   });
 
   it("splits long reports into multiple pages", async () => {
