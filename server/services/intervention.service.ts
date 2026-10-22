@@ -16,6 +16,13 @@ import {
 } from "../types";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../errors";
 
+function validateOptionalStringField(value: unknown, field: string, nullable = false): void {
+  if (value === undefined || (nullable && value === null)) return;
+  if (typeof value !== "string") {
+    throw new BadRequestError(`${field} deve essere una stringa valida.`);
+  }
+}
+
 export interface GetInterventionsFilter {
   search?: string;
   status?: string;
@@ -189,6 +196,14 @@ export class InterventionService {
     createdBy: string,
     input: CreateInterventionInput
   ): Promise<InterventionRecord> {
+    // Validate runtime input types before calling string methods or date parsing.
+    validateOptionalStringField(input.assetId, "L'impianto", true);
+    validateOptionalStringField(input.problem, "Il problema", true);
+    validateOptionalStringField(input.scheduledStart, "La data di inizio", true);
+    validateOptionalStringField(input.scheduledEnd, "La data di fine", true);
+    validateOptionalStringField(input.technicianId, "Il tecnico", true);
+    validateOptionalStringField(input.notes, "Le note", true);
+
     // 1. Validate required fields
     if (!input.description || typeof input.description !== "string" || input.description.trim().length < 2) {
       throw new BadRequestError("La descrizione dell'intervento è obbligatoria e deve avere almeno 2 caratteri.");
@@ -308,6 +323,16 @@ export class InterventionService {
     interventionId: string,
     input: UpdateInterventionInput
   ): Promise<InterventionRecord> {
+    // Request bodies are untrusted at runtime even when TypeScript interfaces are used.
+    validateOptionalStringField(input.customerId, "Il cliente");
+    validateOptionalStringField(input.locationId, "La sede/cantiere");
+    validateOptionalStringField(input.assetId, "L'impianto", true);
+    validateOptionalStringField(input.technicianId, "Il tecnico", true);
+    validateOptionalStringField(input.problem, "Il problema", true);
+    validateOptionalStringField(input.scheduledStart, "La data di inizio", true);
+    validateOptionalStringField(input.scheduledEnd, "La data di fine", true);
+    validateOptionalStringField(input.notes, "Le note", true);
+
     const existing = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
     if (!existing) {
       throw new NotFoundError("Intervento non trovato.");
