@@ -364,5 +364,23 @@ describe("Configuration Security", () => {
       expect(config.GOOGLE_CLIENT_ID).toBeUndefined();
     });
   });
+ 
+  it("normalizes escaped newlines in DATABASE_SSL_CA", () => {
+    const caPem = "-----BEGIN CERTIFICATE-----\nZXhhbXBsZS1jYS1wZW0=\n-----END CERTIFICATE-----";
+    const result = loadConfig({
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@db.example.com:5432/db",
+      DATABASE_SSL_CA: caPem.replace(/\n/g, "\\n"),
+      FRONTEND_URL: "https://example.com",
+      CORS_ORIGINS: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+    } as any);
+
+    expect(result.DATABASE_SSL_CA).toBe(caPem);
+  });
+
 });
 
