@@ -344,6 +344,7 @@ export interface ReportRecord {
   companyId: string;
   customerId?: string;
   locationId?: string;
+  locationName?: string;
   interventionId?: string;
   date: string;
   time: string;
