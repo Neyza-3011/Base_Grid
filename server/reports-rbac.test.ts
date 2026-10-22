@@ -280,6 +280,11 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
         headers: tech.headers,
       });
       expect(pdfRes.status).toBe(200);
+      expect(pdfRes.headers.get("content-type")).toContain("application/pdf");
+      expect(pdfRes.headers.get("content-disposition")).toContain("attachment; filename=");
+      expect(typeof pdfRes.data).toBe("string");
+      expect(pdfRes.data.startsWith("%PDF-1.4")).toBe(true);
+      expect(pdfRes.data.trimEnd().endsWith("%%EOF")).toBe(true);
     });
 
     it("strictly forbids technician from creating reports (403)", async () => {
@@ -433,6 +438,11 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
           headers: auth.headers,
         });
         expect(pdfRes.status).toBe(200);
+      expect(pdfRes.headers.get("content-type")).toContain("application/pdf");
+      expect(pdfRes.headers.get("content-disposition")).toContain("attachment; filename=");
+      expect(typeof pdfRes.data).toBe("string");
+      expect(pdfRes.data.startsWith("%PDF-1.4")).toBe(true);
+      expect(pdfRes.data.trimEnd().endsWith("%%EOF")).toBe(true);
 
         // 4. Delete -> 200
         const deleteRes = await apiRequest(`/api/v1/reports/${reportId}`, {
