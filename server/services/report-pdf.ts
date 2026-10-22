@@ -21,32 +21,35 @@ function safeText(value: unknown): string {
 }
 
 function wrapLine(value: string, maxChars = MAX_CHARS): string[] {
-  const normalized = safeText(value).trim();
-  if (!normalized) return [""];
-  const words = normalized.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if (word.length > maxChars) {
-      if (current) lines.push(current);
-      current = "";
-      for (let offset = 0; offset < word.length; offset += maxChars) {
-        const chunk = word.slice(offset, offset + maxChars);
-        if (chunk.length === maxChars) lines.push(chunk);
-        else current = chunk;
+  const paragraphs = String(value ?? "").replace(/\r\n?/g, "\n").split("\n");
+  return paragraphs.flatMap((paragraph) => {
+    const normalized = safeText(paragraph).trim();
+    if (!normalized) return [""];
+    const words = normalized.split(/\s+/);
+    const lines: string[] = [];
+    let current = "";
+    for (const word of words) {
+      if (word.length > maxChars) {
+        if (current) lines.push(current);
+        current = "";
+        for (let offset = 0; offset < word.length; offset += maxChars) {
+          const chunk = word.slice(offset, offset + maxChars);
+          if (chunk.length === maxChars) lines.push(chunk);
+          else current = chunk;
+        }
+        continue;
       }
-      continue;
+      const next = current ? current + " " + word : word;
+      if (next.length > maxChars) {
+        if (current) lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
     }
-    const next = current ? current + " " + word : word;
-    if (next.length > maxChars) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length ? lines : [""];
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  });
 }
 
 function formatMaterials(report: ReportRecord): string[] {
