@@ -255,11 +255,23 @@ authRouter.post("/forgot-password", forgotPasswordLimiter, asyncHandler(async (r
         expiresAt,
       });
 
-      const emailRes = await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName);
-      if (!emailRes.success) {
-        await db.revokeActiveAuthTokens(user.id, "password_reset");
-        res.status(502).json({ detail: "Impossibile inviare l'email di reset password. Riprova più tardi." });
-        return;
+      let emailSent = false;
+      try {
+        const emailRes = await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName);
+        emailSent = emailRes.success;
+      } catch {
+        // Provider errors must not reveal whether the requested email belongs to an account.
+        emailSent = false;
+      }
+
+      if (!emailSent) {
+        // The token was not delivered. Best-effort invalidation is deliberately kept
+        // separate from the generic response to avoid account-enumeration signals.
+        try {
+          await db.revokeActiveAuthTokens(user.id, "password_reset");
+        } catch {
+          // Do not turn a provider failure into a distinguishable response.
+        }
       }
     }
 
