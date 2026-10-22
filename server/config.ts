@@ -121,6 +121,9 @@ export function loadConfig(env = process.env): ServerConfig {
     }
 
     const configuredCorsOrigins = CORS_ORIGINS_RAW.split(",").map((origin) => origin.trim()).filter(Boolean);
+    if (configuredCorsOrigins.length === 0) {
+      throw new Error("CRITICAL CONFIG ERROR: CORS_ORIGINS must contain at least one valid HTTPS origin in production.");
+    }
     for (const origin of configuredCorsOrigins) {
       let parsedOrigin: URL;
       try {
