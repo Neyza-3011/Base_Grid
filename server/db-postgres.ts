@@ -440,7 +440,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     let connectionString = dbUrl;
-    let ssl: false | { rejectUnauthorized: true } = false;
+    let ssl: false | { rejectUnauthorized: true; ca?: string } = false;
 
     if (isProd) {
       let parsedUrl: URL;
@@ -475,11 +475,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
       const customCertificateOptions = [...parsedUrl.searchParams.keys()]
         .filter((key) => ["sslrootcert", "sslcert", "sslkey"].includes(key.toLowerCase()));
       if (customCertificateOptions.length > 0) {
-        throw new Error("CRITICAL SECURITY ERROR: production DATABASE_URL must not override TLS certificate settings through query parameters; use the system-trusted certificate chain.");
+        throw new Error("CRITICAL SECURITY ERROR: production DATABASE_URL must not override TLS certificate settings through query parameters; configure DATABASE_SSL_CA for a custom trusted CA.");
       }
 
       connectionString = parsedUrl.toString();
-      ssl = { rejectUnauthorized: true };
+      // Keep certificate verification enabled. Providers using a private CA can supply its PEM bundle separately.
+      ssl = config.DATABASE_SSL_CA
+        ? { rejectUnauthorized: true, ca: config.DATABASE_SSL_CA }
+        : { rejectUnauthorized: true };
     }
 
     const maxConnections = Number(process.env.PG_POOL_MAX) || 20;

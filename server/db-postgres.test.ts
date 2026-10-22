@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "crypto";
 import { PostgresAdapter } from "./db-postgres";
+import { config } from "./config";
 import { CompanyRecord, UserRecord, ReportRecord } from "./types";
 
 describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () => {
@@ -78,6 +79,33 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(poolOptions.options?.ssl ?? poolOptions.ssl).toEqual({ rejectUnauthorized: true });
     expect(String(poolOptions.options?.connectionString ?? poolOptions.connectionString)).not.toMatch(/sslmode=/i);
     await adapter.close();
+  });
+
+  it("uses an explicitly configured PostgreSQL CA without disabling certificate verification", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalCa = config.DATABASE_SSL_CA;
+    const ca = "-----BEGIN CERTIFICATE-----\nTEST-CA-DATA\n-----END CERTIFICATE-----";
+    let adapter: PostgresAdapter | undefined;
+
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.BASEGRID_RUNTIME_MODE;
+      config.DATABASE_SSL_CA = ca;
+
+      adapter = new PostgresAdapter("postgres://user:pass@db.example.com:5432/app?sslmode=require");
+      const poolOptions = adapter.getPool() as any;
+      const tlsOptions = poolOptions.options?.ssl ?? poolOptions.ssl;
+
+      expect(tlsOptions).toEqual({ rejectUnauthorized: true, ca });
+    } finally {
+      if (adapter) await adapter.close();
+      config.DATABASE_SSL_CA = originalCa;
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
+    }
   });
 
   it("initDatabase initializes runtime master data without containing schema evolution DDL", async () => {
