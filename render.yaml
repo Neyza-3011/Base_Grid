@@ -5,7 +5,8 @@ services:
     region: frankfurt
     plan: free
     branch: main
-    autoDeploy: true
+    # Releases require explicit approval; do not deploy automatically on every main push.
+    autoDeploy: false
     buildCommand: "npm ci --include=dev && npm run build"
     startCommand: "npm run start"
     healthCheckPath: /health
