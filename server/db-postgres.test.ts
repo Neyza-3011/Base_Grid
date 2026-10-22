@@ -80,6 +80,39 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     await adapter.close();
   });
 
+  it("passes DATABASE_SSL_CA to certificate-verified production TLS options", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalDatabaseSslCa = process.env.DATABASE_SSL_CA;
+    const caPem = "-----BEGIN CERTIFICATE-----\nZXhhbXBsZS1jYS1wZW0=\n-----END CERTIFICATE-----";
+    let adapter: PostgresAdapter | undefined;
+
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.BASEGRID_RUNTIME_MODE;
+      // Render environment variables can contain literal backslash-n sequences.
+      process.env.DATABASE_SSL_CA = caPem.replace(/\n/g, "\\n");
+      adapter = new PostgresAdapter(
+        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full&application_name=basegrid_test",
+      );
+
+      const poolOptions = adapter.getPool() as any;
+      expect(poolOptions.options?.ssl ?? poolOptions.ssl).toEqual({
+        rejectUnauthorized: true,
+        ca: caPem,
+      });
+      expect(String(poolOptions.options?.connectionString ?? poolOptions.connectionString)).not.toMatch(/sslmode=/i);
+    } finally {
+      if (adapter) await adapter.close();
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
+      if (originalDatabaseSslCa === undefined) delete process.env.DATABASE_SSL_CA;
+      else process.env.DATABASE_SSL_CA = originalDatabaseSslCa;
+    }
+  });
+
   it("initDatabase initializes runtime master data without containing schema evolution DDL", async () => {
     const adapter = new PostgresAdapter(mockPool);
     await adapter.initDatabase();
