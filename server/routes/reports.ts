@@ -97,7 +97,7 @@ reportsRouter.get(
       throw new ValidationError("ID non valido.");
     }
     const report = await reportsService.getReportById(req.user.companyId, reportId);
-    const pdf = generateReportPdf(report);
+    const pdf = await generateReportPdf(report);
     const safeFilenameId = report.id.replace(/[^a-zA-Z0-9_-]/g, "_");
     res.status(200);
     res.setHeader("Content-Type", "application/pdf");

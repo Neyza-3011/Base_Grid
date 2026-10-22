@@ -60,7 +60,7 @@ export function isValidTime(val: any): boolean {
  * - Must be a string
  * - Length must be <= 500,000 (status 413 if exceeded)
  * - Must strictly match data:<allowed-image-mime>;base64,<payload>
- * - Allowed MIMEs: image/png, image/jpeg, image/webp (and image/jpg)
+ * - Allowed MIMEs: image/png, image/jpeg (and image/jpg)
  * - Payload must be non-empty, strictly conform to Base64 syntax (no spaces/arbitrary chars, proper padding)
  * - Decoded binary content must match magic bytes for the declared MIME
  */
@@ -81,7 +81,7 @@ export function validateSignatureBase64(signature: any): { valid: boolean; statu
   const mime = dataUrlMatch[1].toLowerCase();
   const payload = dataUrlMatch[2];
 
-  const allowedMimes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+  const allowedMimes = ["image/png", "image/jpeg", "image/jpg"];
   if (!allowedMimes.includes(mime)) {
     return { valid: false, status: 400, error: `Tipo MIME '${mime}' non consentito per la firma.` };
   }
@@ -125,15 +125,6 @@ export function validateSignatureBase64(signature: any): { valid: boolean; statu
     ) {
       return { valid: false, status: 400, error: "Il contenuto binario non corrisponde al formato image/jpeg." };
     }
-  } else if (mime === "image/webp") {
-    if (
-      buffer.length < 12 ||
-      buffer.subarray(0, 4).toString("ascii") !== "RIFF" ||
-      buffer.subarray(8, 12).toString("ascii") !== "WEBP"
-    ) {
-      return { valid: false, status: 400, error: "Il contenuto binario non corrisponde al formato image/webp." };
-    }
-  }
 
   return { valid: true, status: 200, error: "" };
 }
