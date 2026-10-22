@@ -1377,7 +1377,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       const origDb = process.env.DATABASE_URL;
       try {
         process.env.NODE_ENV = "production";
-        process.env.DATABASE_URL = "postgres://user:pass@127.0.0.1:5432/testdb";
+        process.env.DATABASE_URL = "postgres://user:pass@db.example.com:5432/testdb?sslmode=require";
         const adapter = new PostgresAdapter();
         const pool = adapter.getPool();
         expect(pool).toBeDefined();
