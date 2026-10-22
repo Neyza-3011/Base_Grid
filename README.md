@@ -209,6 +209,7 @@ Le seguenti configurazioni **NON** sono presenti nel repository e **DEVONO** ess
 2. **Render Dashboard (Environment Variables / Secrets)**:
    - `JWT_SECRET`: stringa casuale ad alta entropia (minimo 32 caratteri, no placeholder).
    - `DATABASE_URL`: connection string PostgreSQL di produzione (es. Supabase, Neon, Render Postgres).
+   - `DATABASE_SSL_CA` (opzionale): certificato root CA in formato PEM per il database, da impostare come variabile d’ambiente/secret solo quando il provider richiede una CA dedicata. Per Supabase, scaricare il certificato dalla sezione SSL del dashboard e copiarne il contenuto PEM; il codice supporta newline reali e sequenze letterali `\\n`. La connessione mantiene sempre `rejectUnauthorized: true`. Non aggiungere `sslrootcert`, `sslcert` o `sslkey` alla query di `DATABASE_URL`: gli override TLS in URL sono intenzionalmente rifiutati.
    - `REDIS_URL`: connection string Redis con TLS (es. `rediss://...` da Upstash).
    - `FRONTEND_URL`: URL canonico del frontend Vercel (es. `https://app.basegrid.io`).
    - `CORS_ORIGINS`: origini permesse separate da virgola (es. `https://app.basegrid.io`). Non deve contenere `localhost` in produzione.
