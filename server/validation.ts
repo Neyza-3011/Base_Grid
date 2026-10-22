@@ -125,6 +125,7 @@ export function validateSignatureBase64(signature: any): { valid: boolean; statu
     ) {
       return { valid: false, status: 400, error: "Il contenuto binario non corrisponde al formato image/jpeg." };
     }
+  }
 
   return { valid: true, status: 200, error: "" };
 }

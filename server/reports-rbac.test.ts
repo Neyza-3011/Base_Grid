@@ -286,7 +286,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
         workHours: 2,
         travelHours: 0.5,
         status: "submitted",
-        signatureBase64: "private-signature-data",
+        signatureBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC",
       });
 
       const getRes = await apiRequest(`/api/v1/reports/${report.id}`, {
@@ -306,7 +306,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect(pdfRes.headers.get("content-type")).toContain("application/pdf");
       expect(pdfRes.headers.get("content-disposition")).toContain("attachment; filename=");
       expect(typeof pdfRes.data).toBe("string");
-      expect(pdfRes.data.startsWith("%PDF-1.4")).toBe(true);
+      expect(pdfRes.data.startsWith("%PDF-")).toBe(true);
       expect(pdfRes.data.trimEnd().endsWith("%%EOF")).toBe(true);
     });
 
@@ -464,7 +464,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect(pdfRes.headers.get("content-type")).toContain("application/pdf");
       expect(pdfRes.headers.get("content-disposition")).toContain("attachment; filename=");
       expect(typeof pdfRes.data).toBe("string");
-      expect(pdfRes.data.startsWith("%PDF-1.4")).toBe(true);
+      expect(pdfRes.data.startsWith("%PDF-")).toBe(true);
       expect(pdfRes.data.trimEnd().endsWith("%%EOF")).toBe(true);
 
         // 4. Delete -> 200

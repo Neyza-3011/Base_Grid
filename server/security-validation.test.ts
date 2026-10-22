@@ -893,8 +893,8 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       if (res.body?.id) createdReportIds.add(res.body.id);
     });
 
-    it("should accept valid WebP Base64 Data URL -> 201", async () => {
-      const validWebp = "data:image/webp;base64,UklGRkAAAABXRUJQVlA4IDQAAADwAQCdASoBAAEAAQAcJaACdLoAAP7/2QAA";
+    it("should reject WebP signature MIME because only PNG/JPEG are supported -> 400", async () => {
+      const webp = "data:image/webp;base64,UklGRkAAAABXRUJQVlA4IDQAAADwAQCdASoBAAEAAQAcJaACdLoAAP7/2QAA";
       const res = await request(app)
         .post("/api/v1/reports")
         .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
@@ -903,10 +903,10 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           date: "2026-08-27",
           time: "10:00",
           work_hours: 2,
-          signature_base64: validWebp,
+          signature_base64: webp,
         });
-      expect(res.status).toBe(201);
-      if (res.body?.id) createdReportIds.add(res.body.id);
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("non consentito");
     });
 
     it("should reject data:image/png;base64,NOT_BASE64 -> 400", async () => {

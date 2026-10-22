@@ -18,7 +18,7 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
     technician: { fullName: "Mario Rossi" },
     materialsStatus: "used",
     materialsUsed: [{ name: "Cavo (3x2.5)", quantity: 12 }],
-    notes: "Verificato quadro elettrico\\nSostituita una presa",
+    notes: "Verificato quadro elettrico\nSostituita una presa",
     signatureBase64: undefined,
     createdAt: "2026-10-22T09:35:00.000Z",
     ...overrides,
@@ -47,7 +47,7 @@ describe("generateReportPdf", () => {
   });
 
   it("embeds a valid PNG signature as a PDF image", async () => {
-    const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+    const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
     const pdf = await generateReportPdf(sampleReport({ signatureBase64 }));
     const parsed = await PDFDocument.load(pdf);
     const text = extractText(pdf);
@@ -66,6 +66,12 @@ describe("generateReportPdf", () => {
 
     expect(await parsed.getPageCount()).toBeGreaterThan(1);
     expect(text).toContain("Nota 160");
+  });
+
+  it("rejects JPEG data with matching magic bytes but an invalid image body", async () => {
+    await expect(generateReportPdf(sampleReport({
+      signatureBase64: "data:image/jpeg;base64,/9j/AA==",
+    }))).rejects.toThrow();
   });
 
   it("rejects malformed signature data rather than silently omitting the image", async () => {

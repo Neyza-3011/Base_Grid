@@ -36,16 +36,16 @@ function makeReport(): ReportRecord {
 }
 
 describe("generated PDF independent parser validation", () => {
-  it.skipIf(!hasPoppler)("opens the PDF and extracts expected report text with Poppler", () => {
+  it.skipIf(!hasPoppler)("opens the PDF and extracts expected report text with Poppler", async () => {
     const directory = mkdtempSync(join(tmpdir(), "basegrid-pdf-"));
     const pdfPath = join(directory, "report.pdf");
 
     try {
-      writeFileSync(pdfPath, generateReportPdf(makeReport()));
+      writeFileSync(pdfPath, await generateReportPdf(makeReport()));
 
       const info = execFileSync("pdfinfo", [pdfPath], { encoding: "utf8" });
       expect(info).toMatch(/Pages:\s+1/);
-      expect(info).toMatch(/PDF version:\s+1\.4/);
+      expect(info).toMatch(/PDF version:\s+1\.\d+/);
 
       const extractedText = execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
       expect(extractedText).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
