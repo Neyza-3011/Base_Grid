@@ -94,6 +94,26 @@ describe("Configuration Security", () => {
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain wildcard/i);
   });
 
+  it("rejects empty or whitespace-only production CORS origin lists", () => {
+    const validBase = {
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+      FRONTEND_URL: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+    };
+
+    expect(() =>
+      loadConfig({ ...validBase, CORS_ORIGINS: "   " } as any)
+    ).toThrow(/CORS_ORIGINS must contain at least one valid HTTPS origin/i);
+
+    expect(() =>
+      loadConfig({ ...validBase, CORS_ORIGINS: " , " } as any)
+    ).toThrow(/CORS_ORIGINS must contain at least one valid HTTPS origin/i);
+  });
+
   it("rejects plaintext HTTP frontend URLs in production", () => {
     expect(() =>
       loadConfig({
