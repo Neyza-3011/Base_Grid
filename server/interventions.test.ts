@@ -221,6 +221,49 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(res.data.companyId).toBeUndefined(); // companyId omitted from public response
     });
 
+    it("returns 400 for malformed optional string fields instead of a server error", async () => {
+      const invalidCreate = await apiRequest("/api/v1/interventions", {
+        method: "POST",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          customerId: customerA.id,
+          locationId: locationA.id,
+          description: "Controllo impianto",
+          problem: { unexpected: "object" },
+        },
+      });
+      expect(invalidCreate.status).toBe(400);
+
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per test input",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const invalidUpdates = [
+        { customerId: 42 },
+        { assetId: { unexpected: "object" } },
+        { notes: ["non", "string"] },
+        { scheduledStart: 123456789 },
+      ];
+
+      for (const body of invalidUpdates) {
+        const response = await apiRequest(`/api/v1/interventions/${created.id}`, {
+          method: "PUT",
+          cookies: adminA.cookies,
+          headers: adminA.headers,
+          body,
+        });
+        expect(response.status).toBe(400);
+      }
+
+      const unchanged = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(unchanged?.description).toBe("Intervento per test input");
+    });
+
     it("retrieves a single intervention by ID", async () => {
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
