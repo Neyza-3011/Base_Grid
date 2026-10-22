@@ -36,6 +36,15 @@ export class ReportsService {
     if (!report) {
       throw new NotFoundError("Rapportino non trovato o non accessibile.");
     }
+
+    // Resolve the linked site inside the authenticated tenant before PDF generation.
+    // Legacy reports without a location remain readable and omit the site name.
+    if (report.locationId) {
+      const location = await this.db.getLocationByIdAndCompany(report.locationId, companyId);
+      if (location) {
+        return { ...report, locationName: location.name };
+      }
+    }
     return report;
   }
 

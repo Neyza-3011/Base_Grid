@@ -102,6 +102,7 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       companyId: "comp-tenant-a",
       date: "2026-09-26",
       time: "10:00",
+      locationId: "loc-1-cust-a",
       workHours: 4,
       travelHours: 1,
       status: "submitted",
@@ -214,6 +215,7 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       const report = await reportsService.getReportById("comp-tenant-a", "rep-001");
       expect(report.id).toBe("rep-001");
       expect(report.companyId).toBe("comp-tenant-a");
+      expect(report.locationName).toBe("Sede Principale");
     });
 
     it("throws NotFoundError when trying to access another tenant's report", async () => {
