@@ -7,7 +7,7 @@ const requiredEnv = {
   ...process.env,
   NODE_ENV: "production",
   JWT_SECRET: "test-secret-at-least-32-chars-long-here",
-  DATABASE_URL: process.env.DATABASE_URL || "postgres://fake:fake@127.0.0.1:5432/fake",
+  DATABASE_URL: process.env.DATABASE_URL || "postgres://fake:fake@db.example.com:5432/fake?sslmode=require",
   REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   FRONTEND_URL: "https://app.basegrid.io",
   CORS_ORIGINS: "https://app.basegrid.io",
@@ -26,7 +26,7 @@ describe("Production Startup Sequence", () => {
       const child = spawn(tsxBin, ["server.ts"], {
         env: {
           ...requiredEnv,
-          DATABASE_URL: "postgres://fake:fake@127.0.0.1:54329/fake",
+          DATABASE_URL: "postgres://fake:fake@db.example.com:54329/fake?sslmode=require",
           SKIP_DB_INIT: "true",
           PORT: "10006",
           NITRO_PORT: "10016",
