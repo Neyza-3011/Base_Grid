@@ -121,7 +121,7 @@ async function apiRequest(
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   let data: any = null;
@@ -222,6 +222,14 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
 
     it("returns 400 for malformed optional string fields instead of a server error", async () => {
+      const nullCreateBody = await apiRequest("/api/v1/interventions", {
+        method: "POST",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: null,
+      });
+      expect(nullCreateBody.status).toBe(400);
+
       const invalidCreate = await apiRequest("/api/v1/interventions", {
         method: "POST",
         cookies: adminA.cookies,
@@ -242,6 +250,14 @@ describe("Interventions Backend Module (P1.4)", () => {
         createdBy: adminA.user.id,
         updatedBy: adminA.user.id,
       });
+
+      const nullUpdateBody = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: null,
+      });
+      expect(nullUpdateBody.status).toBe(400);
 
       const invalidUpdates = [
         { customerId: 42 },
