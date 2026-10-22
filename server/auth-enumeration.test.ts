@@ -22,7 +22,7 @@ afterEach(() => {
 
 async function createKnownAccount() {
   const { user } = await db.createUser({
-    email: \`reset-enumeration-\${randomUUID()}@example.com\`,
+    email: "reset-enumeration-" + randomUUID() + "@example.com",
     fullName: "Password Reset Test",
     password: "Password123!",
     companyName: "Reset Test Company",
