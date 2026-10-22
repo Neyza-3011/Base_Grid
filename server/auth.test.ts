@@ -281,6 +281,25 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("3. Server-Authoritative Session (/api/v1/auth/session)", async () => {
+    it("rejects an unverified account's existing access token when email verification is enabled", async () => {
+      const { user } = await db.createUser({
+        email: "unverified.session@azienda.it",
+        fullName: "Unverified Session",
+        password: "SecurePassword123!",
+        companyName: "Unverified Co",
+        emailConfirmed: false,
+        role: "owner",
+      });
+      const { accessToken } = generateTokens(user);
+
+      const res = await apiRequest("/api/v1/auth/session", {
+        cookies: { access_token: accessToken },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.detail).toMatch(/conferma l'indirizzo email/i);
+    });
+
     it("returns authenticated user session when valid access_token cookie is provided", async () => {
       const user = await db.findUserByEmail("admin@rossi.it")!;
       const { accessToken } = generateTokens(user);
@@ -316,6 +335,33 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   });
 
   describe("4. Refresh Token Rotation & Replay Protection (/api/v1/auth/refresh)", async () => {
+    it("rejects refresh of an unverified account when email verification is enabled", async () => {
+      const { user } = await db.createUser({
+        email: "unverified.refresh@azienda.it",
+        fullName: "Unverified Refresh",
+        password: "SecurePassword123!",
+        companyName: "Unverified Co",
+        emailConfirmed: false,
+        role: "owner",
+      });
+      const tokens = generateTokens(user);
+      await tokenStore.registerToken({
+        token: tokens.refreshToken,
+        jti: tokens.jti,
+        userId: user.id,
+        familyId: tokens.familyId,
+      });
+
+      const res = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: tokens.refreshToken },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.detail).toMatch(/conferma l'indirizzo email/i);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+    });
+
     it("successfully rotates R1 -> fresh access_token + R2 on valid refresh request", async () => {
       const loginRes = await apiRequest("/api/v1/auth/login", {
         method: "POST",
