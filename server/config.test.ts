@@ -364,6 +364,7 @@ describe("Configuration Security", () => {
       expect(config.GOOGLE_CLIENT_ID).toBeUndefined();
     });
   });
+
   it("normalizes escaped newlines in DATABASE_SSL_CA", () => {
     const ca = loadConfig({
       NODE_ENV: "development",
@@ -372,7 +373,5 @@ describe("Configuration Security", () => {
 
     expect(ca.DATABASE_SSL_CA).toBe("-----BEGIN CERTIFICATE-----\nTEST-CA-DATA\n-----END CERTIFICATE-----");
   });
-
-
 });
 
