@@ -135,9 +135,11 @@ export function ReportsView({
 
   const handleOpenGenericCreate = () => {
     if (!canCreateStandalone) {
-      toast.error(userRole === "technician"
-        ? "Apri il rapportino da un intervento assegnato a te."
-        : "Non disponi dei permessi per creare rapportini.");
+      toast.error(
+        userRole === "technician"
+          ? "Apri il rapportino da un intervento assegnato a te."
+          : "Non disponi dei permessi per creare rapportini.",
+      );
       return;
     }
     resetForm();
@@ -209,9 +211,11 @@ export function ReportsView({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canCreate || (userRole === "technician" && !linkedIntervention)) {
-      toast.error(userRole === "technician"
-        ? "Il rapportino deve essere collegato a un intervento assegnato a te."
-        : "Non disponi dei permessi per creare rapportini.");
+      toast.error(
+        userRole === "technician"
+          ? "Il rapportino deve essere collegato a un intervento assegnato a te."
+          : "Non disponi dei permessi per creare rapportini.",
+      );
       return;
     }
     if (!newClientName.trim()) {
