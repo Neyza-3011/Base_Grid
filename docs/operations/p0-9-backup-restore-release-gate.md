@@ -38,6 +38,32 @@ Prima dell'esecuzione, impostare `BACKUP_FILE` a un percorso locale protetto con
 
 Questo esempio non configura una schedulazione, una retention o una copia off-site automatica.
 
+### Variante specifica per Supabase Free (dump SQL)
+
+Supabase raccomanda ai progetti Free di esportare regolarmente il database con la CLI e conservare una copia off-site. Questa procedura è manuale: non crea una schedulazione né equivale ai backup gestiti da Supabase o a PITR.
+
+Prerequisiti: Supabase CLI, Docker Desktop e client PostgreSQL compatibili installati su una macchina autorizzata. Verificare la documentazione ufficiale Supabase prima di eseguire il dump. Recuperare la connection string da **Connect** nel progetto corretto; usare normalmente il Session Pooler, salvo che la rete supporti IPv6 o sia configurato l'accesso diretto. Non incollare password o connection string in ticket, chat, repository o comandi versionati. Rendere disponibile la stringa tramite un meccanismo sicuro di gestione dei segreti, nella variabile d'ambiente `SUPABASE_DB_URL`.
+
+Da una directory locale protetta e non versionata, eseguire i tre dump separati documentati da Supabase:
+
+```bash
+supabase db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+```
+
+Dopo ogni comando verificare il codice di uscita e che il file atteso esista e non sia vuoto. Registrare dimensione, data, versione CLI e checksum; ad esempio:
+
+```bash
+sha256sum roles.sql schema.sql data.sql
+```
+
+Conservare i tre file e i checksum in una destinazione approvata, cifrata e accessibile solo agli autorizzati, separata dal repository e dal progetto Supabase. Verificare periodicamente che i file conservati corrispondano ai checksum. Non caricare dump reali nei log CI o negli artifact pubblici.
+
+**Limiti da verificare prima di considerare il backup completo:** questo dump logico non è una copia integrale del progetto Supabase. Non include gli oggetti caricati tramite Storage API; il progetto dichiara attualmente Storage non utilizzato. Verificare separatamente se Supabase Auth, personalizzazioni degli schemi gestiti `auth`/`storage`, estensioni, webhook, funzioni, impostazioni o altri servizi sono utilizzati e richiedono procedure aggiuntive. Non presumere che gli utenti Auth o le impostazioni del progetto siano inclusi. Le migrazioni BaseGrid in `server/migrations/` e l'eventuale tabella `schema_migrations` devono essere controllate dopo il restore.
+
+Per questo formato SQL, la verifica d'integrità tramite checksum e il controllo dei file non provano da soli che il database sia ripristinabile. Il test di restore deve usare un progetto/database Supabase temporaneo o un PostgreSQL isolato e una procedura `psql` coerente con i file `roles.sql`, `schema.sql` e `data.sql`; **non usare i comandi `pg_restore` della procedura generica per questi file SQL**. Non eseguire il restore su produzione.
+
 ## 3. Prova di ripristino isolata
 
 Il ripristino deve essere effettuato su un database temporaneo/di staging dedicato, mai sul database di produzione. Prima di iniziare, verificare due volte l'endpoint e il nome del database di destinazione. Non usare una destinazione che contenga dati da conservare.
