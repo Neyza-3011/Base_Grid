@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth";
 import { reportsService } from "../services";
 import { asyncHandler } from "../async-handler";
-import { ValidationError, UnauthorizedError } from "../errors";
+import { ValidationError, UnauthorizedError, ForbiddenError } from "../errors";
 import { UserRole } from "../types";
 import { generateReportPdf } from "../services/report-pdf";
 
@@ -88,6 +88,9 @@ reportsRouter.get(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user || !req.user.companyId) {
       throw new UnauthorizedError("Non autenticato.");
+    }
+    if (req.company?.featurePdfExport === false) {
+      throw new ForbiddenError("L'esportazione PDF non è inclusa nelle funzionalità abilitate per questa azienda.");
     }
     const reportId = req.params.id;
     if (!isValidId(reportId)) {
