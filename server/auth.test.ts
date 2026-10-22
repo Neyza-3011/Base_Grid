@@ -1014,11 +1014,24 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         delete process.env.FRONTEND_URL;
         expect(() => new ProductionEmailService()).toThrow(/FRONTEND_URL is required in production/i);
       } finally {
-        process.env.NODE_ENV = origEnv;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
-        if (origFrontend) process.env.FRONTEND_URL = origFrontend;
-        if (origProvider) process.env.EMAIL_PROVIDER = origProvider;
+        // Restore the exact original environment, including variables that were
+        // initially absent. Leaving test-only provider credentials behind can
+        // switch the shared email service to Resend and make later tests call
+        // the external provider instead of the deterministic test adapter.
+        if (origEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = origEnv;
+
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
+
+        if (origFrontend === undefined) delete process.env.FRONTEND_URL;
+        else process.env.FRONTEND_URL = origFrontend;
+
+        if (origProvider === undefined) delete process.env.EMAIL_PROVIDER;
+        else process.env.EMAIL_PROVIDER = origProvider;
       }
     });
 
