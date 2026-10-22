@@ -94,6 +94,59 @@ describe("Configuration Security", () => {
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain wildcard/i);
   });
 
+  it("rejects plaintext HTTP frontend URLs in production", () => {
+    expect(() =>
+      loadConfig({
+        NODE_ENV: "production",
+        JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+        REDIS_URL: "redis://127.0.0.1:6379",
+        DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+        FRONTEND_URL: "http://example.com",
+        CORS_ORIGINS: "https://example.com",
+        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_PASSWORD: "super-secure-password",
+      } as any)
+    ).toThrow(/FRONTEND_URL must be a valid HTTPS URL/i);
+  });
+
+  it("rejects plaintext HTTP and non-origin entries in production CORS configuration", () => {
+    const validBase = {
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+      FRONTEND_URL: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+    };
+
+    expect(() =>
+      loadConfig({ ...validBase, CORS_ORIGINS: "http://example.com" } as any)
+    ).toThrow(/CORS_ORIGINS entry must be an HTTPS origin/i);
+
+    expect(() =>
+      loadConfig({ ...validBase, CORS_ORIGINS: "https://example.com/dashboard" } as any)
+    ).toThrow(/CORS_ORIGINS entry must be an HTTPS origin/i);
+  });
+
+  it("allows production startup without email verification or Resend configuration", () => {
+    const config = loadConfig({
+      NODE_ENV: "production",
+      JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
+      REDIS_URL: "redis://127.0.0.1:6379",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/db",
+      FRONTEND_URL: "https://example.com",
+      CORS_ORIGINS: "https://example.com",
+      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_PASSWORD: "super-secure-password",
+      EMAIL_VERIFICATION_ENABLED: "false",
+    } as any);
+
+    expect(config.EMAIL_VERIFICATION_ENABLED).toBe(false);
+    expect(config.EMAIL_PROVIDER).toBe("none");
+    expect(config.EMAIL_API_KEY).toBeUndefined();
+  });
+
   it("fails in production when EMAIL_PROVIDER is missing or not resend (when EMAIL_VERIFICATION_ENABLED is true)", () => {
     expect(() =>
       loadConfig({
