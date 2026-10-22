@@ -183,8 +183,8 @@ Render Web Service (Node.js Express Backend)
 
 ### 1. Backend: Render (`render.yaml`)
 - **Runtime**: Node.js `22.12.0` (o `20.19+`)
-- **Blueprint**: Definito in `render.yaml` (`type: web`, `env: node`, `branch: main`, `autoDeploy: true`)
-- **Comandi**: `buildCommand: "npm ci && npm run build"`, `startCommand: "npm run start"`
+- **Blueprint**: Definito in `render.yaml` (`type: web`, `runtime: node`, `branch: main`, `autoDeploy: false`). I deploy Render non partono automaticamente a ogni push: le release vanno avviate esplicitamente.
+- **Comandi**: `buildCommand: "npm ci --include=dev && npm run build"`, `startCommand: "npm run start"` (come nel `render.yaml`).
 - **Health Check**: `/health` (endpoint liveness leggero senza dipendenze esterne)
 - **Readiness Check**: `/ready` (verifica connettività attiva a PostgreSQL e Redis)
 - **Variabili Deterministiche**:
@@ -204,17 +204,17 @@ Le seguenti configurazioni **NON** sono presenti nel repository e **DEVONO** ess
 
 1. **`frontend/vercel.json` (Rewrite Destination)**:
    - File: `frontend/vercel.json`
-   - Campo: `"destination": "https://YOUR_RENDER_BACKEND_SERVICE.onrender.com/api/:path*"`
-   - **Azione**: Sostituire `YOUR_RENDER_BACKEND_SERVICE.onrender.com` con l'URL effettivo assegnato da Render al Web Service (es. `basegrid-production.onrender.com` o dominio personalizzato `api.basegrid.io`).
-   - *Nota*: Vercel non esegue interpolazione di variabili d'ambiente all'interno di `vercel.json`; il valore di rewrite deve essere inserito prima del deploy frontend su Vercel.
+   - Destinazione attualmente configurata: `https://base-grid.onrender.com/api/:path*`.
+   - **Azione**: verificare che `base-grid.onrender.com` coincida con l'URL effettivo del Web Service Render. Se l'URL del servizio cambia, aggiornare `frontend/vercel.json` e validare il rewrite prima del rilascio.
+   - *Nota*: Vercel non esegue interpolazione di variabili d'ambiente all'interno di `vercel.json`; la destinazione deve essere un URL concreto nel file.
 
 2. **Render Dashboard (Environment Variables / Secrets)**:
    - `JWT_SECRET`: stringa casuale ad alta entropia (minimo 32 caratteri, no placeholder).
    - `DATABASE_URL`: connection string PostgreSQL di produzione (es. Supabase, Neon, Render Postgres).
    - `DATABASE_SSL_CA` (opzionale): certificato root CA in formato PEM per il database, da impostare come variabile d’ambiente/secret solo quando il provider richiede una CA dedicata. Per Supabase, scaricare il certificato dalla sezione SSL del dashboard e copiarne il contenuto PEM; il codice supporta newline reali e sequenze letterali `\\n`. La connessione mantiene sempre `rejectUnauthorized: true`. Non aggiungere `sslrootcert`, `sslcert` o `sslkey` alla query di `DATABASE_URL`: gli override TLS in URL sono intenzionalmente rifiutati.
    - `REDIS_URL`: connection string Redis con TLS (es. `rediss://...` da Upstash).
-   - `FRONTEND_URL`: URL canonico del frontend Vercel (es. `https://app.basegrid.io`).
-   - `CORS_ORIGINS`: origini permesse separate da virgola (es. `https://app.basegrid.io`). Non deve contenere `localhost` in produzione.
+   - `FRONTEND_URL`: URL canonico del frontend Vercel; l'URL attualmente noto è `https://basegridfront.vercel.app` (usare il dominio canonico definitivo solo dopo averlo configurato).
+   - `CORS_ORIGINS`: origini HTTPS esatte del frontend, separate da virgola; per l'URL attualmente noto usare `https://basegridfront.vercel.app` se è il dominio effettivamente usato. Non inserire percorsi, `localhost` o `*` in produzione.
    - `SUPERADMIN_EMAIL`: indirizzo email del master super-admin.
    - `SUPERADMIN_PASSWORD`: password complessa (minimo 12 caratteri).
    - `SUPERADMIN_COMPANY_NAME`: (opzionale) nome dell'organizzazione master.
