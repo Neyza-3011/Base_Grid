@@ -1,5 +1,5 @@
 import { IDatabaseAdapter } from "../db";
-import { ReportRecord, CreateReportRequest, ReportResponseDTO, ReportMaterialsStatus } from "../types";
+import { ReportRecord, CreateReportRequest, ReportResponseDTO, ReportMaterialsStatus, UserRole } from "../types";
 import { AppError, NotFoundError, ValidationError, ForbiddenError, BadRequestError } from "../errors";
 import { isValidCalendarDate, isValidTime, validateSignatureBase64 } from "../validation";
 
@@ -55,6 +55,7 @@ export class ReportsService {
     companyId: string,
     creatorName: string,
     body: CreateReportRequest,
+    actor?: { id: string; role: UserRole },
   ): Promise<ReportResponseDTO> {
     if (!companyId) {
       throw new ValidationError("Company ID is required");
@@ -78,6 +79,13 @@ export class ReportsService {
       intervention_id,
     } = body || {};
 
+    // Technicians may submit field reports only for an intervention assigned to themselves.
+    // Standalone reports remain available to the existing operational roles, not technicians.
+    const hasInterventionId = typeof intervention_id === "string" && intervention_id.trim().length > 0;
+    if (actor?.role === "technician" && !hasInterventionId) {
+      throw new ForbiddenError("Il tecnico può creare un rapportino solo per un intervento assegnato.");
+    }
+
     // 1. Intervention validation (if specified)
     let validatedInterventionId: string | undefined = undefined;
     let interventionRecord: any = null;
@@ -87,6 +95,9 @@ export class ReportsService {
       interventionRecord = await this.db.getInterventionByIdAndCompany(rawInterventionId, companyId);
       if (!interventionRecord) {
         throw new NotFoundError("Intervento non trovato o non accessibile.");
+      }
+      if (actor?.role === "technician" && interventionRecord.technicianId !== actor.id) {
+        throw new ForbiddenError("Il tecnico può creare un rapportino soltanto per un intervento assegnato a sé.");
       }
       validatedInterventionId = interventionRecord.id;
     }
