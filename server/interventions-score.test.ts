@@ -232,6 +232,63 @@ describe("P1.7 Job Complete Score Suite", () => {
       expect(result.missingMandatoryCount).toBe(0);
     });
 
+    it("blocks billing when intervention customer or location IDs are missing", () => {
+      const intervention: InterventionRecord = {
+        id: "int-missing-relations",
+        companyId: "comp-1",
+        customerId: "cust-1",
+        locationId: "loc-1",
+        description: "Manutenzione",
+        priority: "media",
+        status: "completato",
+        technicianId: "tech-1",
+        actualHours: 2,
+        createdBy: "usr-1",
+        updatedBy: "usr-1",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const report: ReportRecord = {
+        id: "rep-missing-relations",
+        companyId: "comp-1",
+        interventionId: intervention.id,
+        customerId: "cust-1",
+        locationId: "loc-1",
+        date: "2025-01-01",
+        time: "10:00",
+        workHours: 2,
+        travelHours: 0,
+        status: "submitted",
+        client: { name: "Cliente Srl" },
+        technician: { fullName: "Tecnico Rossi" },
+        materialsStatus: "none",
+        materialsUsed: [],
+        signatureBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        createdAt: new Date().toISOString(),
+      };
+
+      const missingCustomer = calculateJobCompleteScore(
+        { ...intervention, customerId: undefined as unknown as string },
+        report,
+        null
+      );
+      const customerCheck = missingCustomer.checks.find((check) => check.id === "report_linked");
+      expect(customerCheck?.passed).toBe(false);
+      expect(customerCheck?.missingDataReason).toContain("Cliente dell'intervento");
+      expect(missingCustomer.readyForBilling).toBe(false);
+
+      const missingLocation = calculateJobCompleteScore(
+        { ...intervention, locationId: undefined as unknown as string },
+        report,
+        null
+      );
+      const locationCheck = missingLocation.checks.find((check) => check.id === "report_linked");
+      expect(locationCheck?.passed).toBe(false);
+      expect(locationCheck?.missingDataReason).toContain("Sede dell'intervento");
+      expect(missingLocation.readyForBilling).toBe(false);
+    });
+
     it("4. Explicit confirmation of zero materials used (materialsStatus 'none') passes", () => {
       const intervention: InterventionRecord = {
         id: "int-1",

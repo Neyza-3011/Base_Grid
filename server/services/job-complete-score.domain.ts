@@ -76,13 +76,23 @@ export function calculateJobCompleteScore(
   const isReportPresent = Boolean(report && report.id);
   const isCompanyValid = Boolean(report && report.companyId && intervention.companyId && report.companyId === intervention.companyId);
   const isInterventionValid = Boolean(report && report.interventionId && intervention.id && report.interventionId === intervention.id);
+  // Billing must never pass when the intervention lacks its required customer/site identity.
+  // Treat malformed persisted records as incomplete instead of allowing absent IDs to bypass checks.
   const isCustomerValid = Boolean(
     report &&
-      (!intervention.customerId || (report.customerId && report.customerId === intervention.customerId))
+      typeof intervention.customerId === "string" &&
+      intervention.customerId.trim().length > 0 &&
+      typeof report.customerId === "string" &&
+      report.customerId.trim().length > 0 &&
+      report.customerId === intervention.customerId
   );
   const isLocationValid = Boolean(
     report &&
-      (!intervention.locationId || (report.locationId && report.locationId === intervention.locationId))
+      typeof intervention.locationId === "string" &&
+      intervention.locationId.trim().length > 0 &&
+      typeof report.locationId === "string" &&
+      report.locationId.trim().length > 0 &&
+      report.locationId === intervention.locationId
   );
   const isStatusValid = Boolean(
     report &&
@@ -100,9 +110,15 @@ export function calculateJobCompleteScore(
   } else if (!isInterventionValid) {
     isReportLinkedPassed = false;
     reportMissingReason = "ID intervento del rapportino mancante o discordante.";
+  } else if (typeof intervention.customerId !== "string" || intervention.customerId.trim().length === 0) {
+    isReportLinkedPassed = false;
+    reportMissingReason = "Cliente dell'intervento mancante o non valido; fatturazione bloccata.";
   } else if (!isCustomerValid) {
     isReportLinkedPassed = false;
     reportMissingReason = "Cliente del rapportino mancante o discordante rispetto all'intervento.";
+  } else if (typeof intervention.locationId !== "string" || intervention.locationId.trim().length === 0) {
+    isReportLinkedPassed = false;
+    reportMissingReason = "Sede dell'intervento mancante o non valida; fatturazione bloccata.";
   } else if (!isLocationValid) {
     isReportLinkedPassed = false;
     reportMissingReason = "Sede del rapportino mancante o discordante rispetto all'intervento.";
