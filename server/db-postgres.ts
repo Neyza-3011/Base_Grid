@@ -439,20 +439,56 @@ export class PostgresAdapter implements IDatabaseAdapter {
       throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL is missing in production.");
     }
 
-    const isLocalDb = Boolean(
-      dbUrl?.includes("localhost") ||
-      dbUrl?.includes("127.0.0.1") ||
-      dbUrl?.includes("sslmode=disable")
-    );
-    const useSsl = isProd && !isLocalDb;
+    let connectionString = dbUrl;
+    let ssl: false | { rejectUnauthorized: true } = false;
+
+    if (isProd) {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(dbUrl!);
+      } catch {
+        throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL must be a valid PostgreSQL URL in production.");
+      }
+
+      if (parsedUrl.protocol !== "postgres:" && parsedUrl.protocol !== "postgresql:") {
+        throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL must use the PostgreSQL protocol in production.");
+      }
+
+      const hostname = parsedUrl.hostname.toLowerCase();
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "0.0.0.0") {
+        throw new Error("CRITICAL SECURITY ERROR: DATABASE_URL must point to a remote PostgreSQL host in production.");
+      }
+
+      const sslModeEntries = [...parsedUrl.searchParams.entries()]
+        .filter(([key]) => key.toLowerCase() === "sslmode");
+      const sslModes = sslModeEntries.map(([, value]) => value.toLowerCase());
+      if (sslModes.some((mode) => !["require", "verify-ca", "verify-full"].includes(mode))) {
+        throw new Error("CRITICAL SECURITY ERROR: production DATABASE_URL cannot use a PostgreSQL sslmode that permits plaintext or fallback connections.");
+      }
+
+      // node-postgres lets sslmode in the URL replace the explicit SSL options.
+      // Remove it so the verified TLS settings below cannot be silently overridden.
+      for (const key of [...parsedUrl.searchParams.keys()]) {
+        if (key.toLowerCase() === "sslmode") parsedUrl.searchParams.delete(key);
+      }
+
+      const customCertificateOptions = [...parsedUrl.searchParams.keys()]
+        .filter((key) => ["sslrootcert", "sslcert", "sslkey"].includes(key.toLowerCase()));
+      if (customCertificateOptions.length > 0) {
+        throw new Error("CRITICAL SECURITY ERROR: production DATABASE_URL must not override TLS certificate settings through query parameters; use the system-trusted certificate chain.");
+      }
+
+      connectionString = parsedUrl.toString();
+      ssl = { rejectUnauthorized: true };
+    }
 
     const maxConnections = Number(process.env.PG_POOL_MAX) || 20;
     const connectionTimeoutMillis = Number(process.env.PG_CONNECTION_TIMEOUT_MS) || 5000;
     const idleTimeoutMillis = Number(process.env.PG_IDLE_TIMEOUT_MS) || 30000;
 
     this.pool = new Pool({
-      connectionString: dbUrl,
-      ssl: useSsl ? { rejectUnauthorized: false } : false,
+      connectionString,
+      ssl,
       max: maxConnections,
       connectionTimeoutMillis,
       idleTimeoutMillis,

@@ -37,6 +37,49 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     }
   });
 
+  it("rejects production PostgreSQL URLs that permit plaintext or TLS fallback", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.BASEGRID_RUNTIME_MODE;
+
+      expect(() => new PostgresAdapter("postgres://user:pass@db.example.com:5432/app?sslmode=disable"))
+        .toThrow(/cannot use a PostgreSQL sslmode/i);
+      expect(() => new PostgresAdapter("postgres://user:pass@db.example.com:5432/app?sslmode=prefer"))
+        .toThrow(/cannot use a PostgreSQL sslmode/i);
+      expect(() => new PostgresAdapter("postgres://user:pass@localhost:5432/app"))
+        .toThrow(/remote PostgreSQL host/i);
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+      if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
+    }
+  });
+
+  it("enables certificate-verified TLS for production PostgreSQL connections", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
+    const adapter = (() => {
+      try {
+        process.env.NODE_ENV = "production";
+        delete process.env.BASEGRID_RUNTIME_MODE;
+        return new PostgresAdapter("postgres://user:pass@db.example.com:5432/app?sslmode=require&application_name=basegrid_test");
+      } finally {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalNodeEnv;
+        if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+        else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
+      }
+    })();
+
+    const poolOptions = adapter.getPool() as any;
+    expect(poolOptions.options?.ssl ?? poolOptions.ssl).toEqual({ rejectUnauthorized: true });
+    expect(String(poolOptions.options?.connectionString ?? poolOptions.connectionString)).not.toMatch(/sslmode=/i);
+    await adapter.close();
+  });
+
   it("initDatabase initializes runtime master data without containing schema evolution DDL", async () => {
     const adapter = new PostgresAdapter(mockPool);
     await adapter.initDatabase();
