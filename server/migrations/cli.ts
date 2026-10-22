@@ -1,6 +1,8 @@
 import { Pool } from "pg";
 import { runMigrations } from "../migrator";
 import { config } from "../config";
+import { getRuntimeMode } from "../runtime-mode";
+import { getPostgresConnectionOptions } from "../postgres-connection-options";
 
 async function main() {
   const dbUrl = process.env.DATABASE_URL || config.DATABASE_URL;
@@ -9,16 +11,15 @@ async function main() {
     process.exit(1);
   }
 
-  const isLocalDb = Boolean(
-    dbUrl.includes("localhost") ||
-    dbUrl.includes("127.0.0.1") ||
-    dbUrl.includes("sslmode=disable")
+  const mode = getRuntimeMode();
+  const connectionOptions = getPostgresConnectionOptions(
+    dbUrl,
+    mode === "production",
+    config.DATABASE_SSL_CA,
   );
-  const useSsl = process.env.NODE_ENV === "production" && !isLocalDb;
 
   const pool = new Pool({
-    connectionString: dbUrl,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    ...connectionOptions,
     max: 2,
     connectionTimeoutMillis: 5000,
   });
