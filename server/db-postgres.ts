@@ -475,16 +475,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
       const customCertificateOptions = [...parsedUrl.searchParams.keys()]
         .filter((key) => ["sslrootcert", "sslcert", "sslkey"].includes(key.toLowerCase()));
       if (customCertificateOptions.length > 0) {
-        throw new Error(
-          "CRITICAL SECURITY ERROR: production DATABASE_URL must not override TLS certificate settings through query parameters; provide a root CA PEM using DATABASE_SSL_CA when the provider requires a custom CA. Client certificate/key URL parameters are not supported."
-        );
+        throw new Error("CRITICAL SECURITY ERROR: production DATABASE_URL must not override TLS certificate settings through query parameters; configure DATABASE_SSL_CA for a custom trusted CA.");
       }
 
       connectionString = parsedUrl.toString();
-      const rawSslCa = process.env.DATABASE_SSL_CA ?? config.DATABASE_SSL_CA;
-      const sslCa = rawSslCa?.replace(/\\n/g, "\n").trim() || undefined;
-      ssl = sslCa
-        ? { rejectUnauthorized: true, ca: sslCa }
+      // Keep certificate verification enabled. Providers using a private CA can supply its PEM bundle separately.
+      ssl = config.DATABASE_SSL_CA
+        ? { rejectUnauthorized: true, ca: config.DATABASE_SSL_CA }
         : { rejectUnauthorized: true };
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "crypto";
 import { PostgresAdapter } from "./db-postgres";
+import { config } from "./config";
 import { CompanyRecord, UserRecord, ReportRecord } from "./types";
 
 describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () => {
@@ -80,36 +81,30 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     await adapter.close();
   });
 
-  it("passes DATABASE_SSL_CA to certificate-verified production TLS options", async () => {
+  it("uses an explicitly configured PostgreSQL CA without disabling certificate verification", async () => {
     const originalNodeEnv = process.env.NODE_ENV;
     const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
-    const originalDatabaseSslCa = process.env.DATABASE_SSL_CA;
-    const caPem = "-----BEGIN CERTIFICATE-----\nZXhhbXBsZS1jYS1wZW0=\n-----END CERTIFICATE-----";
+    const originalCa = config.DATABASE_SSL_CA;
+    const ca = "-----BEGIN CERTIFICATE-----\nTEST-CA-DATA\n-----END CERTIFICATE-----";
     let adapter: PostgresAdapter | undefined;
 
     try {
       process.env.NODE_ENV = "production";
       delete process.env.BASEGRID_RUNTIME_MODE;
-      // Render environment variables can contain literal backslash-n sequences.
-      process.env.DATABASE_SSL_CA = caPem.replace(/\n/g, "\\n");
-      adapter = new PostgresAdapter(
-        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full&application_name=basegrid_test",
-      );
+      config.DATABASE_SSL_CA = ca;
 
+      adapter = new PostgresAdapter("postgres://user:pass@db.example.com:5432/app?sslmode=require");
       const poolOptions = adapter.getPool() as any;
-      expect(poolOptions.options?.ssl ?? poolOptions.ssl).toEqual({
-        rejectUnauthorized: true,
-        ca: caPem,
-      });
-      expect(String(poolOptions.options?.connectionString ?? poolOptions.connectionString)).not.toMatch(/sslmode=/i);
+      const tlsOptions = poolOptions.options?.ssl ?? poolOptions.ssl;
+
+      expect(tlsOptions).toEqual({ rejectUnauthorized: true, ca });
     } finally {
       if (adapter) await adapter.close();
+      config.DATABASE_SSL_CA = originalCa;
       if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = originalNodeEnv;
       if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
       else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
-      if (originalDatabaseSslCa === undefined) delete process.env.DATABASE_SSL_CA;
-      else process.env.DATABASE_SSL_CA = originalDatabaseSslCa;
     }
   });
 

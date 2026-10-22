@@ -45,6 +45,7 @@ export function loadConfig(env = process.env): ServerConfig {
   let FRONTEND_URL = env.FRONTEND_URL;
   let CORS_ORIGINS_RAW = env.CORS_ORIGINS;
   let DATABASE_URL = env.DATABASE_URL;
+  // Optional PEM CA bundle for PostgreSQL providers whose CA is not in Node.js's default trust store.
   const DATABASE_SSL_CA = env.DATABASE_SSL_CA?.replace(/\\n/g, "\n").trim() || undefined;
   let REDIS_URL = env.REDIS_URL;
   const REDIS_HOST = env.REDIS_HOST || "127.0.0.1";
