@@ -124,7 +124,25 @@ reportsRouter.get(
       throw new ValidationError("ID non valido.");
     }
     const report = await reportsService.getReportById(req.user.companyId, reportId);
-    res.status(200).json(report);
+    // Keep internal tenant identifiers and raw signature image data out of the general API response.
+    res.status(200).json({
+      id: report.id,
+      customerId: report.customerId,
+      locationId: report.locationId,
+      locationName: report.locationName,
+      interventionId: report.interventionId,
+      date: report.date,
+      time: report.time,
+      workHours: report.workHours,
+      travelHours: report.travelHours,
+      status: report.status,
+      client: report.client,
+      technician: report.technician,
+      materialsStatus: report.materialsStatus || "unverified",
+      materialsUsed: report.materialsUsed,
+      notes: report.notes,
+      createdAt: report.createdAt,
+    });
   })
 );
 

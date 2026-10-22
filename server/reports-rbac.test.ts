@@ -286,6 +286,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
         workHours: 2,
         travelHours: 0.5,
         status: "submitted",
+        signatureBase64: "private-signature-data",
       });
 
       const getRes = await apiRequest(`/api/v1/reports/${report.id}`, {
@@ -294,6 +295,8 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       });
       expect(getRes.status).toBe(200);
       expect(getRes.data.id).toBe(report.id);
+      expect(getRes.data.signatureBase64).toBeUndefined();
+      expect(getRes.data.companyId).toBeUndefined();
 
       const pdfRes = await apiRequest(`/api/v1/reports/${report.id}/pdf`, {
         cookies: tech.cookies,
