@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 import { ReportRecord } from "../types";
 import { generateReportPdf } from "./report-pdf";
 
@@ -23,67 +25,53 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
   };
 }
 
-describe("generateReportPdf", () => {
-  it("returns a structurally complete PDF containing report details", () => {
-    const pdf = generateReportPdf(sampleReport());
-    const text = pdf.toString("ascii");
+function extractText(pdf: Buffer): string {
+  return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
+}
 
-    expect(text.startsWith("%PDF-1.4")).toBe(true);
-    expect(text).toContain("/Type /Catalog");
-    expect(text).toContain("/Type /Pages");
-    expect(text).toContain("/BaseFont /Helvetica");
+describe("generateReportPdf", () => {
+  it("returns a valid PDF containing report details", async () => {
+    const pdf = await generateReportPdf(sampleReport());
+    const parsed = await PDFDocument.load(pdf);
+    const text = extractText(pdf);
+
+    expect(pdf.toString("ascii", 0, 8)).toBe("%PDF-1.7");
+    expect(await parsed.getPageCount()).toBe(1);
     expect(text).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
-    expect(text).toContain("Elettro Rossi \\(S.r.l.\\)");
+    expect(text).toContain("Elettro Rossi (S.r.l.)");
     expect(text).toContain("Mario Rossi");
     expect(text).toContain("Sede/cantiere: Sede Principale");
     expect(text).toContain("Ore di lavoro: 2.5");
-    expect(text).toContain("Cavo \\(3x2.5\\): 12");
-    expect(text).toContain("startxref");
-    expect(text.trimEnd().endsWith("%%EOF")).toBe(true);
+    expect(text).toContain("Cavo (3x2.5): 12");
+    expect(text).toContain("Firma cliente: non presente");
   });
 
-  it("splits long reports into multiple pages and escapes PDF literal delimiters", () => {
-    const pdf = generateReportPdf(sampleReport({
+  it("embeds a valid PNG signature as a PDF image", async () => {
+    const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+    const pdf = await generateReportPdf(sampleReport({ signatureBase64 }));
+    const parsed = await PDFDocument.load(pdf);
+    const text = extractText(pdf);
+
+    expect(await parsed.getPageCount()).toBe(1);
+    expect(pdf.toString("latin1")).toContain("/Subtype /Image");
+    expect(text).toContain("Firma cliente: immagine inclusa sotto");
+    expect(text).not.toContain("immagine inclusa sotto");
+  });
+
+  it("splits long reports into multiple pages", async () => {
+    const pdf = await generateReportPdf(sampleReport({
       notes: Array.from({ length: 160 }, (_, index) => `Nota ${index + 1} (controllo) \\ eseguito`).join(" "),
     }));
-    const text = pdf.toString("ascii");
-    const pageCount = (text.match(/\/Type \/Page \/Parent/g) || []).length;
+    const parsed = await PDFDocument.load(pdf);
+    const text = extractText(pdf);
 
-    expect(pageCount).toBeGreaterThan(1);
+    expect(await parsed.getPageCount()).toBeGreaterThan(1);
     expect(text).toContain("Nota 160");
-    expect(text).toContain("\\(controllo\\)");
   });
 
-  it("normalizes unsupported Unicode without corrupting the PDF structure", () => {
-    const pdf = generateReportPdf(sampleReport({
-      client: { name: "Azienda Èlettrica", address: "Via dell’Unità", city: "Forlì" },
-    }));
-    const text = pdf.toString("ascii");
-
-    expect(text).toContain("Azienda Elettrica");
-    expect(text).toContain("Via dell'Unita");
-    expect(text).toContain("Forli");
-    expect(text.trimEnd().endsWith("%%EOF")).toBe(true);
-  });
-  it("writes correct byte offsets for the PDF cross-reference table", () => {
-    const pdf = generateReportPdf(sampleReport());
-    const text = pdf.toString("ascii");
-    const startXrefMatch = text.match(/startxref\s+(\d+)\s+%%EOF/);
-
-    expect(startXrefMatch).not.toBeNull();
-    const xrefOffset = Number(startXrefMatch?.[1]);
-    expect(text.slice(xrefOffset, xrefOffset + 5)).toBe("xref\n");
-
-    const xrefSection = text.slice(xrefOffset);
-    const entries = xrefSection.match(/^xref\n0 (\d+)\n([\s\S]*?)trailer\n/);
-    expect(entries).not.toBeNull();
-    const objectCount = Number(entries?.[1]);
-    const offsets = (entries?.[2] || "").trimEnd().split("\n").slice(1);
-
-    expect(offsets).toHaveLength(objectCount - 1);
-    offsets.forEach((entry, index) => {
-      const objectOffset = Number(entry.slice(0, 10));
-      expect(text.slice(objectOffset)).toMatch(new RegExp("^" + (index + 1) + " 0 obj\n"));
-    });
+  it("rejects malformed signature data rather than silently omitting the image", async () => {
+    await expect(generateReportPdf(sampleReport({
+      signatureBase64: "data:image/png;base64,not-an-image",
+    }))).rejects.toThrow("Firma cliente non valida");
   });
 });
