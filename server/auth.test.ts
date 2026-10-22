@@ -797,8 +797,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
           csrf_token: "csrf",
         },
         headers: {
-          "x-csrf-token": "csrf",
-        },
+          "x-csrf-token": "csrf",        },
       });
 
       expect(deleteRes.status).toBe(404);
@@ -1598,7 +1597,6 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
     it("handles Resend provider 5xx error response gracefully", async () => {
       const { ProductionEmailService } = await import("./email-service");
       const prodSvc = new ProductionEmailService();
-
       const originalFetch = global.fetch;
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -1668,7 +1666,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       }
     });
 
-    it("handles resend-verification when email provider fails by revoking token and returning 502", async () => {
+    it("handles resend-verification when email provider fails without revealing account or provider state", async () => {
       const user = (await db.findUserByEmail("admin@rossi.it"))!;
       await db.updateUser(user.id, { emailConfirmed: false });
 
@@ -1682,8 +1680,8 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
           body: { email: "admin@rossi.it" },
         });
 
-        expect(resendRes.status).toBe(502);
-        expect(resendRes.body.detail).toMatch(/Impossibile inviare/i);
+        expect(resendRes.status).toBe(200);
+        expect(resendRes.body.message).toMatch(/indirizzo email è registrato e non ancora verificato/i);
       } finally {
         emailService.sendVerificationEmail = originalSend;
       }
@@ -2397,7 +2395,6 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       const tokenB = accessCookieB!.split(";")[0].split("=")[1];
       const refreshTokenB = refreshCookieB!.split(";")[0].split("=")[1];
       const csrfB = csrfCookieB!.split(";")[0].split("=")[1];
-
       const meDeviceB = await apiRequest("/api/v1/users/me", {
         method: "GET",
         headers: { "x-csrf-token": csrfB },
@@ -3015,5 +3012,4 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(loginRes.body.jwt).toBeUndefined();
     });
   });
-
 
