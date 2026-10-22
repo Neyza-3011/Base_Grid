@@ -12,6 +12,7 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
     travelHours: 0.5,
     status: "submitted",
     client: { name: "Elettro Rossi (S.r.l.)", address: "Via Roma 10", city: "Roma" },
+    locationName: "Sede Principale",
     technician: { fullName: "Mario Rossi" },
     materialsStatus: "used",
     materialsUsed: [{ name: "Cavo (3x2.5)", quantity: 12 }],
@@ -34,6 +35,7 @@ describe("generateReportPdf", () => {
     expect(text).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
     expect(text).toContain("Elettro Rossi \\(S.r.l.\\)");
     expect(text).toContain("Mario Rossi");
+    expect(text).toContain("Sede/cantiere: Sede Principale");
     expect(text).toContain("Ore di lavoro: 2.5");
     expect(text).toContain("Cavo \\(3x2.5\\): 12");
     expect(text).toContain("startxref");
