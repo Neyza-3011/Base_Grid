@@ -109,6 +109,30 @@ export function loadConfig(env = process.env): ServerConfig {
       );
     }
 
+    // Production browser sessions use secure cookies; reject plaintext HTTP origins.
+    let frontendUrl: URL;
+    try {
+      frontendUrl = new URL(FRONTEND_URL);
+    } catch {
+      throw new Error("CRITICAL CONFIG ERROR: FRONTEND_URL must be a valid HTTPS URL in production.");
+    }
+    if (frontendUrl.protocol !== "https:" || frontendUrl.username || frontendUrl.password) {
+      throw new Error("CRITICAL CONFIG ERROR: FRONTEND_URL must be a valid HTTPS URL in production.");
+    }
+
+    const configuredCorsOrigins = CORS_ORIGINS_RAW.split(",").map((origin) => origin.trim()).filter(Boolean);
+    for (const origin of configuredCorsOrigins) {
+      let parsedOrigin: URL;
+      try {
+        parsedOrigin = new URL(origin);
+      } catch {
+        throw new Error("CRITICAL CONFIG ERROR: every CORS_ORIGINS entry must be a valid HTTPS origin in production.");
+      }
+      if (parsedOrigin.protocol !== "https:" || parsedOrigin.origin !== origin || parsedOrigin.username || parsedOrigin.password) {
+        throw new Error("CRITICAL CONFIG ERROR: every CORS_ORIGINS entry must be an HTTPS origin without a path in production.");
+      }
+    }
+
     if (EMAIL_VERIFICATION_ENABLED) {
       if (!EMAIL_PROVIDER) {
         throw new Error(
