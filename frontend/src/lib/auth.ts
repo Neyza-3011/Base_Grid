@@ -162,7 +162,7 @@ export async function signupUser(
   pass: string,
   fullName: string,
   companyName?: string,
-): Promise<{ success: boolean; user?: UserSession; error?: string }> {
+): Promise<{ success: boolean; user?: UserSession; verificationRequired?: boolean; message?: string; error?: string }> {
   try {
     const res = await fetch("/api/v1/auth/register", {
       method: "POST",
@@ -178,6 +178,13 @@ export async function signupUser(
 
     if (res.ok) {
       const data = await res.json();
+      if (data.emailVerificationRequired === true) {
+        return {
+          success: true,
+          verificationRequired: true,
+          message: data.message || "Controlla la tua email per verificare l'account prima di accedere.",
+        };
+      }
       return { success: true, user: parseUserSession(data) };
     } else {
       const errorData = await res
