@@ -3,6 +3,7 @@ import { verifyAccessToken } from "../security";
 import { db } from "../db";
 import { CompanyRecord, UserRecord, UserRole } from "../types";
 import { asyncHandler } from "../async-handler";
+import { config } from "../config";
 
 // Extend Express Request interface to include authenticated user and company
 declare global {
@@ -44,6 +45,11 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
     return;
   }
 
+  if (config.EMAIL_VERIFICATION_ENABLED && !user.emailConfirmed) {
+    res.status(403).json({ detail: "Conferma l'indirizzo email prima di accedere." });
+    return;
+  }
+
   const tokenAuthVersion = payload.authVersion ?? 0;
   if (tokenAuthVersion !== user.authVersion) {
     res.status(401).json({ detail: "Sessione invalidata per motivi di sicurezza. Effettua nuovamente l'accesso." });
@@ -75,7 +81,7 @@ export const optionalAuthenticate = asyncHandler(async (req: Request, res: Respo
   if (payload && payload.sub) {
     const user = await db.findUserById(payload.sub);
 
-    if (user && user.isActive) {
+    if (user && user.isActive && (!config.EMAIL_VERIFICATION_ENABLED || user.emailConfirmed)) {
       const tokenAuthVersion = payload.authVersion ?? 0;
       if (tokenAuthVersion === user.authVersion) {
         req.user = user;
