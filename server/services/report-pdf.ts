@@ -121,7 +121,7 @@ export async function generateReportPdf(report: ReportRecord): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const lines = reportLines(report, Boolean(signatureData));
-  const linesPerPage = Math.floor((TOP - (signatureData ? SIGNATURE_RESERVED_HEIGHT : BOTTOM)) / LINE_HEIGHT);
+  const linesPerPage = Math.floor((TOP - (signatureData ? BOTTOM + SIGNATURE_RESERVED_HEIGHT : BOTTOM)) / LINE_HEIGHT);
   const pageLines: string[][] = [];
   for (let i = 0; i < lines.length; i += linesPerPage) {
     pageLines.push(lines.slice(i, i + linesPerPage));
