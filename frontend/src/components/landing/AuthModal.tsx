@@ -45,7 +45,8 @@ export function AuthModal({
         const res = await signupUser(email, password, fullName);
         if (res.success && res.verificationRequired) {
           toast.success(
-            res.message || "Controlla la tua email per verificare l'account prima di accedere.",
+            res.message ||
+              "Controlla la tua email per verificare l'account prima di accedere.",
           );
           onClose();
           onSwitch("login");
