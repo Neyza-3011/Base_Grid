@@ -1073,8 +1073,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         );
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
@@ -1106,8 +1108,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         expect(res.error).toBe("provider_error_422");
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
@@ -1137,8 +1141,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         expect(res.error).toBe("provider_timeout");
       } finally {
         globalThis.fetch = originalFetch;
-        if (origKey) process.env.EMAIL_API_KEY = origKey;
-        if (origFrom) process.env.EMAIL_FROM = origFrom;
+        if (origKey === undefined) delete process.env.EMAIL_API_KEY;
+        else process.env.EMAIL_API_KEY = origKey;
+        if (origFrom === undefined) delete process.env.EMAIL_FROM;
+        else process.env.EMAIL_FROM = origFrom;
       }
     });
 
