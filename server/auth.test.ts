@@ -121,7 +121,7 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
   beforeEach(() => { (rateLimiter as any).localFallback.clear(); });
 
   describe("1. Registration (/api/v1/auth/register)", async () => {
-    it("creates new user & company and sets HttpOnly cookies without leaking token in JSON body", async () => {
+    it("creates new user and requires email verification before issuing a session", async () => {
       const res = await apiRequest("/api/v1/auth/register", {
         method: "POST",
         body: {
@@ -133,25 +133,16 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       });
 
       expect(res.status).toBe(201);
-      expect(res.body.email).toBe("nuovo.cliente@azienda.it");
-      expect(res.body.fullName).toBe("Mario Rossi");
-      expect(res.body.role).toBe("owner");
-      expect(res.body.companyName).toBe("Elettro Rossi Srl");
-      expect(res.body.passwordHash).toBeUndefined();
-      expect(res.body.salt).toBeUndefined();
+      expect(res.body.emailVerificationRequired).toBe(true);
+      expect(res.body.message).toMatch(/verificare l'account prima di accedere/i);
       expect(res.body.access_token).toBeUndefined();
       expect(res.body.refreshToken).toBeUndefined();
 
-      // Check cookies set: access_token, refresh_token (HttpOnly) & csrf_token
-      const accessCookie = res.setCookieHeaders.find((c) => c.startsWith("access_token="));
-      const refreshCookie = res.setCookieHeaders.find((c) => c.startsWith("refresh_token="));
-      const csrfCookie = res.setCookieHeaders.find((c) => c.startsWith("csrf_token="));
-
-      expect(accessCookie).toBeDefined();
-      expect(accessCookie).toContain("HttpOnly");
-      expect(refreshCookie).toBeDefined();
-      expect(refreshCookie).toContain("HttpOnly");
-      expect(csrfCookie).toBeDefined();
+      // No authenticated session is issued before email verification.
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
+      const createdUser = await db.findUserByEmail("nuovo.cliente@azienda.it");
+      expect(createdUser?.emailConfirmed).toBe(false);
     });
 
     it("rejects invalid emails and weak passwords (<8 chars)", async () => {
@@ -249,6 +240,27 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       });
 
       expect(res.status).toBe(401);
+    });
+
+    it("rejects login for an unverified account when email verification is enabled", async () => {
+      const { user } = await db.createUser({
+        email: "unverified.login@azienda.it",
+        fullName: "Unverified Login",
+        password: "SecurePassword123!",
+        companyName: "Unverified Co",
+        emailConfirmed: false,
+        role: "owner",
+      });
+
+      const res = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: user.email, password: "SecurePassword123!" },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.detail).toMatch(/conferma l'indirizzo email/i);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
     });
 
     it("rejects inactive users with 401", async () => {
@@ -1655,8 +1667,10 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
           },
         });
 
-        // Registration succeeds in creating user, returning 201
-        expect(res.status).toBe(201);
+        // Account creation is retained, but no session is issued when delivery fails.
+        expect(res.status).toBe(503);
+        expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+        expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
 
         const createdUser = await db.findUserByEmail("provider.fail@azienda.it");
         expect(createdUser).not.toBeNull();
