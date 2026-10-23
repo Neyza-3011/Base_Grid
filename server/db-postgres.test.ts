@@ -582,6 +582,44 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(crossTenantReport).toBeNull();
   });
 
+  it("updateDraftReport atomically scopes updates to tenant-owned drafts", async () => {
+    const rawRow = {
+      id: "rep-draft-1", companyId: "comp-A", date: "2026-10-20", time: "11:30",
+      workHours: 2.5, travelHours: 0.5, status: "draft",
+      client: { name: "Cliente aggiornato", address: "Via Nuova 2", city: "Roma" },
+      technician: { fullName: "Tech 1" }, materialsStatus: "used",
+      materialsUsed: [{ name: "Cavo FG16", quantity: 2 }], notes: "Bozza aggiornata",
+      signatureBase64: "", createdAt: new Date("2026-10-20T10:00:00Z"),
+    };
+    mockPool.query.mockResolvedValueOnce({ rowCount: 1, rows: [rawRow] });
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.updateDraftReport("comp-A", "rep-draft-1", {
+      date: "2026-10-20", time: "11:30", workHours: 2.5, travelHours: 0.5,
+      status: "draft", client: rawRow.client, materialsStatus: "used",
+      materialsUsed: rawRow.materialsUsed, notes: "Bozza aggiornata",
+    });
+    expect(result.status).toBe("updated");
+    if (result.status === "updated") {
+      expect(result.report.companyId).toBe("comp-A");
+      expect(result.report.status).toBe("draft");
+    }
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain('WHERE id = $1 AND "companyId" = $2 AND status = \'draft\'');
+    expect(sql).toContain("RETURNING *");
+    expect(params[0]).toBe("rep-draft-1");
+    expect(params[1]).toBe("comp-A");
+  });
+
+  it("updateDraftReport distinguishes a non-draft report from a missing tenant report", async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ status: "submitted" }] });
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.updateDraftReport("comp-A", "rep-submitted", {});
+    expect(result).toEqual({ status: "not_draft" });
+    expect(mockPool.query.mock.calls[1][1]).toEqual(["rep-submitted", "comp-A"]);
+  });
+
   describe("authVersion PostgreSQL Implementation & Security (P0.4.4-B.1)", () => {
     it("incrementUserAuthVersion calls this.pool.query with atomic UPDATE and RETURNING", async () => {
       mockPool.query.mockResolvedValueOnce({
