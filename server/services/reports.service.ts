@@ -438,14 +438,12 @@ export class ReportsService {
       throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
     }
 
-    const workHours = typeof body.work_hours === "number" ? body.work_hours :
-      typeof body.work_hours === "string" && body.work_hours.trim() !== "" ? Number(body.work_hours) : NaN;
+    const workHours = typeof body.work_hours === "number" ? body.work_hours : NaN;
     if (!Number.isFinite(workHours) || workHours < 0 || workHours > 24) {
       throw new ValidationError("Ore di lavoro non valide (devono essere un numero compreso tra 0 e 24).");
     }
     const travelHours = body.travel_hours === undefined ? existing.travelHours :
-      typeof body.travel_hours === "number" ? body.travel_hours :
-      typeof body.travel_hours === "string" && body.travel_hours.trim() !== "" ? Number(body.travel_hours) : NaN;
+      typeof body.travel_hours === "number" ? body.travel_hours : NaN;
     if (!Number.isFinite(travelHours) || travelHours < 0 || travelHours > 24) {
       throw new ValidationError("Ore di viaggio non valide (devono essere un numero compreso tra 0 e 24).");
     }
