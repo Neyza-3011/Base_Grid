@@ -13,8 +13,9 @@ import {
   AlertCircle,
   RefreshCw,
   Wrench,
+  Pencil,
 } from "lucide-react";
-import { getReports, addReport, removeReport, Report } from "@/lib/reportsStorage";
+import { getReports, addReport, updateDraftReport, removeReport, Report } from "@/lib/reportsStorage";
 import { Intervention } from "@/lib/api/interventions";
 import { UserSession } from "@/lib/auth";
 import { PdfPreviewModal } from "./PdfPreviewModal";
@@ -60,6 +61,7 @@ export function ReportsView({
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Tutti");
   const [previewReportId, setPreviewReportId] = useState<string | null>(null);
+  const [editingReport, setEditingReport] = useState<Report | null>(null);
 
   // Quick Create Modal State
   const [showQuickCreate, setShowQuickCreate] = useState(false);
@@ -118,6 +120,7 @@ export function ReportsView({
   }, [loadAllData]);
 
   const resetForm = useCallback(() => {
+    setEditingReport(null);
     setLinkedIntervention(null);
     setSignatureBase64("");
     const signatureCanvas = signatureCanvasRef.current;
@@ -196,6 +199,25 @@ export function ReportsView({
     if (submitting) return;
     setShowQuickCreate(false);
     resetForm();
+  };
+
+  const handleEditDraft = (report: Report) => {
+    if (!canCreate || report.status !== "draft") {
+      toast.error("È possibile modificare soltanto bozze per cui disponi dei permessi.");
+      return;
+    }
+    resetForm();
+    setEditingReport(report);
+    setNewClientName(report.client?.name || "");
+    setNewClientAddress(report.client?.address || "");
+    setNewHours(String(report.work_hours ?? 0));
+    setNewTravelHours(String(report.travel_hours ?? 0));
+    setNewStatus("draft");
+    setNewNotes(report.notes || "");
+    setMaterialsMode(report.materials_status || (report.materials_used.length ? "used" : "unverified"));
+    setNewMaterialName(report.materials_used[0]?.name || "");
+    setNewMaterialQty(String(report.materials_used[0]?.quantity ?? 1));
+    setShowQuickCreate(true);
   };
 
   const handleOpenGenericCreate = () => {
@@ -333,28 +355,41 @@ export function ReportsView({
         materials = [];
       }
 
-      const created = await addReport({
+      const reportInput = {
         clientName: newClientName.trim(),
-        clientAddress: newClientAddress.trim() || undefined,
-        customerId: linkedIntervention?.customerId,
-        locationId: linkedIntervention?.locationId,
-        interventionId: linkedIntervention?.id,
+        clientAddress: newClientAddress.trim() || "",
         hours: newHours.trim() === "" && newStatus === "draft" ? 0 : parsedWorkHours,
         travelHours: parsedTravelHours,
         status: newStatus,
-        notes: newNotes.trim() || undefined,
+        notes: newNotes.trim() || "",
         materialsStatus,
-        materials,
+        materials: materialsMode === "used" && editingReport
+          ? [...materials, ...editingReport.materials_used.slice(1)]
+          : materials,
+        date: editingReport?.date,
+        time: editingReport?.time,
         signatureBase64: signatureBase64 || undefined,
-      });
+      };
+      const saved = editingReport
+        ? await updateDraftReport(editingReport.id, {
+            ...reportInput,
+            date: reportInput.date || new Date().toISOString().slice(0, 10),
+            time: reportInput.time || "10:00",
+          })
+        : await addReport({
+            ...reportInput,
+            customerId: linkedIntervention?.customerId,
+            locationId: linkedIntervention?.locationId,
+            interventionId: linkedIntervention?.id,
+          });
 
-      toast.success(`Rapportino ${created.id} creato con successo!`, {
-        description: `Cliente: ${created.client.name}`,
-      });
-
+      toast.success(
+        editingReport ? `Bozza ${saved.id} aggiornata.` : `Rapportino ${saved.id} creato con successo!`,
+        { description: `Cliente: ${saved.client.name}` },
+      );
       setShowQuickCreate(false);
       resetForm();
-      setReports((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
+      setReports((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Errore nella creazione del rapportino.";
       toast.error(msg);
@@ -607,6 +642,16 @@ export function ReportsView({
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
                   <span className="text-[11px] text-blue-400 font-mono">{r.id}</span>
                   <div className="flex items-center gap-2">
+                    {canCreate && r.status === "draft" && (
+                      <button
+                        onClick={() => handleEditDraft(r)}
+                        aria-label={`Modifica bozza ${r.id}`}
+                        className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 flex items-center gap-1.5 text-xs text-amber-300 font-medium transition active:scale-95"
+                        title="Modifica bozza"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Modifica
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDownload(r.id)}
                       aria-label={`Anteprima e Stampa PDF per rapportino ${r.id}`}
@@ -724,6 +769,16 @@ export function ReportsView({
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2.5">
+                        {canCreate && r.status === "draft" && (
+                          <button
+                            onClick={() => handleEditDraft(r)}
+                            aria-label={`Modifica bozza ${r.id}`}
+                            className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 flex items-center gap-1.5 text-xs text-amber-300 font-medium transition active:scale-95"
+                            title="Modifica bozza"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Modifica
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDownload(r.id)}
                           aria-label={`Anteprima e Stampa PDF per rapportino ${r.id}`}
@@ -768,7 +823,7 @@ export function ReportsView({
             <div className="flex items-center gap-2 border-b border-white/10 pb-3">
               <FileText className="h-5 w-5 text-blue-400" />
               <h3 className="text-lg font-bold">
-                {linkedIntervention ? "Rapportino da Intervento" : "Nuovo Rapportino Rapido"}
+                {editingReport ? "Modifica Rapportino in Bozza" : linkedIntervention ? "Rapportino da Intervento" : "Nuovo Rapportino Rapido"}
               </h3>
             </div>
 
@@ -999,7 +1054,7 @@ export function ReportsView({
                       Salvataggio...
                     </>
                   ) : (
-                    "Salva Rapportino"
+                    editingReport ? "Salva modifiche" : "Salva Rapportino"
                   )}
                 </button>
               </div>
