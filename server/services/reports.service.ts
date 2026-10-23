@@ -260,6 +260,12 @@ export class ReportsService {
     const finalStatus: "draft" | "submitted" =
       status === "draft" ? "draft" : "submitted";
 
+    // A submitted field report must record positive working time. Drafts may be
+    // saved incomplete so the technician can resume data entry later.
+    if (finalStatus === "submitted" && workHours <= 0) {
+      throw new ValidationError("Per inviare il rapportino le ore di lavoro devono essere maggiori di zero.");
+    }
+
     // notes: optional string, max 2000 chars
     let safeNotes = "";
     if (notes !== undefined && notes !== null) {
