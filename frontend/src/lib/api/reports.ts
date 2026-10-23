@@ -261,7 +261,8 @@ export async function updateDraftReport(
     return mapDtoToReport(await parseResponseOrThrow<ApiReportResponse>(res));
   } catch (err: unknown) {
     if (err instanceof ReportsApiError) throw err;
-    const message = err instanceof Error ? err.message : "Impossibile aggiornare il rapportino sul server.";
+    const message =
+      err instanceof Error ? err.message : "Impossibile aggiornare il rapportino sul server.";
     throw new ReportsApiError(message, 0);
   }
 }
