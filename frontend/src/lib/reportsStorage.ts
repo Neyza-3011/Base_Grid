@@ -16,7 +16,13 @@ import {
   UpdateDraftReportPayload,
 } from "./api/reports";
 
-export type { Report, MaterialItem, MaterialsStatus, CreateReportPayload, UpdateDraftReportPayload };
+export type {
+  Report,
+  MaterialItem,
+  MaterialsStatus,
+  CreateReportPayload,
+  UpdateDraftReportPayload,
+};
 
 export interface AddReportInput {
   clientName: string;
