@@ -228,6 +228,8 @@ describe("P1.6 Migration 007 & 008 Referential Integrity & Immutability", () => 
       const mockClient = {
         query: vi.fn().mockImplementation(async (sql: string, params?: any[]) => {
           executedQueries.push({ sql, params });
+          if (sql.includes("pg_try_advisory_lock")) return { rows: [{ acquired: true }] };
+          if (sql.includes("pg_advisory_unlock")) return { rows: [{ released: true }] };
           if (sql.includes("FROM schema_migrations") && sql.includes("SELECT")) {
             return {
               rows: [
