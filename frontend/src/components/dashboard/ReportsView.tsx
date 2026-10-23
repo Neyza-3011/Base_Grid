@@ -148,7 +148,7 @@ export function ReportsView({
     canvas.setPointerCapture(event.pointerId);
     context.beginPath();
     context.moveTo(x, y);
-    context.strokeStyle = "#111827";
+    context.strokeStyle = "#000000";
     context.lineWidth = 3;
     context.lineCap = "round";
     context.lineJoin = "round";
