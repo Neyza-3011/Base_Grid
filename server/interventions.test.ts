@@ -703,6 +703,56 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(res.data.detail || res.data.error).toMatch(/non consentita/i);
     });
 
+    it("rejects completion when actual hours are missing or zero", async () => {
+      const missingHoursIntervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Completamento senza ore",
+        status: "in_lavorazione",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const missingHoursResponse = await apiRequest(
+        `/api/v1/interventions/${missingHoursIntervention.id}/transition`,
+        {
+          method: "POST",
+          cookies: adminA.cookies,
+          headers: adminA.headers,
+          body: { targetStatus: "completato" },
+        }
+      );
+
+      expect(missingHoursResponse.status).toBe(400);
+      expect(missingHoursResponse.data.detail).toMatch(/ore effettive maggiori di zero/i);
+      const unchangedMissing = await db.getInterventionByIdAndCompany(missingHoursIntervention.id, companyA);
+      expect(unchangedMissing?.status).toBe("in_lavorazione");
+
+      const zeroHoursIntervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Completamento con zero ore",
+        status: "in_lavorazione",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const zeroHoursResponse = await apiRequest(
+        `/api/v1/interventions/${zeroHoursIntervention.id}/transition`,
+        {
+          method: "POST",
+          cookies: adminA.cookies,
+          headers: adminA.headers,
+          body: { targetStatus: "completato", actualHours: 0 },
+        }
+      );
+
+      expect(zeroHoursResponse.status).toBe(400);
+      expect(zeroHoursResponse.data.detail).toMatch(/ore effettive maggiori di zero/i);
+      const unchangedZero = await db.getInterventionByIdAndCompany(zeroHoursIntervention.id, companyA);
+      expect(unchangedZero?.status).toBe("in_lavorazione");
+    });
+
     it("rejects transition to 'assegnato' if no technician is assigned or provided", async () => {
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
