@@ -288,6 +288,31 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       expect(result.notes).toBe("Bozza preliminare");
     });
 
+    it("rejects a submitted report with zero working hours but permits an incomplete zero-hour draft", async () => {
+      const basePayload = {
+        client_name: "Cliente",
+        work_hours: 0,
+        travel_hours: 0,
+        date: "2026-09-26",
+        time: "10:00",
+        materials_status: "unverified" as const,
+      };
+
+      await expect(
+        reportsService.createReport("comp-tenant-a", "Tecnico", {
+          ...basePayload,
+          status: "submitted",
+        })
+      ).rejects.toThrow(/ore di lavoro devono essere maggiori di zero/i);
+
+      const draft = await reportsService.createReport("comp-tenant-a", "Tecnico", {
+        ...basePayload,
+        status: "draft",
+      });
+      expect(draft.status).toBe("draft");
+      expect(draft.work_hours).toBe(0);
+    });
+
     it("rejects invalid date format", async () => {
       const invalidPayload = {
         client_name: "Cliente",
