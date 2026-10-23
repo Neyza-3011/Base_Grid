@@ -418,10 +418,10 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
         materials_used: [{ name: "Cavo", quantity: 2 }],
       };
 
-      const result = await updateDraftReport("rep-draft/12", payload);
+      const result = await updateDraftReport("rep-draft-12", payload);
       expect(result.id).toBe("rep-draft-12");
       expect(global.fetch).toHaveBeenCalledWith(
-        "/api/v1/reports/rep-draft%2F12",
+        "/api/v1/reports/rep-draft-12",
         expect.objectContaining({
           method: "PATCH",
           credentials: "include",
