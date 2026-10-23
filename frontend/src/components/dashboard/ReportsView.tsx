@@ -288,24 +288,45 @@ export function ReportsView({
       return;
     }
 
+    const parsedWorkHours = newHours.trim() === "" ? NaN : Number(newHours);
+    const parsedTravelHours = newTravelHours.trim() === "" ? 0 : Number(newTravelHours);
+    if (
+      (newStatus === "submitted" &&
+        (!Number.isFinite(parsedWorkHours) || parsedWorkHours <= 0 || parsedWorkHours > 24)) ||
+      (newStatus === "draft" &&
+        newHours.trim() !== "" &&
+        (!Number.isFinite(parsedWorkHours) || parsedWorkHours < 0 || parsedWorkHours > 24))
+    ) {
+      toast.error("Inserisci ore di lavoro valide. Per inviare il rapportino devono essere maggiori di zero (massimo 24).");
+      return;
+    }
+    if (!Number.isFinite(parsedTravelHours) || parsedTravelHours < 0 || parsedTravelHours > 24) {
+      toast.error("Inserisci ore di viaggio valide (da 0 a 24).");
+      return;
+    }
+    if (materialsMode === "used") {
+      const quantity = Number(newMaterialQty);
+      if (!newMaterialName.trim()) {
+        toast.error("Hai selezionato 'Materiali usati': inserisci almeno un materiale oppure seleziona un'altra opzione.");
+        return;
+      }
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        toast.error("La quantità del materiale deve essere un numero intero maggiore di zero.");
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       let materials: { name: string; quantity: number }[] = [];
-      let materialsStatus: "used" | "none" | "unverified" = materialsMode;
+      const materialsStatus: "used" | "none" | "unverified" = materialsMode;
 
       if (materialsMode === "used") {
-        if (newMaterialName.trim()) {
-          materials = [{ name: newMaterialName.trim(), quantity: parseInt(newMaterialQty) || 1 }];
-          materialsStatus = "used";
-        } else {
-          materialsStatus = "unverified";
-        }
+        materials = [{ name: newMaterialName.trim(), quantity: Number(newMaterialQty) }];
       } else if (materialsMode === "none") {
         materials = [];
-        materialsStatus = "none";
       } else {
         materials = [];
-        materialsStatus = "unverified";
       }
 
       const created = await addReport({
@@ -314,8 +335,8 @@ export function ReportsView({
         customerId: linkedIntervention?.customerId,
         locationId: linkedIntervention?.locationId,
         interventionId: linkedIntervention?.id,
-        hours: parseFloat(newHours) || 1,
-        travelHours: parseFloat(newTravelHours) || 0,
+        hours: newHours.trim() === "" && newStatus === "draft" ? 0 : parsedWorkHours,
+        travelHours: parsedTravelHours,
         status: newStatus,
         notes: newNotes.trim() || undefined,
         materialsStatus,
@@ -800,7 +821,7 @@ export function ReportsView({
                   <input
                     type="number"
                     step="0.5"
-                    min="0.5"
+                    min={newStatus === "draft" ? "0" : "0.5"}
                     max="24"
                     disabled={submitting}
                     value={newHours}
@@ -945,6 +966,7 @@ export function ReportsView({
                 <label className="text-xs font-semibold text-white/70">Note Intervento</label>
                 <textarea
                   rows={2}
+                  maxLength={2000}
                   disabled={submitting}
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
