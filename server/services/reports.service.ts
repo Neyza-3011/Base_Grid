@@ -305,10 +305,11 @@ export class ReportsService {
         if (
           typeof m.quantity !== "number" ||
           !Number.isFinite(m.quantity) ||
-          m.quantity < 0
+          !Number.isInteger(m.quantity) ||
+          m.quantity < 1
         ) {
           throw new ValidationError(
-            "Quantità materiale non valida (deve essere un numero finito >= 0)."
+            "Quantità materiale non valida (deve essere un numero intero >= 1)."
           );
         }
         safeMaterials.push({
