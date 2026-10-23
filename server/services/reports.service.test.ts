@@ -133,6 +133,16 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
         mockReports.set(record.id, record);
         return record;
       }),
+      updateDraftReport: vi.fn().mockImplementation(async (companyId: string, reportId: string, updates: Partial<ReportRecord>) => {
+        const current = mockReports.get(reportId);
+        if (!current || current.companyId !== companyId) return { status: "not_found" };
+        if (current.status !== "draft") return { status: "not_draft" };
+        const updated = { ...current, ...updates, client: updates.client ?? current.client,
+          technician: current.technician, companyId: current.companyId, id: current.id,
+          createdAt: current.createdAt };
+        mockReports.set(reportId, updated);
+        return { status: "updated", report: updated };
+      }),
       deleteReport: vi.fn().mockImplementation(async (companyId: string, reportId: string) => {
         const report = mockReports.get(reportId);
         if (!report || report.companyId !== companyId) return false;
@@ -745,6 +755,79 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
           expect(found?.intervention_id).toBe("int-1-tenant-a");
         });
       });
+    });
+  });
+
+  describe("updateDraftReport", () => {
+    const validDraftUpdate: CreateReportRequest = {
+      client_name: "Cliente aggiornato",
+      client_address: "Via Nuova 2",
+      client_city: "Roma",
+      work_hours: 2.5,
+      travel_hours: 0.5,
+      date: "2026-10-20",
+      time: "11:30",
+      notes: "Bozza aggiornata",
+      materials_status: "used",
+      materials_used: [{ name: "Cavo FG16", quantity: 2 }],
+      status: "draft",
+    };
+
+    it("updates a tenant-owned draft and preserves server-owned fields", async () => {
+      mockReports.set("draft-001", {
+        id: "draft-001", companyId: "comp-tenant-a", customerId: "cust-tenant-a",
+        locationId: "loc-1-cust-a", interventionId: "int-1-tenant-a",
+        date: "2026-09-26", time: "10:00", workHours: 0, travelHours: 0,
+        status: "draft", client: { name: "Cliente prima" }, technician: { fullName: "Mario Rossi" },
+        materialsStatus: "unverified", materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+
+      const result = await reportsService.updateDraftReport("comp-tenant-a", "draft-001", validDraftUpdate);
+      expect(result.id).toBe("draft-001");
+      expect(result.status).toBe("draft");
+      expect(result.client.name).toBe("Cliente aggiornato");
+      expect(mockReports.get("draft-001")?.companyId).toBe("comp-tenant-a");
+      expect(mockReports.get("draft-001")?.technician.fullName).toBe("Mario Rossi");
+      expect(mockReports.get("draft-001")?.interventionId).toBe("int-1-tenant-a");
+    });
+
+    it("rejects updates to submitted reports", async () => {
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "rep-001", validDraftUpdate))
+        .rejects.toThrow("È possibile modificare soltanto un rapportino in bozza.");
+      expect(mockDb.updateDraftReport).not.toHaveBeenCalled();
+    });
+
+    it("does not expose another tenant's draft", async () => {
+      mockReports.set("draft-tenant-b", {
+        id: "draft-tenant-b", companyId: "comp-tenant-b", date: "2026-09-26", time: "10:00",
+        workHours: 0, travelHours: 0, status: "draft", client: { name: "Tenant B" },
+        technician: { fullName: "Tecnico B" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "draft-tenant-b", validDraftUpdate))
+        .rejects.toThrow("Rapportino non trovato o non accessibile.");
+    });
+
+    it("rejects client attempts to modify server-owned fields", async () => {
+      mockReports.set("draft-001", {
+        id: "draft-001", companyId: "comp-tenant-a", date: "2026-09-26", time: "10:00",
+        workHours: 0, travelHours: 0, status: "draft", client: { name: "Cliente" },
+        technician: { fullName: "Mario Rossi" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "draft-001", {
+        ...validDraftUpdate, companyId: "comp-tenant-b",
+      } as any)).rejects.toThrow("Il payload contiene campi non consentiti");
+      expect(mockDb.updateDraftReport).not.toHaveBeenCalled();
+    });
+
+    it("rejects submitting an incomplete draft", async () => {
+      mockReports.set("draft-001", {
+        id: "draft-001", companyId: "comp-tenant-a", date: "2026-09-26", time: "10:00",
+        workHours: 0, travelHours: 0, status: "draft", client: { name: "Cliente" },
+        technician: { fullName: "Mario Rossi" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "draft-001", {
+        ...validDraftUpdate, work_hours: 0, status: "submitted",
+      })).rejects.toThrow("Per inviare il rapportino le ore di lavoro devono essere maggiori di zero.");
     });
   });
 
