@@ -297,7 +297,9 @@ export function ReportsView({
         newHours.trim() !== "" &&
         (!Number.isFinite(parsedWorkHours) || parsedWorkHours < 0 || parsedWorkHours > 24))
     ) {
-      toast.error("Inserisci ore di lavoro valide. Per inviare il rapportino devono essere maggiori di zero (massimo 24).");
+      toast.error(
+        "Inserisci ore di lavoro valide. Per inviare il rapportino devono essere maggiori di zero (massimo 24).",
+      );
       return;
     }
     if (!Number.isFinite(parsedTravelHours) || parsedTravelHours < 0 || parsedTravelHours > 24) {
@@ -307,7 +309,9 @@ export function ReportsView({
     if (materialsMode === "used") {
       const quantity = Number(newMaterialQty);
       if (!newMaterialName.trim()) {
-        toast.error("Hai selezionato 'Materiali usati': inserisci almeno un materiale oppure seleziona un'altra opzione.");
+        toast.error(
+          "Hai selezionato 'Materiali usati': inserisci almeno un materiale oppure seleziona un'altra opzione.",
+        );
         return;
       }
       if (!Number.isInteger(quantity) || quantity < 1) {
