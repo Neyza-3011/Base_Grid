@@ -661,6 +661,19 @@ export class InterventionService {
       ...updates,
     };
 
+    // Completing field work requires a positive, persisted actual-hours value.
+    // The technician may enter it during "in_lavorazione" or at completion.
+    if (
+      input.targetStatus === "completato" &&
+      (typeof candidateRecord.actualHours !== "number" ||
+        !Number.isFinite(candidateRecord.actualHours) ||
+        candidateRecord.actualHours <= 0)
+    ) {
+      throw new BadRequestError(
+        "Per completare l'intervento è necessario registrare ore effettive maggiori di zero."
+      );
+    }
+
     if (input.targetStatus === "pronto_per_fatturazione") {
       const report = await this.db.getReportByInterventionId(companyId, interventionId);
       const asset = candidateRecord.assetId
