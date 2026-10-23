@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { ReportRecord } from "../types";
@@ -25,15 +26,45 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
   };
 }
 
-function extractText(pdf: Buffer): string {
-  return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
+async function extractText(pdf: Buffer): Promise<string> {
+  try {
+    return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
+  } catch {
+    const doc = await PDFDocument.load(pdf);
+    let fullText = "";
+    for (const page of doc.getPages()) {
+      const contents = (page.node as any).Contents();
+      if (!contents) continue;
+      const streams = Array.isArray(contents.array) ? contents.array : [contents];
+      for (const streamRef of streams) {
+        const streamObj = doc.context.lookup(streamRef) as any;
+        if (streamObj && streamObj.contents) {
+          let rawBytes: Uint8Array = streamObj.contents;
+          const filter = streamObj.dict?.get(doc.context.obj("Filter"));
+          if (filter?.toString() === "/FlateDecode") {
+            rawBytes = zlib.unzipSync(Buffer.from(rawBytes));
+          }
+          const streamStr = Buffer.from(rawBytes).toString("latin1");
+          const hexMatches = streamStr.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g);
+          for (const m of hexMatches) {
+            fullText += Buffer.from(m[1], "hex").toString("utf8") + "\n";
+          }
+          const strMatches = streamStr.matchAll(/\((.*?)\)\s*Tj/g);
+          for (const m of strMatches) {
+            fullText += m[1] + "\n";
+          }
+        }
+      }
+    }
+    return fullText;
+  }
 }
 
 describe("generateReportPdf", () => {
   it("returns a valid PDF containing report details", async () => {
     const pdf = await generateReportPdf(sampleReport());
     const parsed = await PDFDocument.load(pdf);
-    const text = extractText(pdf);
+    const text = await extractText(pdf);
 
     expect(pdf.toString("ascii", 0, 8)).toBe("%PDF-1.7");
     expect(await parsed.getPageCount()).toBe(1);
@@ -50,7 +81,7 @@ describe("generateReportPdf", () => {
     const signatureBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
     const pdf = await generateReportPdf(sampleReport({ signatureBase64 }));
     const parsed = await PDFDocument.load(pdf);
-    const text = extractText(pdf);
+    const text = await extractText(pdf);
 
     expect(await parsed.getPageCount()).toBe(1);
     expect(pdf.toString("latin1")).toContain("/Subtype /Image");
@@ -62,7 +93,7 @@ describe("generateReportPdf", () => {
       notes: Array.from({ length: 160 }, (_, index) => `Nota ${index + 1} (controllo) \\ eseguito`).join(" "),
     }));
     const parsed = await PDFDocument.load(pdf);
-    const text = extractText(pdf);
+    const text = await extractText(pdf);
 
     expect(await parsed.getPageCount()).toBeGreaterThan(1);
     expect(text).toContain("Nota 160");
