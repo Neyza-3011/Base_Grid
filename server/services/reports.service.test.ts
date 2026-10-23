@@ -313,6 +313,40 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       expect(draft.work_hours).toBe(0);
     });
 
+    it("enforces a 24-hour maximum for work and travel hours", async () => {
+      const basePayload = {
+        client_name: "Cliente",
+        work_hours: 2,
+        travel_hours: 1,
+        date: "2026-09-26",
+        time: "10:00",
+        status: "submitted" as const,
+        materials_status: "unverified" as const,
+      };
+
+      await expect(
+        reportsService.createReport("comp-tenant-a", "Tecnico", {
+          ...basePayload,
+          work_hours: 24.5,
+        })
+      ).rejects.toThrow(/Ore di lavoro non valide/i);
+
+      await expect(
+        reportsService.createReport("comp-tenant-a", "Tecnico", {
+          ...basePayload,
+          travel_hours: 24.5,
+        })
+      ).rejects.toThrow(/Ore di viaggio non valide/i);
+
+      const boundaryReport = await reportsService.createReport(
+        "comp-tenant-a",
+        "Tecnico",
+        { ...basePayload, work_hours: 24, travel_hours: 24 }
+      );
+      expect(boundaryReport.work_hours).toBe(24);
+      expect(boundaryReport.travel_hours).toBe(24);
+    });
+
     it("rejects invalid date format", async () => {
       const invalidPayload = {
         client_name: "Cliente",
