@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { ReportRecord } from "../types";
@@ -26,7 +27,31 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
 }
 
 function extractText(pdf: Buffer): string {
-  return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
+  try {
+    return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
+  } catch {
+    const pdfStr = pdf.toString("binary");
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match: RegExpExecArray | null;
+    let extracted = "";
+    while ((match = streamRegex.exec(pdfStr)) !== null) {
+      const streamBytes = Buffer.from(match[1], "binary");
+      try {
+        const decompressed = inflateSync(streamBytes).toString("utf8");
+        const hexMatches = decompressed.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g);
+        for (const hm of hexMatches) {
+          extracted += Buffer.from(hm[1], "hex").toString("utf8") + "\n";
+        }
+        const literalMatches = decompressed.matchAll(/\((.*?)\)\s*Tj/g);
+        for (const lm of literalMatches) {
+          extracted += lm[1] + "\n";
+        }
+      } catch {
+        // stream not compressed or not flate
+      }
+    }
+    return extracted;
+  }
 }
 
 describe("generateReportPdf", () => {
