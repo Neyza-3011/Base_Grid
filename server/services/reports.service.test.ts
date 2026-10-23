@@ -387,6 +387,37 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       ).rejects.toThrow(/Lo stato 'approved' non è consentito/);
     });
 
+    it("requires each material quantity to be a positive integer", async () => {
+      const basePayload = {
+        client_name: "Cliente",
+        work_hours: 2,
+        travel_hours: 0,
+        date: "2026-09-26",
+        time: "10:00",
+        materials_status: "used" as const,
+      };
+
+      await expect(
+        reportsService.createReport("comp-tenant-a", "Tecnico", {
+          ...basePayload,
+          materials_used: [{ name: "Cavo", quantity: 0 }],
+        })
+      ).rejects.toThrow(/quantità materiale non valida/i);
+
+      await expect(
+        reportsService.createReport("comp-tenant-a", "Tecnico", {
+          ...basePayload,
+          materials_used: [{ name: "Cavo", quantity: 1.5 }],
+        })
+      ).rejects.toThrow(/quantità materiale non valida/i);
+
+      const validReport = await reportsService.createReport("comp-tenant-a", "Tecnico", {
+        ...basePayload,
+        materials_used: [{ name: "Cavo", quantity: 1 }],
+      });
+      expect(validReport.materials_used).toEqual([{ name: "Cavo", quantity: 1 }]);
+    });
+
     it("rejects materials_used with extra disallowed fields", async () => {
       const invalidPayload = {
         client_name: "Cliente",
