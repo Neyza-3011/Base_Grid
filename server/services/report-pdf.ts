@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { ReportRecord } from "../types";
 
 const PAGE_WIDTH = 595;
@@ -141,7 +141,7 @@ export async function generateReportPdf(report: ReportRecord): Promise<Buffer> {
     const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     let y = TOP;
     for (const line of pageLinesContent) {
-      page.drawText(line, { x: LEFT, y, size: 10, font });
+      page.drawText(line, { x: LEFT, y, size: 10, font, color: rgb(0, 0, 0) });
       y -= LINE_HEIGHT;
     }
     if (embeddedSignature && pageIndex === pageLines.length - 1) {
@@ -150,7 +150,7 @@ export async function generateReportPdf(report: ReportRecord): Promise<Buffer> {
       const scale = Math.min(maxWidth / embeddedSignature.width, maxHeight / embeddedSignature.height, 1);
       const width = embeddedSignature.width * scale;
       const height = embeddedSignature.height * scale;
-      page.drawText("Firma cliente:", { x: LEFT, y: BOTTOM + 70, size: 9, font });
+      page.drawText("Firma cliente:", { x: LEFT, y: BOTTOM + 70, size: 9, font, color: rgb(0, 0, 0) });
       page.drawImage(embeddedSignature, {
         x: LEFT,
         y: BOTTOM + 8,
