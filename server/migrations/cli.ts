@@ -4,6 +4,18 @@ import { config } from "../config";
 import { getRuntimeMode } from "../runtime-mode";
 import { getPostgresConnectionOptions } from "../postgres-connection-options";
 
+export function getMigrationCliPoolOptions(
+  dbUrl: string | undefined,
+  isProduction: boolean,
+  ca?: string,
+) {
+  return {
+    ...getPostgresConnectionOptions(dbUrl, isProduction, ca),
+    max: 2,
+    connectionTimeoutMillis: 5000,
+  };
+}
+
 async function main() {
   const dbUrl = process.env.DATABASE_URL || config.DATABASE_URL;
   if (!dbUrl) {
@@ -12,17 +24,9 @@ async function main() {
   }
 
   const mode = getRuntimeMode();
-  const connectionOptions = getPostgresConnectionOptions(
-    dbUrl,
-    mode === "production",
-    config.DATABASE_SSL_CA,
+  const pool = new Pool(
+    getMigrationCliPoolOptions(dbUrl, mode === "production", config.DATABASE_SSL_CA),
   );
-
-  const pool = new Pool({
-    ...connectionOptions,
-    max: 2,
-    connectionTimeoutMillis: 5000,
-  });
 
   try {
     console.log("[Migration CLI] Running database migrations...");

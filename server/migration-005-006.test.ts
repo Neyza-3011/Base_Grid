@@ -68,6 +68,8 @@ describe("Migration 005 Immutability & Migration 006 Correctness", () => {
       mockClient = {
         query: vi.fn().mockImplementation(async (sql: string, params?: any[]) => {
           executedQueries.push({ sql, params });
+          if (sql.includes("pg_try_advisory_lock")) return { rows: [{ acquired: true }] };
+          if (sql.includes("pg_advisory_unlock")) return { rows: [{ released: true }] };
           if (sql.includes("FROM schema_migrations") && sql.includes("SELECT")) {
             return {
               rows: [
@@ -299,6 +301,8 @@ describe("Migration 005 Immutability & Migration 006 Correctness", () => {
       mockClient = {
         query: vi.fn().mockImplementation(async (sql: string, params?: any[]) => {
           executedQueries.push({ sql, params });
+          if (sql.includes("pg_try_advisory_lock")) return { rows: [{ acquired: true }] };
+          if (sql.includes("pg_advisory_unlock")) return { rows: [{ released: true }] };
           if (sql.includes("FROM schema_migrations") && sql.includes("SELECT")) {
             // Simulate: migrations 001-005 already applied in production
             return {

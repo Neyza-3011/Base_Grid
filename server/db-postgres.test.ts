@@ -880,7 +880,9 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     it("fails migration with an explicit error if a foreign key exists with a non-CASCADE action", async () => {
       const { runMigrations } = await import("./migrator");
       const rejectHandler = (sql: string) => {
-        if (sql.includes("DO $$") && sql.includes("confdeltype")) {
+        if (sql.includes("pg_try_advisory_lock")) return Promise.resolve({ rows: [{ acquired: true }] });
+        if (sql.includes("pg_advisory_unlock")) return Promise.resolve({ rows: [{ released: true }] });
+        if (sql.includes("DO $") && sql.includes("confdeltype")) {
           const err: any = new Error('Foreign key on users("companyId") -> companies(id) exists with non-CASCADE delete action (a). Manual migration required.');
           return Promise.reject(err);
         }

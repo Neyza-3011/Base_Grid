@@ -25,6 +25,8 @@ export interface MigrationResult {
 export interface MigratorOptions {
   migrationsDir?: string;
   migrations?: MigrationFile[];
+  lockTimeoutMs?: number;
+  lockPollIntervalMs?: number;
 }
 
 /**
@@ -45,8 +47,13 @@ export function getDefaultMigrationsDir(): string {
   ];
 
   for (const dir of candidates) {
-    if (fs.existsSync(dir)) {
-      return dir;
+    try {
+      if (fs.statSync(dir).isDirectory()) {
+        fs.accessSync(dir, fs.constants.R_OK);
+        return dir;
+      }
+    } catch {
+      // Try the next known runtime location; the loader reports a clear error.
     }
   }
 
@@ -57,28 +64,40 @@ export function getDefaultMigrationsDir(): string {
  * Loads and deterministically sorts all .sql migration files from directory
  */
 export function loadMigrationsFromDir(dirPath: string): MigrationFile[] {
-  if (!fs.existsSync(dirPath)) {
-    return [];
+  let files: string[];
+  try {
+    const stats = fs.statSync(dirPath);
+    if (!stats.isDirectory()) {
+      throw new Error("path is not a directory");
+    }
+    fs.accessSync(dirPath, fs.constants.R_OK);
+    files = fs
+      .readdirSync(dirPath)
+      .filter((file) => file.endsWith(".sql"))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  } catch (err: any) {
+    throw new Error(
+      '[Migrator] Required migrations directory "' + dirPath + '" is missing or unreadable: ' + (err?.message || err)
+    );
   }
 
-  const files = fs
-    .readdirSync(dirPath)
-    .filter((file) => file.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (files.length === 0) {
+    throw new Error('[Migrator] No SQL migration files found in required directory "' + dirPath + '".');
+  }
 
   return files.map((filename) => {
     const fullPath = path.join(dirPath, filename);
-    const sql = fs.readFileSync(fullPath, "utf-8");
+    let sql: string;
+    try {
+      sql = fs.readFileSync(fullPath, "utf-8");
+    } catch (err: any) {
+      throw new Error('[Migrator] Cannot read migration file "' + fullPath + '": ' + (err?.message || err));
+    }
     const match = filename.match(/^(\d+)/);
     const version = match ? match[1] : filename;
     const checksum = calculateChecksum(sql);
 
-    return {
-      version,
-      name: filename,
-      sql,
-      checksum,
-    };
+    return { version, name: filename, sql, checksum };
   });
 }
 
@@ -109,89 +128,148 @@ export async function getAppliedMigrations(clientOrPool: any): Promise<AppliedMi
   return result.rows || [];
 }
 
+const MIGRATION_ADVISORY_LOCK_KEY = [1111966788, 1296644679] as const;
+const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
+const DEFAULT_MIGRATION_LOCK_POLL_INTERVAL_MS = 100;
+
+async function acquireMigrationLock(
+  client: any,
+  timeoutMs: number,
+  pollIntervalMs: number,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (true) {
+    const result = await client.query(
+      "SELECT pg_try_advisory_lock($1, $2) AS acquired",
+      [...MIGRATION_ADVISORY_LOCK_KEY],
+    );
+    if (result.rows?.[0]?.acquired === true) return;
+
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= timeoutMs) {
+      throw new Error(
+        "[Migrator] Timed out after " + timeoutMs + "ms waiting for the PostgreSQL migration advisory lock.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, Math.max(1, timeoutMs - elapsed))));
+  }
+}
+
+async function releaseMigrationLock(client: any): Promise<void> {
+  const result = await client.query(
+    "SELECT pg_advisory_unlock($1, $2) AS released",
+    [...MIGRATION_ADVISORY_LOCK_KEY],
+  );
+  if (result.rows?.[0]?.released !== true) {
+    throw new Error("[Migrator] PostgreSQL migration advisory lock was not held at release time.");
+  }
+}
+
 /**
  * Runs pending PostgreSQL migrations in numerical order.
- * - Idempotent: Skips migrations that have already been applied.
- * - Atomic: Each migration executes in a dedicated transaction (BEGIN / COMMIT).
- * - Safe: On failure, transaction is rolled back, the migration is NOT recorded in schema_migrations,
- *   and an explicit error is thrown.
+ * A session-level advisory lock protects the complete check-and-apply cycle,
+ * including the gaps between each migration's dedicated transaction.
  */
 export async function runMigrations(
   poolOrClient: any,
   options: MigratorOptions = {}
 ): Promise<MigrationResult> {
   const dirPath = options.migrationsDir || getDefaultMigrationsDir();
-  const availableMigrations = options.migrations || loadMigrationsFromDir(dirPath);
+  const availableMigrations = options.migrations ?? loadMigrationsFromDir(dirPath);
 
   if (availableMigrations.length === 0) {
-    console.warn(`[Migrator] No migration files found in ${dirPath}.`);
-    return { applied: [], alreadyApplied: [], total: 0 };
+    throw new Error('[Migrator] No SQL migration files supplied for required directory "' + dirPath + '".');
   }
 
-  // Ensure tracking table exists
-  await ensureMigrationsTable(poolOrClient);
+  const isPool = typeof poolOrClient.connect === "function";
+  const client = isPool ? await poolOrClient.connect() : poolOrClient;
+  let lockAcquired = false;
+  let operationError: unknown;
+  let releaseError: unknown;
 
-  // Retrieve already applied migrations
-  const appliedRecords = await getAppliedMigrations(poolOrClient);
-  const appliedMap = new Map<string, AppliedMigrationRecord>();
-  for (const record of appliedRecords) {
-    appliedMap.set(record.version, record);
-  }
+  try {
+    await acquireMigrationLock(
+      client,
+      options.lockTimeoutMs ?? DEFAULT_MIGRATION_LOCK_TIMEOUT_MS,
+      options.lockPollIntervalMs ?? DEFAULT_MIGRATION_LOCK_POLL_INTERVAL_MS,
+    );
+    lockAcquired = true;
 
-  const alreadyApplied: string[] = [];
-  const pendingMigrations: MigrationFile[] = [];
+    await ensureMigrationsTable(client);
+    const appliedRecords = await getAppliedMigrations(client);
+    const appliedMap = new Map<string, AppliedMigrationRecord>();
+    for (const record of appliedRecords) appliedMap.set(record.version, record);
 
-  for (const migration of availableMigrations) {
-    if (appliedMap.has(migration.version)) {
-      const recorded = appliedMap.get(migration.version)!;
-      if (recorded.checksum && recorded.checksum !== migration.checksum) {
+    const alreadyApplied: string[] = [];
+    const pendingMigrations: MigrationFile[] = [];
+    for (const migration of availableMigrations) {
+      if (appliedMap.has(migration.version)) {
+        const recorded = appliedMap.get(migration.version)!;
+        if (recorded.checksum && recorded.checksum !== migration.checksum) {
+          throw new Error(
+            '[Migrator] Migration checksum mismatch for version ' + migration.version + ' (' + migration.name +
+            '): recorded checksum "' + recorded.checksum + '", current file checksum "' + migration.checksum +
+            '". Migration files must be immutable once applied. Manual intervention required.'
+          );
+        }
+        alreadyApplied.push(migration.name);
+      } else {
+        pendingMigrations.push(migration);
+      }
+    }
+
+    const appliedThisRun: string[] = [];
+    for (const migration of pendingMigrations) {
+      try {
+        await client.query("BEGIN");
+        await client.query(migration.sql);
+        await client.query(
+          "INSERT INTO schema_migrations (version, name, applied_at, checksum) VALUES ($1, $2, CURRENT_TIMESTAMP, $3)",
+          [migration.version, migration.name, migration.checksum],
+        );
+        await client.query("COMMIT");
+        appliedThisRun.push(migration.name);
+        console.log("[Migrator] Applied migration: " + migration.name + " (version " + migration.version + ")");
+      } catch (err: any) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackErr) {
+          console.error("[Migrator] Error rolling back failed migration " + migration.name + ":", rollbackErr);
+        }
         throw new Error(
-          `[Migrator] Migration checksum mismatch for version ${migration.version} (${migration.name}): recorded checksum "${recorded.checksum}", current file checksum "${migration.checksum}". Migration files must be immutable once applied. Manual intervention required.`
+          "[Migrator] Migration " + migration.name + " (version " + migration.version + ") failed: " + (err?.message || err)
         );
       }
-      alreadyApplied.push(migration.name);
-    } else {
-      pendingMigrations.push(migration);
     }
-  }
 
-  const appliedThisRun: string[] = [];
-
-  for (const migration of pendingMigrations) {
-    // Check if pool or single client
-    const isPool = typeof poolOrClient.connect === "function";
-    const client = isPool ? await poolOrClient.connect() : poolOrClient;
-
-    try {
-      await client.query("BEGIN");
-      await client.query(migration.sql);
-      await client.query(
-        `INSERT INTO schema_migrations (version, name, applied_at, checksum) 
-         VALUES ($1, $2, CURRENT_TIMESTAMP, $3)`,
-        [migration.version, migration.name, migration.checksum]
-      );
-      await client.query("COMMIT");
-      appliedThisRun.push(migration.name);
-      console.log(`[Migrator] Applied migration: ${migration.name} (version ${migration.version})`);
-    } catch (err: any) {
+    return { applied: appliedThisRun, alreadyApplied, total: availableMigrations.length };
+  } catch (err) {
+    operationError = err;
+    throw err;
+  } finally {
+    let fatalReleaseError: unknown;
+    if (lockAcquired) {
       try {
-        await client.query("ROLLBACK");
-      } catch (rollbackErr) {
-        console.error(`[Migrator] Error rolling back failed migration ${migration.name}:`, rollbackErr);
-      }
-      throw new Error(
-        `[Migrator] Migration ${migration.name} (version ${migration.version}) failed: ${err?.message || err}`
-      );
-    } finally {
-      if (isPool && typeof client.release === "function") {
-        client.release();
+        await releaseMigrationLock(client);
+      } catch (err) {
+        releaseError = err;
+        if (operationError) {
+          console.error("[Migrator] Failed to release advisory lock after migration error:", err);
+        } else {
+          fatalReleaseError = err;
+        }
       }
     }
+    if (isPool && typeof client.release === "function") {
+      // Destroy the connection if lock acquisition/release left its session state uncertain.
+      const destroyError =
+        releaseError instanceof Error
+          ? releaseError
+          : !lockAcquired && operationError instanceof Error
+            ? operationError
+            : undefined;
+      client.release(destroyError);
+    }
+    if (fatalReleaseError) throw fatalReleaseError;
   }
-
-  return {
-    applied: appliedThisRun,
-    alreadyApplied,
-    total: availableMigrations.length,
-  };
 }

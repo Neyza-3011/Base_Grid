@@ -16,11 +16,15 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
   let executedQueries: { sql: string; params?: any[] }[];
   let appliedRowsInDb: any[];
   let queryErrorTrigger: ((sql: string) => Error | null) | null = null;
+  let lockResponses: boolean[] = [];
+  let forceLockUnavailable = false;
 
   beforeEach(() => {
     executedQueries = [];
     appliedRowsInDb = [];
     queryErrorTrigger = null;
+    lockResponses = [];
+    forceLockUnavailable = false;
 
     mockClient = {
       query: vi.fn().mockImplementation(async (sql: string, params?: any[]) => {
@@ -31,6 +35,13 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
           if (err) throw err;
         }
 
+        if (sql.includes("pg_try_advisory_lock")) {
+          const next = lockResponses.length > 0 ? lockResponses.shift()! : true;
+          return { rows: [{ acquired: !forceLockUnavailable && next }] };
+        }
+        if (sql.includes("pg_advisory_unlock")) {
+          return { rows: [{ released: true }] };
+        }
         if (sql.includes("FROM schema_migrations") && sql.includes("SELECT")) {
           return { rows: [...appliedRowsInDb] };
         }
@@ -46,6 +57,39 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
   });
 
   describe("Directory & Migration File Loader", () => {
+
+    it("throws explicitly when the required migrations directory is missing", () => {
+      const missingDir = path.join(process.cwd(), "missing-migrations-dir-for-regression-test");
+      expect(() => loadMigrationsFromDir(missingDir)).toThrow(/Required migrations directory.*missing or unreadable/i);
+    });
+
+    it("rejects a path that exists but is not a directory", () => {
+      const sqlFile = path.join(getDefaultMigrationsDir(), "001_initial_schema.sql");
+      expect(() => loadMigrationsFromDir(sqlFile)).toThrow(/Required migrations directory.*not a directory/i);
+    });
+
+    it("throws explicitly when a directory cannot be read", () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-unreadable-migrations-"));
+      const accessSpy = vi.spyOn(fs, "accessSync").mockImplementationOnce(() => {
+        throw new Error("permission denied");
+      });
+      try {
+        expect(() => loadMigrationsFromDir(tempDir)).toThrow(/missing or unreadable.*permission denied/i);
+      } finally {
+        accessSpy.mockRestore();
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects an empty migration directory instead of reporting a successful no-op", () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-empty-migrations-"));
+      try {
+        expect(() => loadMigrationsFromDir(tempDir)).toThrow(/No SQL migration files found/i);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("loads and deterministically orders migrations from disk", () => {
       const dir = getDefaultMigrationsDir();
       expect(fs.existsSync(dir)).toBe(true);
@@ -117,6 +161,56 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       expect(sql).toContain("idx_reports_location_id");
     });
   });
+
+
+    it("acquires the session advisory lock before checking migrations and releases it afterward", async () => {
+      appliedRowsInDb = [
+        { version: "001", name: "001_first.sql", applied_at: "2026-01-01", checksum: "hash1" },
+      ];
+      const migrations: MigrationFile[] = [
+        { version: "001", name: "001_first.sql", sql: "SELECT 1;", checksum: "hash1" },
+      ];
+
+      await runMigrations(mockPool, { migrations });
+
+      const sqls = executedQueries.map((query) => query.sql);
+      expect(sqls[0]).toContain("pg_try_advisory_lock");
+      expect(sqls.indexOf("SELECT pg_advisory_unlock($1, $2) AS released")).toBeGreaterThan(
+        sqls.findIndex((sql) => sql.includes("FROM schema_migrations") && sql.includes("SELECT")),
+      );
+      expect(mockClient.release).toHaveBeenCalledWith(undefined);
+    });
+
+    it("waits for the advisory lock and continues when it becomes available", async () => {
+      lockResponses = [false, false, true];
+      const migrations: MigrationFile[] = [
+        { version: "001", name: "001_first.sql", sql: "SELECT 1;", checksum: "hash1" },
+      ];
+
+      const result = await runMigrations(mockPool, {
+        migrations,
+        lockTimeoutMs: 100,
+        lockPollIntervalMs: 1,
+      });
+
+      expect(result.applied).toEqual(["001_first.sql"]);
+      expect(executedQueries.filter((query) => query.sql.includes("pg_try_advisory_lock"))).toHaveLength(3);
+      expect(executedQueries.some((query) => query.sql.includes("pg_advisory_unlock"))).toBe(true);
+    });
+
+    it("fails closed on lock timeout and destroys the uncertain pool connection", async () => {
+      forceLockUnavailable = true;
+      const migrations: MigrationFile[] = [
+        { version: "001", name: "001_first.sql", sql: "SELECT 1;", checksum: "hash1" },
+      ];
+
+      await expect(
+        runMigrations(mockPool, { migrations, lockTimeoutMs: 3, lockPollIntervalMs: 1 }),
+      ).rejects.toThrow(/Timed out.*migration advisory lock/i);
+
+      expect(executedQueries.some((query) => query.sql.includes("CREATE TABLE IF NOT EXISTS schema_migrations"))).toBe(false);
+      expect(mockClient.release).toHaveBeenCalledWith(expect.any(Error));
+    });
 
   describe("Migration Execution & Ordering", () => {
     it("creates schema_migrations tracking table and applies migrations in numerical order", async () => {
@@ -299,6 +393,24 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       expect(mockClient.release).toHaveBeenCalled();
     });
   });
+
+
+    it("can recover and apply the same migration after a failed attempt rolls back", async () => {
+      queryErrorTrigger = (sql: string) => sql.includes("TEMPORARY FAILURE") ? new Error("temporary database error") : null;
+      const migrations: MigrationFile[] = [
+        { version: "001", name: "001_retry.sql", sql: "TEMPORARY FAILURE;", checksum: "retry-hash" },
+      ];
+
+      await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(/temporary database error/i);
+      expect(executedQueries.some((query) => query.sql === "ROLLBACK")).toBe(true);
+      expect(executedQueries.some((query) => query.sql.includes("pg_advisory_unlock"))).toBe(true);
+
+      queryErrorTrigger = null;
+      executedQueries = [];
+      const retry = await runMigrations(mockPool, { migrations });
+      expect(retry.applied).toEqual(["001_retry.sql"]);
+      expect(executedQueries.some((query) => query.sql === "COMMIT")).toBe(true);
+    });
 
   describe("Runtime DDL Separation (Single Schema Evolution Authority)", () => {
     it("guarantees PostgresAdapter.initDatabase() contains zero schema evolution DDL statements", async () => {
