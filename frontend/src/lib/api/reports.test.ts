@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fetchReports,
   createReport,
+  updateDraftReport,
   deleteReport,
   fetchReportPdfBlob,
   ReportsApiError,
@@ -380,6 +381,79 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
         (sentBody as unknown as { intervention_id?: string })?.intervention_id,
       ).toBeUndefined();
       expect(res.intervention_id).toBeUndefined();
+    });
+  });
+
+  describe("updateDraftReport", () => {
+    it("sends a tenant-scoped draft PATCH without client-controlled ownership fields", async () => {
+      const dto = {
+        id: "rep-draft-12",
+        date: "2026-09-26",
+        time: "10:00",
+        work_hours: 2,
+        travel_hours: 0.5,
+        status: "draft" as const,
+        client: { name: "Cliente Bozza", address: "Via Roma 1" },
+        technician: { full_name: "Tecnico Server" },
+        materials_used: [{ name: "Cavo", quantity: 2 }],
+        materials_status: "used" as const,
+        notes: "Da completare",
+        created_at: "2026-09-26T10:00:00.000Z",
+      };
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => dto,
+      });
+      const payload = {
+        client_name: "Cliente Bozza",
+        client_address: "Via Roma 1",
+        work_hours: 2,
+        travel_hours: 0.5,
+        date: "2026-09-26",
+        time: "10:00",
+        status: "draft" as const,
+        notes: "Da completare",
+        materials_status: "used" as const,
+        materials_used: [{ name: "Cavo", quantity: 2 }],
+      };
+
+      const result = await updateDraftReport("rep-draft-12", payload);
+      expect(result.id).toBe("rep-draft-12");
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports/rep-draft-12",
+        expect.objectContaining({
+          method: "PATCH",
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }),
+      );
+      const [, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+        string,
+        RequestInit,
+      ];
+      expect(JSON.parse(options.body as string)).not.toHaveProperty("company_id");
+      expect(JSON.parse(options.body as string)).not.toHaveProperty("technician_id");
+    });
+
+    it("surfaces a server rejection when the report is no longer editable", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ detail: "È possibile modificare soltanto un rapportino in bozza." }),
+      });
+      await expect(
+        updateDraftReport("rep-submitted", {
+          client_name: "Cliente",
+          work_hours: 2,
+          travel_hours: 0,
+          date: "2026-09-26",
+          time: "10:00",
+          status: "draft",
+          materials_status: "none",
+          materials_used: [],
+        }),
+      ).rejects.toThrow("È possibile modificare soltanto un rapportino in bozza.");
     });
   });
 

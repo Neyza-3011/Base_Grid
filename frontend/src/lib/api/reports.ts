@@ -51,6 +51,11 @@ export type CreateReportPayload = {
   signature_base64?: string;
 };
 
+export type UpdateDraftReportPayload = Omit<
+  CreateReportPayload,
+  "customer_id" | "location_id" | "intervention_id" | "status"
+> & { status?: "draft" | "submitted" };
+
 export type ApiReportResponse = {
   id: string;
   customer_id?: string;
@@ -234,6 +239,30 @@ export async function createReport(payload: CreateReportPayload): Promise<Report
     }
     const message =
       err instanceof Error ? err.message : "Impossibile salvare il rapportino sul server.";
+    throw new ReportsApiError(message, 0);
+  }
+}
+
+/** Update a draft; the server remains authoritative for tenant ownership and state. */
+export async function updateDraftReport(
+  reportId: string,
+  payload: UpdateDraftReportPayload,
+): Promise<Report> {
+  try {
+    const res = await fetch(`/api/v1/reports/${encodeURIComponent(reportId)}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: appendCsrfHeaders({
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      }),
+      body: JSON.stringify(payload),
+    });
+    return mapDtoToReport(await parseResponseOrThrow<ApiReportResponse>(res));
+  } catch (err: unknown) {
+    if (err instanceof ReportsApiError) throw err;
+    const message =
+      err instanceof Error ? err.message : "Impossibile aggiornare il rapportino sul server.";
     throw new ReportsApiError(message, 0);
   }
 }

@@ -7,14 +7,22 @@
 import {
   fetchReports,
   createReport as apiCreateReport,
+  updateDraftReport as apiUpdateDraftReport,
   deleteReport as apiDeleteReport,
   Report,
   MaterialItem,
   MaterialsStatus,
   CreateReportPayload,
+  UpdateDraftReportPayload,
 } from "./api/reports";
 
-export type { Report, MaterialItem, MaterialsStatus, CreateReportPayload };
+export type {
+  Report,
+  MaterialItem,
+  MaterialsStatus,
+  CreateReportPayload,
+  UpdateDraftReportPayload,
+};
 
 export interface AddReportInput {
   clientName: string;
@@ -91,6 +99,33 @@ export async function addReport(input: AddReportInput): Promise<Report> {
   }
 
   return await apiCreateReport(payload);
+}
+
+/** Update a draft through the authenticated API. */
+export async function updateDraftReport(
+  reportId: string,
+  input: AddReportInput & { date: string; time: string },
+): Promise<Report> {
+  let dateYYYYMMDD = input.date;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(input.date)) {
+    const [day, month, year] = input.date.split("/");
+    dateYYYYMMDD = `${year}-${month}-${day}`;
+  }
+  const payload: UpdateDraftReportPayload = {
+    client_name: input.clientName.trim(),
+    client_address: input.clientAddress?.trim() || "",
+    client_city: input.clientCity?.trim() || "",
+    work_hours: Number(input.hours),
+    travel_hours: Number(input.travelHours ?? 0),
+    date: dateYYYYMMDD,
+    time: input.time,
+    notes: input.notes?.trim() || "",
+    materials_status: input.materialsStatus || "unverified",
+    materials_used: Array.isArray(input.materials) ? input.materials : [],
+    status: input.status === "submitted" ? "submitted" : "draft",
+    signature_base64: input.signatureBase64 || undefined,
+  };
+  return await apiUpdateDraftReport(reportId, payload);
 }
 
 /**
