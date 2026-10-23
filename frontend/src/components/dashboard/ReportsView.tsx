@@ -297,7 +297,7 @@ export function ReportsView({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCreate || (userRole === "technician" && !linkedIntervention)) {
+    if (!canCreate || (userRole === "technician" && !linkedIntervention && !editingReport?.intervention_id)) {
       toast.error(
         userRole === "technician"
           ? "Il rapportino deve essere collegato a un intervento assegnato a te."
