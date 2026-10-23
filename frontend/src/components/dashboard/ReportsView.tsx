@@ -15,7 +15,13 @@ import {
   Wrench,
   Pencil,
 } from "lucide-react";
-import { getReports, addReport, updateDraftReport, removeReport, Report } from "@/lib/reportsStorage";
+import {
+  getReports,
+  addReport,
+  updateDraftReport,
+  removeReport,
+  Report,
+} from "@/lib/reportsStorage";
 import { Intervention } from "@/lib/api/interventions";
 import { UserSession } from "@/lib/auth";
 import { PdfPreviewModal } from "./PdfPreviewModal";
@@ -214,7 +220,9 @@ export function ReportsView({
     setNewTravelHours(String(report.travel_hours ?? 0));
     setNewStatus("draft");
     setNewNotes(report.notes || "");
-    setMaterialsMode(report.materials_status || (report.materials_used.length ? "used" : "unverified"));
+    setMaterialsMode(
+      report.materials_status || (report.materials_used.length ? "used" : "unverified"),
+    );
     setNewMaterialName(report.materials_used[0]?.name || "");
     setNewMaterialQty(String(report.materials_used[0]?.quantity ?? 1));
     setShowQuickCreate(true);
@@ -297,7 +305,10 @@ export function ReportsView({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCreate || (userRole === "technician" && !linkedIntervention && !editingReport?.intervention_id)) {
+    if (
+      !canCreate ||
+      (userRole === "technician" && !linkedIntervention && !editingReport?.intervention_id)
+    ) {
       toast.error(
         userRole === "technician"
           ? "Il rapportino deve essere collegato a un intervento assegnato a te."
@@ -364,9 +375,10 @@ export function ReportsView({
         status: newStatus,
         notes: newNotes.trim() || "",
         materialsStatus,
-        materials: materialsMode === "used" && editingReport
-          ? [...materials, ...editingReport.materials_used.slice(1)]
-          : materials,
+        materials:
+          materialsMode === "used" && editingReport
+            ? [...materials, ...editingReport.materials_used.slice(1)]
+            : materials,
         date: editingReport?.date,
         time: editingReport?.time,
         signatureBase64: signatureBase64 || undefined,
@@ -385,7 +397,9 @@ export function ReportsView({
           });
 
       toast.success(
-        editingReport ? `Bozza ${saved.id} aggiornata.` : `Rapportino ${saved.id} creato con successo!`,
+        editingReport
+          ? `Bozza ${saved.id} aggiornata.`
+          : `Rapportino ${saved.id} creato con successo!`,
         { description: `Cliente: ${saved.client.name}` },
       );
       setShowQuickCreate(false);
@@ -824,7 +838,11 @@ export function ReportsView({
             <div className="flex items-center gap-2 border-b border-white/10 pb-3">
               <FileText className="h-5 w-5 text-blue-400" />
               <h3 className="text-lg font-bold">
-                {editingReport ? "Modifica Rapportino in Bozza" : linkedIntervention ? "Rapportino da Intervento" : "Nuovo Rapportino Rapido"}
+                {editingReport
+                  ? "Modifica Rapportino in Bozza"
+                  : linkedIntervention
+                    ? "Rapportino da Intervento"
+                    : "Nuovo Rapportino Rapido"}
               </h3>
             </div>
 
@@ -1054,8 +1072,10 @@ export function ReportsView({
                       <div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Salvataggio...
                     </>
+                  ) : editingReport ? (
+                    "Salva modifiche"
                   ) : (
-                    editingReport ? "Salva modifiche" : "Salva Rapportino"
+                    "Salva Rapportino"
                   )}
                 </button>
               </div>
