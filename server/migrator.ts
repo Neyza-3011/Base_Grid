@@ -128,13 +128,6 @@ export async function getAppliedMigrations(clientOrPool: any): Promise<AppliedMi
   return result.rows || [];
 }
 
-/**
- * Runs pending PostgreSQL migrations in numerical order.
- * - Idempotent: Skips migrations that have already been applied.
- * - Atomic: Each migration executes in a dedicated transaction (BEGIN / COMMIT).
- * - Safe: On failure, transaction is rolled back, the migration is NOT recorded in schema_migrations,
- *   and an explicit error is thrown.
- */
 const MIGRATION_ADVISORY_LOCK_KEY = [1111966788, 1296644679] as const;
 const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
 const DEFAULT_MIGRATION_LOCK_POLL_INTERVAL_MS = 100;
