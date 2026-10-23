@@ -358,6 +358,7 @@ export function ReportsView({
       const reportInput = {
         clientName: newClientName.trim(),
         clientAddress: newClientAddress.trim() || "",
+        clientCity: editingReport?.client?.city || "",
         hours: newHours.trim() === "" && newStatus === "draft" ? 0 : parsedWorkHours,
         travelHours: parsedTravelHours,
         status: newStatus,
