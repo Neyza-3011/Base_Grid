@@ -254,6 +254,7 @@ export async function runMigrations(
     operationError = err;
     throw err;
   } finally {
+    let fatalReleaseError: unknown;
     if (lockAcquired) {
       try {
         await releaseMigrationLock(client);
@@ -262,13 +263,20 @@ export async function runMigrations(
         if (operationError) {
           console.error("[Migrator] Failed to release advisory lock after migration error:", err);
         } else {
-          throw err;
+          fatalReleaseError = err;
         }
       }
     }
     if (isPool && typeof client.release === "function") {
-      // An error destroys a connection whose lock state cannot be confirmed.
-      client.release(releaseError instanceof Error ? releaseError : undefined);
+      // Destroy the connection if lock acquisition/release left its session state uncertain.
+      const destroyError =
+        releaseError instanceof Error
+          ? releaseError
+          : !lockAcquired && operationError instanceof Error
+            ? operationError
+            : undefined;
+      client.release(destroyError);
     }
+    if (fatalReleaseError) throw fatalReleaseError;
   }
 }
