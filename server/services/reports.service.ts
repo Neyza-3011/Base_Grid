@@ -199,7 +199,7 @@ export class ReportsService {
       clientCity = locationRecord.city || "";
     }
 
-    // work_hours: required, finite, >= 0, <= 1000
+    // work_hours: required, finite, >= 0, <= 24 for a single field report
     if (work_hours === undefined || work_hours === null) {
       throw new ValidationError("Ore di lavoro obbligatorie.");
     }
@@ -209,13 +209,13 @@ export class ReportsService {
         : typeof (work_hours as unknown) === "string" && (work_hours as unknown as string).trim() !== ""
         ? Number(work_hours)
         : NaN;
-    if (!Number.isFinite(workHours) || workHours < 0 || workHours > 1000) {
+    if (!Number.isFinite(workHours) || workHours < 0 || workHours > 24) {
       throw new ValidationError(
-        "Ore di lavoro non valide (devono essere un numero compreso tra 0 e 1000)."
+        "Ore di lavoro non valide (devono essere un numero compreso tra 0 e 24)."
       );
     }
 
-    // travel_hours: optional, finite, >= 0, <= 1000, defaults to 0
+    // travel_hours: optional, finite, >= 0, <= 24, defaults to 0
     let travelHours = 0;
     if (travel_hours !== undefined && travel_hours !== null) {
       const parsedTravel =
@@ -224,9 +224,9 @@ export class ReportsService {
           : typeof (travel_hours as unknown) === "string" && (travel_hours as unknown as string).trim() !== ""
           ? Number(travel_hours)
           : NaN;
-      if (!Number.isFinite(parsedTravel) || parsedTravel < 0 || parsedTravel > 1000) {
+      if (!Number.isFinite(parsedTravel) || parsedTravel < 0 || parsedTravel > 24) {
         throw new ValidationError(
-          "Ore di viaggio non valide (devono essere un numero compreso tra 0 e 1000)."
+          "Ore di viaggio non valide (devono essere un numero compreso tra 0 e 24)."
         );
       }
       travelHours = parsedTravel;
