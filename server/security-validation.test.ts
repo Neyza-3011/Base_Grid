@@ -727,23 +727,22 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
   // =========================================================================
 
   describe("P0.4.4-E.2: Materials Used Quantity Strict Type Validation", () => {
-    it("should accept valid numeric quantity (positive float 2.5) -> 201", async () => {
+    it("should reject fractional material quantity 2.5 -> 400", async () => {
       const res = await request(app)
         .post("/api/v1/reports")
         .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
         .send({
-          client_name: "Client Quantità Valida",
+          client_name: "Client Quantità Frazionaria",
           date: "2026-08-27",
           time: "10:00",
           work_hours: 2,
           materials_used: [{ name: "Cavo FG16", quantity: 2.5 }]
         });
-      expect(res.status).toBe(201);
-      if (res.body?.id) createdReportIds.add(res.body.id);
-      expect(res.body.materials_used[0].quantity).toBe(2.5);
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("Quantità materiale non valida");
     });
 
-    it("should accept quantity = 0 -> 201", async () => {
+    it("should reject quantity = 0 -> 400", async () => {
       const res = await request(app)
         .post("/api/v1/reports")
         .set("Cookie", adminCookies).set("x-csrf-token", csrfToken)
@@ -754,9 +753,8 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
           work_hours: 2,
           materials_used: [{ name: "Cavo FG16", quantity: 0 }]
         });
-      expect(res.status).toBe(201);
-      if (res.body?.id) createdReportIds.add(res.body.id);
-      expect(res.body.materials_used[0].quantity).toBe(0);
+      expect(res.status).toBe(400);
+      expect(res.body.detail).toContain("Quantità materiale non valida");
     });
 
     it("should reject numeric string '5' -> 400", async () => {
