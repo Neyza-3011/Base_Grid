@@ -26,6 +26,25 @@ function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
   };
 }
 
+async function extractPageStreams(pdf: Buffer): Promise<string[]> {
+  const doc = await PDFDocument.load(pdf);
+  return doc.getPages().flatMap((page) => {
+    const contents = (page.node as any).Contents();
+    if (!contents) return [];
+    const streams = Array.isArray(contents.array) ? contents.array : [contents];
+    return streams.flatMap((streamRef: any) => {
+      const streamObj = doc.context.lookup(streamRef) as any;
+      if (!streamObj?.contents) return [];
+      let rawBytes: Uint8Array = streamObj.contents;
+      const filter = streamObj.dict?.get(doc.context.obj("Filter"));
+      if (filter?.toString() === "/FlateDecode") {
+        rawBytes = zlib.unzipSync(Buffer.from(rawBytes));
+      }
+      return [Buffer.from(rawBytes).toString("latin1")];
+    });
+  });
+}
+
 async function extractText(pdf: Buffer): Promise<string> {
   try {
     return execFileSync("pdftotext", ["-", "-"], { input: pdf, encoding: "utf8" });
@@ -75,6 +94,14 @@ describe("generateReportPdf", () => {
     expect(text).toContain("Ore di lavoro: 2.5");
     expect(text).toContain("Cavo (3x2.5): 12");
     expect(text).toContain("Firma cliente: non presente");
+  });
+
+  it("uses explicit black text operators for monochrome PDF output", async () => {
+    const pdf = await generateReportPdf(sampleReport());
+    const streams = (await extractPageStreams(pdf)).join("\n");
+
+    expect(streams).toContain("0 0 0 rg");
+    expect(streams).not.toMatch(/(?:0\.\d+|[1-9]\d*)\s+(?:0\.\d+|[1-9]\d*)\s+(?:0\.\d+|[1-9]\d*)\s+rg/);
   });
 
   it("embeds a valid PNG signature as a PDF image", async () => {
