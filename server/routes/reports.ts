@@ -80,6 +80,33 @@ reportsRouter.post(
 );
 
 /**
+ * PATCH /api/v1/reports/:id
+ * Updates only a draft owned by the authenticated tenant. Company and technician
+ * identity, as well as customer/site/intervention links, are never client-editable.
+ */
+reportsRouter.patch(
+  "/:id",
+  authenticate,
+  requireRole(CREATE_ROLES),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.user || !req.user.companyId) {
+      throw new UnauthorizedError("Non autenticato.");
+    }
+    const reportId = req.params.id;
+    if (!isValidId(reportId)) {
+      throw new ValidationError("ID non valido.");
+    }
+    const responseData = await reportsService.updateDraftReport(
+      req.user.companyId,
+      reportId,
+      req.body,
+      { id: req.user.id, role: req.user.role },
+    );
+    res.status(200).json(responseData);
+  })
+);
+
+/**
  * GET /api/v1/reports/:id/pdf
  * Generates a valid PDF document for a report belonging to the authenticated company.
  */

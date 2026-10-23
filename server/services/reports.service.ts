@@ -386,6 +386,147 @@ export class ReportsService {
   }
 
   /**
+   * Update an existing draft without allowing tenant, technician, or relationship changes.
+   * The database adapter performs the final status check atomically to prevent stale edits.
+   */
+  async updateDraftReport(
+    companyId: string,
+    reportId: string,
+    body: CreateReportRequest,
+    actor?: { id: string; role: UserRole },
+  ): Promise<ReportResponseDTO> {
+    if (!companyId || !reportId) {
+      throw new ValidationError("Report ID and Company ID are required");
+    }
+
+    const allowedKeys = new Set([
+      "client_name", "client_address", "client_city", "work_hours", "travel_hours",
+      "date", "time", "notes", "materials_status", "materials_used", "status", "signature_base64",
+    ]);
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
+        Object.keys(body).some((key) => !allowedKeys.has(key))) {
+      throw new ValidationError("Il payload contiene campi non consentiti per la modifica del rapportino.");
+    }
+
+    const existing = await this.db.getReportById(companyId, reportId);
+    if (!existing) {
+      throw new NotFoundError("Rapportino non trovato o non accessibile.");
+    }
+    if (existing.status !== "draft") {
+      throw new BadRequestError("È possibile modificare soltanto un rapportino in bozza.");
+    }
+
+    if (actor?.role === "technician") {
+      if (!existing.interventionId) {
+        throw new ForbiddenError("Il tecnico può modificare soltanto bozze collegate a un intervento assegnato.");
+      }
+      const intervention = await this.db.getInterventionByIdAndCompany(existing.interventionId, companyId);
+      if (!intervention || intervention.technicianId !== actor.id) {
+        throw new ForbiddenError("Il tecnico può modificare soltanto bozze di interventi assegnati a sé.");
+      }
+    }
+
+    const clientName = typeof body.client_name === "string" ? body.client_name.trim() : "";
+    if (!clientName || clientName.length > 255) {
+      throw new ValidationError("Nome cliente non valido o mancante (massimo 255 caratteri).");
+    }
+    const clientAddress = body.client_address === undefined ? existing.client.address || "" : body.client_address;
+    if (typeof clientAddress !== "string" || clientAddress.length > 500) {
+      throw new ValidationError("Indirizzo cliente non valido (massimo 500 caratteri).");
+    }
+    const clientCity = body.client_city === undefined ? existing.client.city || "" : body.client_city;
+    if (typeof clientCity !== "string" || clientCity.length > 100) {
+      throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
+    }
+
+    const workHours = typeof body.work_hours === "number" ? body.work_hours : NaN;
+    if (!Number.isFinite(workHours) || workHours < 0 || workHours > 24) {
+      throw new ValidationError("Ore di lavoro non valide (devono essere un numero compreso tra 0 e 24).");
+    }
+    const travelHours = body.travel_hours === undefined ? existing.travelHours :
+      typeof body.travel_hours === "number" ? body.travel_hours : NaN;
+    if (!Number.isFinite(travelHours) || travelHours < 0 || travelHours > 24) {
+      throw new ValidationError("Ore di viaggio non valide (devono essere un numero compreso tra 0 e 24).");
+    }
+    if (!isValidCalendarDate(body.date)) {
+      throw new ValidationError("Data non valida o inesistente nel calendario. Formato richiesto: YYYY-MM-DD.");
+    }
+    if (!isValidTime(body.time)) {
+      throw new ValidationError("Ora non valida o inesistente. Formato richiesto: HH:mm (00:00 - 23:59).");
+    }
+
+    const status = body.status === undefined ? "draft" : body.status;
+    if (status !== "draft" && status !== "submitted") {
+      throw new ValidationError("Stato non valido. Valori consentiti: draft, submitted.");
+    }
+    if (status === "submitted" && workHours <= 0) {
+      throw new ValidationError("Per inviare il rapportino le ore di lavoro devono essere maggiori di zero.");
+    }
+
+    const notes = body.notes === undefined ? existing.notes || "" : body.notes;
+    if (typeof notes !== "string" || notes.length > 2000) {
+      throw new ValidationError("Note non valide (massimo 2000 caratteri).");
+    }
+
+    const materials = body.materials_used === undefined ? existing.materialsUsed : body.materials_used;
+    if (!Array.isArray(materials)) {
+      throw new ValidationError("materials_used deve essere un array.");
+    }
+    const safeMaterials: { name: string; quantity: number }[] = [];
+    for (const material of materials) {
+      if (!material || typeof material !== "object" || Array.isArray(material) ||
+          Object.keys(material).some((key) => key !== "name" && key !== "quantity") ||
+          typeof material.name !== "string" || !material.name.trim() || material.name.trim().length > 255 ||
+          typeof material.quantity !== "number" || !Number.isFinite(material.quantity) || material.quantity < 0) {
+        throw new ValidationError("Materiale non valido: nome obbligatorio e quantità numerica finita >= 0.");
+      }
+      safeMaterials.push({ name: material.name.trim(), quantity: material.quantity });
+    }
+
+    const materialsStatus = body.materials_status === undefined
+      ? (existing.materialsStatus || "unverified")
+      : body.materials_status;
+    if (materialsStatus !== "used" && materialsStatus !== "none" && materialsStatus !== "unverified") {
+      throw new ValidationError("Stato verifica materiali non valido.");
+    }
+    if (materialsStatus === "none" && safeMaterials.length > 0) {
+      throw new ValidationError("Non è possibile indicare materiali utilizzati se la verifica conferma 'none'.");
+    }
+    if (materialsStatus === "used" && !safeMaterials.some((material) => material.quantity > 0)) {
+      throw new ValidationError("Per dichiarare materiali utilizzati è necessario indicare almeno una quantità positiva.");
+    }
+
+    let signatureBase64 = existing.signatureBase64;
+    if (body.signature_base64 !== undefined) {
+      const signatureValidation = validateSignatureBase64(body.signature_base64);
+      if (!signatureValidation.valid) {
+        throw new AppError(signatureValidation.error, signatureValidation.status || 400);
+      }
+      signatureBase64 = body.signature_base64;
+    }
+
+    const result = await this.db.updateDraftReport(companyId, reportId, {
+      date: body.date,
+      time: body.time,
+      workHours,
+      travelHours,
+      client: { name: clientName, address: clientAddress.trim(), city: clientCity.trim() },
+      materialsStatus,
+      materialsUsed: safeMaterials,
+      notes,
+      status,
+      signatureBase64,
+    });
+    if (result.status === "not_found") {
+      throw new NotFoundError("Rapportino non trovato o non accessibile.");
+    }
+    if (result.status === "not_draft") {
+      throw new BadRequestError("Il rapportino non è più una bozza e non può essere modificato.");
+    }
+    return this.toResponseDTO(result.report);
+  }
+
+  /**
    * Delete a report strictly if it belongs to the tenant.
    * Enforces state integrity on linked interventions (preventing inconsistent billing readiness).
    * Atomically handled inside the database adapter within a single transaction.

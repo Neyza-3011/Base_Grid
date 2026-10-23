@@ -21,7 +21,7 @@ import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
 import { config, ServerConfig } from "./config";
 import { getRuntimeMode } from "./runtime-mode";
-import { IDatabaseAdapter, TransactionClient, PostgresAdapter, DeleteReportWithRegressionResult } from "./db-postgres";
+import { IDatabaseAdapter, TransactionClient, PostgresAdapter, DeleteReportWithRegressionResult, UpdateDraftReportResult } from "./db-postgres";
 
 export { IDatabaseAdapter, TransactionClient, PostgresAdapter };
 export class DatabaseStore implements IDatabaseAdapter {
@@ -398,6 +398,39 @@ export class DatabaseStore implements IDatabaseAdapter {
       return null;
     }
     return report;
+  }
+
+  /**
+   * Updates only a tenant-owned draft. The synchronous status check and map write
+   * prevent this in-memory adapter from overwriting a report already submitted.
+   */
+  public async updateDraftReport(
+    companyId: string,
+    reportId: string,
+    updates: Partial<ReportRecord>,
+  ): Promise<UpdateDraftReportResult> {
+    if (!companyId || !reportId) {
+      throw new Error("DB_CONTRACT_ERROR: missing companyId/reportId in updateDraftReport");
+    }
+    const current = this.reports.get(reportId);
+    if (!current || current.companyId !== companyId) return { status: "not_found" };
+    if (current.status !== "draft") return { status: "not_draft" };
+
+    const updated: ReportRecord = {
+      ...current,
+      date: updates.date ?? current.date,
+      time: updates.time ?? current.time,
+      workHours: updates.workHours ?? current.workHours,
+      travelHours: updates.travelHours ?? current.travelHours,
+      client: updates.client ?? current.client,
+      materialsStatus: updates.materialsStatus ?? current.materialsStatus,
+      materialsUsed: updates.materialsUsed ?? current.materialsUsed,
+      notes: updates.notes ?? current.notes,
+      status: updates.status === "submitted" ? "submitted" : "draft",
+      signatureBase64: updates.signatureBase64 ?? current.signatureBase64,
+    };
+    this.reports.set(reportId, updated);
+    return { status: "updated", report: updated };
   }
 
   public async deleteReport(companyId: string, reportId: string): Promise<boolean> {

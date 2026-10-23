@@ -260,6 +260,11 @@ export interface DeleteReportAtomicOperation {
   ): Promise<DeleteReportWithRegressionResult>;
 }
 
+export type UpdateDraftReportResult =
+  | { status: "updated"; report: ReportRecord }
+  | { status: "not_found" }
+  | { status: "not_draft" };
+
 export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   findUserById(id: string): Promise<UserRecord | null>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
@@ -281,6 +286,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   // Ordinary public signatures restored after the PR #15 regression: the first
   // positional arguments are application data, never a transaction client.
   getReportById(companyId: string, reportId: string): Promise<ReportRecord | null>;
+  updateDraftReport(companyId: string, reportId: string, updates: Partial<ReportRecord>): Promise<UpdateDraftReportResult>;
   deleteReport(companyId: string, reportId: string): Promise<boolean>;
   getReportByInterventionId(companyId: string, interventionId: string): Promise<ReportRecord | null>;
   getGlobalStats(): Promise<any>;
@@ -1104,6 +1110,53 @@ export class PostgresAdapter implements IDatabaseAdapter {
     );
     if (res.rows.length === 0) return null;
     return mapReportRow(res.rows[0]);
+  }
+
+  /**
+   * Atomically updates a report only while it is still a draft and belongs to the tenant.
+   * The status predicate prevents a concurrent submission from being overwritten.
+   */
+  public async updateDraftReport(
+    companyId: string,
+    reportId: string,
+    updates: Partial<ReportRecord>,
+  ): Promise<UpdateDraftReportResult> {
+    if (!companyId || !reportId) {
+      throw new Error("DB_CONTRACT_ERROR: missing companyId/reportId in updateDraftReport");
+    }
+    const result = await this.pool.query(
+      `UPDATE reports
+       SET date = $3, time = $4, "workHours" = $5, "travelHours" = $6,
+           client = $7, "materialsStatus" = $8, "materialsUsed" = $9,
+           notes = $10, status = $11,
+           "signatureBase64" = COALESCE($12, "signatureBase64")
+       WHERE id = $1 AND "companyId" = $2 AND status = 'draft'
+       RETURNING *`,
+      [
+        reportId,
+        companyId,
+        updates.date,
+        updates.time,
+        updates.workHours,
+        updates.travelHours,
+        JSON.stringify(updates.client),
+        updates.materialsStatus || "unverified",
+        JSON.stringify(updates.materialsUsed || []),
+        updates.notes || "",
+        updates.status || "draft",
+        updates.signatureBase64 ?? null,
+      ],
+    );
+    if (result.rows.length > 0) {
+      return { status: "updated", report: mapReportRow(result.rows[0]) };
+    }
+
+    const existing = await this.pool.query(
+      'SELECT status FROM reports WHERE id = $1 AND "companyId" = $2 LIMIT 1',
+      [reportId, companyId],
+    );
+    if (existing.rows.length === 0) return { status: "not_found" };
+    return { status: "not_draft" };
   }
 
   public async deleteReport(
