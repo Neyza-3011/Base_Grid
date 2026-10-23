@@ -68,6 +68,19 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       expect(() => loadMigrationsFromDir(sqlFile)).toThrow(/Required migrations directory.*not a directory/i);
     });
 
+    it("throws explicitly when a directory cannot be read", () => {
+      const tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-unreadable-migrations-"));
+      const accessSpy = vi.spyOn(fs, "accessSync").mockImplementationOnce(() => {
+        throw new Error("permission denied");
+      });
+      try {
+        expect(() => loadMigrationsFromDir(tempDir)).toThrow(/missing or unreadable.*permission denied/i);
+      } finally {
+        accessSpy.mockRestore();
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it("rejects an empty migration directory instead of reporting a successful no-op", () => {
       const tempDir = fs.mkdtempSync(path.join(process.cwd(), ".tmp-empty-migrations-"));
       try {
