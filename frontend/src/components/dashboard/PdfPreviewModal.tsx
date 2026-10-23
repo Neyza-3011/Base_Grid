@@ -8,18 +8,41 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     let currentUrl: string | null = null;
     let isMounted = true;
 
     const fetchPdf = async () => {
       try {
-        const res = await fetch(`/api/v1/reports/${reportId}/pdf`, {
+        const res = await fetch(`/api/v1/reports/${encodeURIComponent(reportId)}/pdf`, {
+          method: "GET",
           credentials: "include",
-          headers: {},
+          headers: { Accept: "application/pdf" },
         });
-        if (!res.ok) throw new Error("Errore generazione PDF");
+        if (!res.ok) {
+          let message = "Errore generazione PDF";
+          try {
+            const body = await res.json();
+            if (typeof body?.detail === "string") message = body.detail;
+          } catch {
+            // The server may return a non-JSON error body.
+          }
+          throw new Error(message);
+        }
+
         const blob = await res.blob();
+        if (blob.size < 8 || (blob.type && blob.type !== "application/pdf")) {
+          throw new Error("Il server non ha restituito un PDF valido.");
+        }
+        if ((await blob.slice(0, 5).text()) !== "%PDF-") {
+          throw new Error("La risposta del server non contiene un documento PDF valido.");
+        }
         if (!isMounted) return;
         currentUrl = window.URL.createObjectURL(blob);
         setPdfUrl(currentUrl);
@@ -27,7 +50,7 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
         if (!isMounted) return;
         const error = err as Error;
         toast.error(error.message || "Errore generazione PDF");
-        onClose();
+        onCloseRef.current();
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -41,7 +64,7 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
       isMounted = false;
       if (currentUrl) window.URL.revokeObjectURL(currentUrl);
     };
-  }, [reportId, onClose]);
+  }, [reportId]);
 
   // Focus management: move focus to close button upon mount
   useEffect(() => {
