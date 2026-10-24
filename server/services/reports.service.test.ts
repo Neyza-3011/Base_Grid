@@ -822,6 +822,47 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       expect(mockReports.get("draft-001")?.interventionId).toBe("int-1-tenant-a");
     });
 
+    it("rejects zero material quantity when updating a draft", async () => {
+      mockReports.set("draft-quantity-0", {
+        id: "draft-quantity-0", companyId: "comp-tenant-a", date: "2026-09-26", time: "10:00",
+        workHours: 2, travelHours: 0, status: "draft", client: { name: "Cliente" },
+        technician: { fullName: "Mario Rossi" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "draft-quantity-0", {
+        ...validDraftUpdate, materials_used: [{ name: "Cavo FG16", quantity: 0 }],
+      })).rejects.toThrow("quantità intera >= 1");
+      expect(mockDb.updateDraftReport).not.toHaveBeenCalled();
+    });
+
+    it("rejects fractional material quantity when updating a draft", async () => {
+      mockReports.set("draft-quantity-fraction", {
+        id: "draft-quantity-fraction", companyId: "comp-tenant-a", date: "2026-09-26", time: "10:00",
+        workHours: 2, travelHours: 0, status: "draft", client: { name: "Cliente" },
+        technician: { fullName: "Mario Rossi" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      await expect(reportsService.updateDraftReport("comp-tenant-a", "draft-quantity-fraction", {
+        ...validDraftUpdate, materials_used: [{ name: "Cavo FG16", quantity: 1.5 }],
+      })).rejects.toThrow("quantità intera >= 1");
+      expect(mockDb.updateDraftReport).not.toHaveBeenCalled();
+    });
+
+    it("accepts the minimum valid integer material quantity when updating a draft", async () => {
+      mockReports.set("draft-quantity-1", {
+        id: "draft-quantity-1", companyId: "comp-tenant-a", date: "2026-09-26", time: "10:00",
+        workHours: 2, travelHours: 0, status: "draft", client: { name: "Cliente" },
+        technician: { fullName: "Mario Rossi" }, materialsUsed: [], notes: "", createdAt: "2026-09-26T10:00:00.000Z",
+      });
+      const result = await reportsService.updateDraftReport("comp-tenant-a", "draft-quantity-1", {
+        ...validDraftUpdate, materials_used: [{ name: "Cavo FG16", quantity: 1 }],
+      });
+      expect(result.id).toBe("draft-quantity-1");
+      expect(mockDb.updateDraftReport).toHaveBeenCalledWith(
+        "comp-tenant-a",
+        "draft-quantity-1",
+        expect.objectContaining({ materialsUsed: [{ name: "Cavo FG16", quantity: 1 }] }),
+      );
+    });
+
     it("rejects updates to submitted reports", async () => {
       await expect(reportsService.updateDraftReport("comp-tenant-a", "rep-001", validDraftUpdate))
         .rejects.toThrow("È possibile modificare soltanto un rapportino in bozza.");
