@@ -860,6 +860,90 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
         ...validDraftUpdate, work_hours: 0, status: "submitted",
       })).rejects.toThrow("Per inviare il rapportino le ore di lavoro devono essere maggiori di zero.");
     });
+
+    it("allows partial PATCH update without client_name, work_hours, date, or time, preserving existing baseline values", async () => {
+      mockReports.set("draft-partial-01", {
+        id: "draft-partial-01",
+        companyId: "comp-tenant-a",
+        date: "2026-09-26",
+        time: "10:00",
+        workHours: 3.5,
+        travelHours: 0.5,
+        status: "draft",
+        client: { name: "Cliente Iniziale", address: "Via Roma 1", city: "Milano" },
+        technician: { fullName: "Mario Rossi" },
+        materialsStatus: "unverified",
+        materialsUsed: [],
+        notes: "Note iniziali",
+        createdAt: "2026-09-26T10:00:00.000Z",
+      });
+
+      const partialPatchPayload = {
+        notes: "Note aggiornate via PATCH parziale",
+      };
+
+      const result = await reportsService.updateDraftReport("comp-tenant-a", "draft-partial-01", partialPatchPayload as any);
+      expect(result.id).toBe("draft-partial-01");
+      expect(result.notes).toBe("Note aggiornate via PATCH parziale");
+      expect(result.client.name).toBe("Cliente Iniziale");
+      expect(result.client.address).toBe("Via Roma 1");
+      expect(result.client.city).toBe("Milano");
+      expect(result.work_hours).toBe(3.5);
+      expect(result.date).toBe("2026-09-26");
+      expect(result.time).toBe("10:00");
+    });
+
+    it("supports string representations of numeric work_hours and travel_hours in partial updates", async () => {
+      mockReports.set("draft-partial-02", {
+        id: "draft-partial-02",
+        companyId: "comp-tenant-a",
+        date: "2026-09-26",
+        time: "10:00",
+        workHours: 2,
+        travelHours: 0,
+        status: "draft",
+        client: { name: "Cliente Test" },
+        technician: { fullName: "Mario Rossi" },
+        materialsStatus: "unverified",
+        materialsUsed: [],
+        notes: "",
+        createdAt: "2026-09-26T10:00:00.000Z",
+      });
+
+      const result = await reportsService.updateDraftReport("comp-tenant-a", "draft-partial-02", {
+        work_hours: "4.5",
+        travel_hours: "1.5",
+      } as any);
+
+      expect(result.work_hours).toBe(4.5);
+      expect(result.travel_hours).toBe(1.5);
+    });
+
+    it("allows submitting a draft with a partial PATCH update if work_hours > 0", async () => {
+      mockReports.set("draft-partial-03", {
+        id: "draft-partial-03",
+        companyId: "comp-tenant-a",
+        date: "2026-09-26",
+        time: "10:00",
+        workHours: 3,
+        travelHours: 1,
+        status: "draft",
+        client: { name: "Cliente Da Inviare" },
+        technician: { fullName: "Mario Rossi" },
+        materialsStatus: "none",
+        materialsUsed: [],
+        notes: "Pronto per invio",
+        createdAt: "2026-09-26T10:00:00.000Z",
+      });
+
+      const result = await reportsService.updateDraftReport("comp-tenant-a", "draft-partial-03", {
+        status: "submitted",
+      } as any);
+
+      expect(result.status).toBe("submitted");
+      expect(result.work_hours).toBe(3);
+      expect(result.client.name).toBe("Cliente Da Inviare");
+    });
   });
 
   describe("deleteReport", () => {

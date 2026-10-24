@@ -426,32 +426,50 @@ export class ReportsService {
       }
     }
 
-    const clientName = typeof body.client_name === "string" ? body.client_name.trim() : "";
+    const clientName = body.client_name === undefined
+      ? existing.client.name
+      : (typeof body.client_name === "string" ? body.client_name.trim() : "");
     if (!clientName || clientName.length > 255) {
       throw new ValidationError("Nome cliente non valido o mancante (massimo 255 caratteri).");
     }
-    const clientAddress = body.client_address === undefined ? existing.client.address || "" : body.client_address;
+    const clientAddress = body.client_address === undefined ? (existing.client.address ?? "") : body.client_address;
     if (typeof clientAddress !== "string" || clientAddress.length > 500) {
       throw new ValidationError("Indirizzo cliente non valido (massimo 500 caratteri).");
     }
-    const clientCity = body.client_city === undefined ? existing.client.city || "" : body.client_city;
+    const clientCity = body.client_city === undefined ? (existing.client.city ?? "") : body.client_city;
     if (typeof clientCity !== "string" || clientCity.length > 100) {
       throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
     }
 
-    const workHours = typeof body.work_hours === "number" ? body.work_hours : NaN;
+    const rawWorkHours = body.work_hours === undefined ? existing.workHours : body.work_hours;
+    const workHours =
+      typeof rawWorkHours === "number"
+        ? rawWorkHours
+        : typeof (rawWorkHours as unknown) === "string" && (rawWorkHours as unknown as string).trim() !== ""
+        ? Number(rawWorkHours)
+        : NaN;
     if (!Number.isFinite(workHours) || workHours < 0 || workHours > 24) {
       throw new ValidationError("Ore di lavoro non valide (devono essere un numero compreso tra 0 e 24).");
     }
-    const travelHours = body.travel_hours === undefined ? existing.travelHours :
-      typeof body.travel_hours === "number" ? body.travel_hours : NaN;
+
+    const rawTravelHours = body.travel_hours === undefined ? existing.travelHours : body.travel_hours;
+    const travelHours =
+      typeof rawTravelHours === "number"
+        ? rawTravelHours
+        : typeof (rawTravelHours as unknown) === "string" && (rawTravelHours as unknown as string).trim() !== ""
+        ? Number(rawTravelHours)
+        : NaN;
     if (!Number.isFinite(travelHours) || travelHours < 0 || travelHours > 24) {
       throw new ValidationError("Ore di viaggio non valide (devono essere un numero compreso tra 0 e 24).");
     }
-    if (!isValidCalendarDate(body.date)) {
+
+    const targetDate = body.date === undefined ? existing.date : body.date;
+    if (!isValidCalendarDate(targetDate)) {
       throw new ValidationError("Data non valida o inesistente nel calendario. Formato richiesto: YYYY-MM-DD.");
     }
-    if (!isValidTime(body.time)) {
+
+    const targetTime = body.time === undefined ? existing.time : body.time;
+    if (!isValidTime(targetTime)) {
       throw new ValidationError("Ora non valida o inesistente. Formato richiesto: HH:mm (00:00 - 23:59).");
     }
 
@@ -506,8 +524,8 @@ export class ReportsService {
     }
 
     const result = await this.db.updateDraftReport(companyId, reportId, {
-      date: body.date,
-      time: body.time,
+      date: targetDate,
+      time: targetTime,
       workHours,
       travelHours,
       client: { name: clientName, address: clientAddress.trim(), city: clientCity.trim() },
