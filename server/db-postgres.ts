@@ -275,7 +275,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
@@ -682,7 +682,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
   ): Promise<UserRecord | null> {
     try {
       const now = new Date().toISOString();
@@ -708,6 +708,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       if (profileUpdates?.phoneNumber !== undefined) {
         setClauses.push(`"phoneNumber" = $${paramIndex}`);
         params.push(profileUpdates.phoneNumber);
+        paramIndex++;
+      }
+      if (profileUpdates?.emailConfirmed !== undefined) {
+        setClauses.push(`"emailConfirmed" = $${paramIndex}`);
+        params.push(profileUpdates.emailConfirmed);
         paramIndex++;
       }
 

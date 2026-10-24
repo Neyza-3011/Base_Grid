@@ -1,11 +1,13 @@
 import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth";
 import { db } from "../db";
-import { hashPassword, isValidEmail, normalizeEmail, toSafeUserSession, verifyPassword, validatePasswordPolicy } from "../security";
+import { generateSecureToken, hashPassword, hashToken, isValidEmail, normalizeEmail, toSafeUserSession, verifyPassword, validatePasswordPolicy } from "../security";
 import { tokenStore } from "../token-store";
 import { asyncHandler } from "../async-handler";
 import { TeamService } from "../services/team.service";
 import { TEAM_ADMIN_ROLES } from "../types";
+import { config } from "../config";
+import { emailService } from "../email-service";
 
 export const usersRouter = Router();
 const teamService = new TeamService(db);
@@ -43,6 +45,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     updates.fullName = full_name.trim();
   }
 
+  let emailChanged = false;
   if (email !== undefined) {
     if (typeof email !== "string") {
       res.status(400).json({ detail: "Formato email non valido." });
@@ -61,6 +64,10 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
         return;
       }
       updates.email = normalized;
+      emailChanged = true;
+      if (config.EMAIL_VERIFICATION_ENABLED) {
+        updates.emailConfirmed = false;
+      }
     }
   }
 
@@ -121,10 +128,11 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
 
     if (password && typeof password === "string") {
       // Atomic: password + authVersion + any profile fields in a single DB operation
-      const profileUpdates: Partial<Pick<import("../types").UserRecord, "fullName" | "email" | "phoneNumber">> = {};
+      const profileUpdates: Partial<Pick<import("../types").UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">> = {};
       if (updates.fullName !== undefined) profileUpdates.fullName = updates.fullName;
       if (updates.email !== undefined) profileUpdates.email = updates.email;
       if (updates.phoneNumber !== undefined) profileUpdates.phoneNumber = updates.phoneNumber;
+      if (updates.emailConfirmed !== undefined) profileUpdates.emailConfirmed = updates.emailConfirmed;
 
       updatedUser = await db.updatePasswordAndIncrementAuthVersion(
         req.user.id,
@@ -141,7 +149,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       res.clearCookie("refresh_token", { path: "/api/v1/auth" });
       res.clearCookie("csrf_token", { path: "/" });
     } else {
-      // Profile-only update: no password change, no authVersion increment
+      // Profile-only update: no password change
       if (Object.keys(updates).length === 0) {
         res.status(200).json(toSafeUserSession(req.user));
         return;
@@ -150,6 +158,40 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       if (!updatedUser) {
         res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
         return;
+      }
+    }
+
+    if (emailChanged && config.EMAIL_VERIFICATION_ENABLED && updates.email) {
+      // Revoke old active email verification tokens
+      await db.revokeActiveAuthTokens(req.user.id, "email_verification");
+
+      const rawVerificationToken = generateSecureToken();
+      const verificationTokenHash = hashToken(rawVerificationToken);
+      const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await db.createAuthToken({
+        userId: req.user.id,
+        tokenHash: verificationTokenHash,
+        type: "email_verification",
+        expiresAt: verificationExpiresAt,
+      });
+
+      try {
+        await emailService.sendVerificationEmail(updates.email, rawVerificationToken, updatedUser.fullName);
+      } catch {
+        // Continue flow cleanly if email provider fails
+      }
+
+      // Revoke active sessions & clear auth cookies so user must verify new email
+      res.clearCookie("access_token", { path: "/" });
+      res.clearCookie("refresh_token", { path: "/api/v1/auth" });
+      res.clearCookie("csrf_token", { path: "/" });
+
+      await db.incrementUserAuthVersion(req.user.id);
+      if (tokenStore.isAvailable()) {
+        try {
+          await tokenStore.revokeAllUserTokens(req.user.id);
+        } catch { }
       }
     }
 
