@@ -176,4 +176,25 @@ describe("Graceful Shutdown Handler (server.ts)", () => {
 
     expect(mockExit).toHaveBeenCalledWith(1);
   });
+
+  it("exits with code 1 when triggered by uncaughtException or unhandledRejection", async () => {
+    const handler1 = createShutdownHandler({
+      server: mockServer,
+      exit: mockExit,
+      timeoutMs: 1000,
+    });
+
+    await handler1("uncaughtException");
+    expect(mockExit).toHaveBeenCalledWith(1);
+
+    mockExit.mockClear();
+    const handler2 = createShutdownHandler({
+      server: mockServer,
+      exit: mockExit,
+      timeoutMs: 1000,
+    });
+
+    await handler2("unhandledRejection");
+    expect(mockExit).toHaveBeenCalledWith(1);
+  });
 });
