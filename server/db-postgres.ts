@@ -1126,24 +1126,30 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
     const result = await this.pool.query(
       `UPDATE reports
-       SET date = $3, time = $4, "workHours" = $5, "travelHours" = $6,
-           client = $7, "materialsStatus" = $8, "materialsUsed" = $9,
-           notes = $10, status = $11,
+       SET date = COALESCE($3, date),
+           time = COALESCE($4, time),
+           "workHours" = COALESCE($5, "workHours"),
+           "travelHours" = COALESCE($6, "travelHours"),
+           client = COALESCE($7, client),
+           "materialsStatus" = COALESCE($8, "materialsStatus"),
+           "materialsUsed" = COALESCE($9, "materialsUsed"),
+           notes = COALESCE($10, notes),
+           status = COALESCE($11, status),
            "signatureBase64" = COALESCE($12, "signatureBase64")
        WHERE id = $1 AND "companyId" = $2 AND status = 'draft'
        RETURNING *`,
       [
         reportId,
         companyId,
-        updates.date,
-        updates.time,
-        updates.workHours,
-        updates.travelHours,
-        JSON.stringify(updates.client),
-        updates.materialsStatus || "unverified",
-        JSON.stringify(updates.materialsUsed || []),
-        updates.notes || "",
-        updates.status || "draft",
+        updates.date ?? null,
+        updates.time ?? null,
+        updates.workHours ?? null,
+        updates.travelHours ?? null,
+        updates.client ? JSON.stringify(updates.client) : null,
+        updates.materialsStatus ?? null,
+        updates.materialsUsed ? JSON.stringify(updates.materialsUsed) : null,
+        updates.notes !== undefined ? updates.notes : null,
+        updates.status ?? null,
         updates.signatureBase64 ?? null,
       ],
     );

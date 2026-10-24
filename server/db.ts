@@ -343,6 +343,7 @@ export class DatabaseStore implements IDatabaseAdapter {
         list.push(r);
       }
     }
+    list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     return list.slice(0, limit);
   }
 
@@ -926,6 +927,7 @@ export class DatabaseStore implements IDatabaseAdapter {
         list.push(c);
       }
     }
+    list.sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
     return list.slice(0, limit);
   }
 
@@ -1019,6 +1021,7 @@ export class DatabaseStore implements IDatabaseAdapter {
         list.push(loc);
       }
     }
+    list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list.slice(0, limit);
   }
 
