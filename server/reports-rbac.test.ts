@@ -609,4 +609,102 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect(checkA?.companyId).toBe(companyA);
     });
   });
+
+
+  describe("7. Draft PATCH endpoint authorization and lifecycle", () => {
+    const draftRecord = {
+      client: { name: "Cliente Bozza", address: "Via Roma 1", city: "Roma" },
+      workHours: 0,
+      travelHours: 0,
+      date: "2026-10-20",
+      time: "09:30",
+      status: "draft" as const,
+      materialsUsed: [],
+      notes: "Bozza iniziale",
+    };
+
+    it("allows an authorized tenant user to update a draft without changing server-owned fields", async () => {
+      const admin = await createTestUserAndLogin(companyA, "admin");
+      const report = await db.createReport(companyA, draftRecord);
+
+      const res = await apiRequest(`/api/v1/reports/${report.id}`, {
+        method: "PATCH",
+        cookies: admin.cookies,
+        headers: admin.headers,
+        body: {
+          client_name: "Cliente aggiornato",
+          work_hours: 2.5,
+          travel_hours: 0.5,
+          date: "2026-10-21",
+          time: "10:15",
+          notes: "Bozza salvata",
+          materials_status: "none",
+          materials_used: [],
+          status: "draft",
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.data.id).toBe(report.id);
+      expect(res.data.status).toBe("draft");
+      expect(res.data.client.name).toBe("Cliente aggiornato");
+      expect(res.data.work_hours).toBe(2.5);
+
+      const persisted = await db.getReportById(companyA, report.id);
+      expect(persisted?.companyId).toBe(companyA);
+      expect(persisted?.technician.fullName).toBe(report.technician.fullName);
+      expect(persisted?.status).toBe("draft");
+      expect(persisted?.notes).toBe("Bozza salvata");
+    });
+
+    it("returns 404 when a tenant attempts to update another company's draft", async () => {
+      const adminA = await createTestUserAndLogin(companyA, "admin");
+      const reportB = await db.createReport(companyB, draftRecord);
+
+      const res = await apiRequest(`/api/v1/reports/${reportB.id}`, {
+        method: "PATCH",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { notes: "Tentativo cross-tenant" },
+      });
+
+      expect(res.status).toBe(404);
+      expect((await db.getReportById(companyB, reportB.id))?.notes).toBe("Bozza iniziale");
+    });
+
+    it("rejects updates to submitted reports", async () => {
+      const admin = await createTestUserAndLogin(companyA, "admin");
+      const report = await db.createReport(companyA, {
+        ...draftRecord,
+        status: "submitted",
+        workHours: 2,
+      });
+
+      const res = await apiRequest(`/api/v1/reports/${report.id}`, {
+        method: "PATCH",
+        cookies: admin.cookies,
+        headers: admin.headers,
+        body: { notes: "Tentativo modifica dopo invio" },
+      });
+
+      expect(res.status).toBe(400);
+      expect((await db.getReportById(companyA, report.id))?.notes).toBe("Bozza iniziale");
+    });
+
+    it("denies the cliente role from PATCH even when the draft belongs to the same company", async () => {
+      const client = await createTestUserAndLogin(companyA, "cliente");
+      const report = await db.createReport(companyA, draftRecord);
+
+      const res = await apiRequest(`/api/v1/reports/${report.id}`, {
+        method: "PATCH",
+        cookies: client.cookies,
+        headers: client.headers,
+        body: { notes: "Tentativo non autorizzato" },
+      });
+
+      expect(res.status).toBe(403);
+      expect((await db.getReportById(companyA, report.id))?.notes).toBe("Bozza iniziale");
+    });
+  });
+
 });
