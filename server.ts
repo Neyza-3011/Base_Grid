@@ -288,10 +288,26 @@ async function startServer() {
     // Use http-proxy to forward requests
     const createProxy = httpProxy.createProxyServer || (httpProxy as any).default?.createProxyServer;
     const proxy = createProxy.call(httpProxy);
-    
+
+    proxy.on("error", (e: any, _req: any, res: any) => {
+      console.error("[NitroProxyError]", e?.message || e);
+      if (res && typeof res.headersSent === "boolean") {
+        if (!res.headersSent) {
+          res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
+        } else if (typeof res.end === "function") {
+          res.end();
+        }
+      }
+    });
+
     app.use((req, res) => {
       proxy.web(req, res, { target: `http://127.0.0.1:${nitroPort}` }, (e) => {
-        res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
+        console.error("[NitroProxyError]", e?.message || e);
+        if (!res.headersSent) {
+          res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
+        } else {
+          res.end();
+        }
       });
     });
   }
@@ -312,6 +328,14 @@ async function startServer() {
 
   process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("uncaughtException", (err) => {
+    console.error("CRITICAL: Uncaught Exception detected:", err?.message || err);
+    gracefulShutdown("uncaughtException");
+  });
+  process.on("unhandledRejection", (reason: any) => {
+    console.error("CRITICAL: Unhandled Promise Rejection detected:", reason?.message || reason);
+    gracefulShutdown("unhandledRejection");
+  });
 }
 
 export interface ShutdownDependencies {
@@ -396,7 +420,8 @@ export function createShutdownHandler(deps: ShutdownDependencies) {
 
         clearTimeout(forceTimer);
         console.log("Graceful shutdown sequence completed.");
-        exitFn(0);
+        const exitCode = (signal === "uncaughtException" || signal === "unhandledRejection") ? 1 : 0;
+        exitFn(exitCode);
       } catch (err) {
         clearTimeout(forceTimer);
         console.error("Unexpected error during graceful shutdown:", err);
