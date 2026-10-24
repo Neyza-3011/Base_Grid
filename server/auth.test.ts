@@ -3108,3 +3108,63 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
     });
   });
 
+  describe("18. Profile Email Verification Security Suite (P0.4.4-K)", () => {
+    beforeEach(async () => {
+      const { config } = await import("./config");
+      config.EMAIL_VERIFICATION_ENABLED = true;
+    });
+
+    it("resets emailConfirmed to false, creates verification token, and invalidates session when email is updated in /me", async () => {
+      const { emailService } = await import("./email-service");
+      const sendSpy = vi.spyOn(emailService, "sendVerificationEmail").mockResolvedValue({ success: true });
+
+      try {
+        // 1. Login user
+        const loginRes = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "admin@rossi.it", password: "Password123!" },
+        });
+        expect(loginRes.status).toBe(200);
+
+        const token = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+        const csrf = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+
+        // 2. Change email address via PUT /api/v1/users/me
+        const updateRes = await apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrf },
+          cookies: { access_token: token, csrf_token: csrf },
+          body: { email: "nuova.email.admin@rossi.it" },
+        });
+
+        expect(updateRes.status).toBe(200);
+
+        // Cookies should be cleared
+        expect(updateRes.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
+
+        // User in DB should have email updated and emailConfirmed = false
+        const userInDb = await db.findUserByEmail("nuova.email.admin@rossi.it");
+        expect(userInDb).not.toBeNull();
+        expect(userInDb?.emailConfirmed).toBe(false);
+
+        // Old token should be blocked because email is now unverified
+        const oldSessionRes = await apiRequest("/api/v1/users/me", {
+          cookies: { access_token: token, csrf_token: csrf },
+        });
+        expect(oldSessionRes.status).toBe(403);
+
+        // Login with new email should be blocked until verified
+        const loginNewEmailRes = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "nuova.email.admin@rossi.it", password: "Password123!" },
+        });
+        expect(loginNewEmailRes.status).toBe(403);
+        expect(loginNewEmailRes.body.detail).toMatch(/conferma l'indirizzo email/i);
+
+        // Verification email should have been sent to new email
+        expect(sendSpy).toHaveBeenCalledWith("nuova.email.admin@rossi.it", expect.any(String), "Marco Rossi");
+      } finally {
+        sendSpy.mockRestore();
+      }
+    });
+  });
