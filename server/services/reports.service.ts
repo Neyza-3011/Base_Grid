@@ -495,8 +495,9 @@ export class ReportsService {
       if (!material || typeof material !== "object" || Array.isArray(material) ||
           Object.keys(material).some((key) => key !== "name" && key !== "quantity") ||
           typeof material.name !== "string" || !material.name.trim() || material.name.trim().length > 255 ||
-          typeof material.quantity !== "number" || !Number.isFinite(material.quantity) || material.quantity < 0) {
-        throw new ValidationError("Materiale non valido: nome obbligatorio e quantità numerica finita >= 0.");
+          typeof material.quantity !== "number" || !Number.isFinite(material.quantity) ||
+          !Number.isInteger(material.quantity) || material.quantity < 1) {
+        throw new ValidationError("Materiale non valido: nome obbligatorio e quantità intera >= 1.");
       }
       safeMaterials.push({ name: material.name.trim(), quantity: material.quantity });
     }
