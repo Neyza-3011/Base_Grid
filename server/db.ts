@@ -189,19 +189,33 @@ export class DatabaseStore implements IDatabaseAdapter {
     return user || null;
   }
 
-  public async findUserByEmail(email: string): Promise<UserRecord | null> {
+  private findUserByEmailSync(email: string): UserRecord | null {
     const normalized = normalizeEmail(email);
-    for (const u of this.users.values()) {
-      if (u.email === normalized) {
-        return u;
-      }
+    for (const user of this.users.values()) {
+      if (user.email === normalized) return user;
     }
     return null;
   }
 
+  public async findUserByEmail(email: string): Promise<UserRecord | null> {
+    return this.findUserByEmailSync(email);
+  }
+
+  private revokeInviteTokensByEmailSync(companyId: string, email: string): void {
+    const normalized = normalizeEmail(email);
+    for (const [hash, token] of this.inviteTokens.entries()) {
+      if (token.companyId === companyId && token.invitedEmail === normalized && !token.consumed && !token.revoked) {
+        token.revoked = true;
+        this.inviteTokens.set(hash, token);
+      }
+    }
+  }
+
   public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    if (await this.findUserByEmail(normalized)) {
+    // Keep duplicate check and insertion in one synchronous turn. Awaiting the
+    // async public lookup here lets concurrent registrations both pass the check.
+    if (this.findUserByEmailSync(normalized)) {
       throw new Error("Email already registered");
     }
 
@@ -250,7 +264,8 @@ export class DatabaseStore implements IDatabaseAdapter {
 
   public async createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    const existing = await this.findUserByEmail(normalized);
+    // Do not yield between checking email uniqueness and inserting the user.
+    const existing = this.findUserByEmailSync(normalized);
     if (existing) {
       if (existing.provider !== "google") {
         throw new Error("Account exists with non-Google provider");
@@ -699,8 +714,9 @@ export class DatabaseStore implements IDatabaseAdapter {
 
     const now = new Date().toISOString();
 
-    // Revoke previous pending invites
-    await this.revokeInviteTokensByEmail(params.companyId, normalized);
+    // Revoke previous pending invites synchronously so another create request
+    // cannot pass the email check before this user is inserted.
+    this.revokeInviteTokensByEmailSync(params.companyId, normalized);
 
     const userId = `usr-${randomUUID()}`;
     const newUser: UserRecord = {
@@ -826,13 +842,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
   public async revokeInviteTokensByEmail(companyId: string, email: string): Promise<void> {
-    const normalized = normalizeEmail(email);
-    for (const [hash, tok] of this.inviteTokens.entries()) {
-      if (tok.companyId === companyId && tok.invitedEmail === normalized && !tok.consumed && !tok.revoked) {
-        tok.revoked = true;
-        this.inviteTokens.set(hash, tok);
-      }
-    }
+    this.revokeInviteTokensByEmailSync(companyId, email);
   }
 
   public async getPendingInvitesByCompany(companyId: string): Promise<InviteTokenRecord[]> {
