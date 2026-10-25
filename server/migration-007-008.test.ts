@@ -257,7 +257,7 @@ describe("P1.6 Migration 007 & 008 Referential Integrity & Immutability", () => 
 
       expect(result.alreadyApplied).toHaveLength(7);
       expect(result.applied).toContain("008_reports_intervention_company_check.sql");
-      expect(result.total).toBe(9);
+      expect(result.total).toBe(10);
 
       // Verify transaction was properly wrapped
       const begins = executedQueries.filter((q) => q.sql === "BEGIN");
