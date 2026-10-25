@@ -1445,5 +1445,73 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(check?.actualHours).toBe(2.0);
     });
   });
+
+  describe("9. Single-Date Validation in PUT Updates & Query Filter Validation", () => {
+    it("rejects invalid scheduledStart on PUT update when scheduledEnd is undefined or null (returns 400)", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Test update data inizio non valida",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          scheduledStart: "data-non-valida",
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/data inizio/i);
+
+      const unchanged = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(unchanged?.scheduledStart).toBeUndefined();
+    });
+
+    it("rejects invalid scheduledEnd on PUT update when scheduledStart is undefined or null (returns 400)", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Test update data fine non valida",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          scheduledEnd: "data-non-valida",
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/data fine/i);
+
+      const unchanged = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(unchanged?.scheduledEnd).toBeUndefined();
+    });
+
+    it("rejects invalid scheduledStartFrom or scheduledStartTo in GET list query filters (returns 400)", async () => {
+      const resFrom = await apiRequest("/api/v1/interventions?scheduledStartFrom=invalid-date", {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+      expect(resFrom.status).toBe(400);
+      expect(resFrom.data.detail || resFrom.data.error).toMatch(/data/i);
+
+      const resTo = await apiRequest("/api/v1/interventions?scheduledStartTo=invalid-date", {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+      expect(resTo.status).toBe(400);
+      expect(resTo.data.detail || resTo.data.error).toMatch(/data/i);
+    });
+  });
 });
 

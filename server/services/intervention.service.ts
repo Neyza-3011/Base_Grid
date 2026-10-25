@@ -56,6 +56,13 @@ export class InterventionService {
       effectiveFilters.technicianId = actor.id;
     }
 
+    if (effectiveFilters.scheduledStartFrom && isNaN(new Date(effectiveFilters.scheduledStartFrom).getTime())) {
+      throw new BadRequestError("Formato data inizio ricerca non valido.");
+    }
+    if (effectiveFilters.scheduledStartTo && isNaN(new Date(effectiveFilters.scheduledStartTo).getTime())) {
+      throw new BadRequestError("Formato data fine ricerca non valido.");
+    }
+
     const result = await this.db.getInterventionsByCompany(companyId, effectiveFilters);
 
     // Enrich items with related names for UI convenience
@@ -279,22 +286,17 @@ export class InterventionService {
     }
 
     // 6. Validate Scheduled Dates
+    if (input.scheduledStart && isNaN(new Date(input.scheduledStart).getTime())) {
+      throw new BadRequestError("Formato data inizio programmata non valido.");
+    }
+    if (input.scheduledEnd && isNaN(new Date(input.scheduledEnd).getTime())) {
+      throw new BadRequestError("Formato data fine programmata non valido.");
+    }
     if (input.scheduledStart && input.scheduledEnd) {
       const startDate = new Date(input.scheduledStart);
       const endDate = new Date(input.scheduledEnd);
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        throw new BadRequestError("Formato data programmata non valido.");
-      }
       if (endDate.getTime() <= startDate.getTime()) {
         throw new BadRequestError("La data di fine intervento programmata deve essere successiva alla data di inizio.");
-      }
-    } else if (input.scheduledStart) {
-      if (isNaN(new Date(input.scheduledStart).getTime())) {
-        throw new BadRequestError("Formato data inizio programmata non valido.");
-      }
-    } else if (input.scheduledEnd) {
-      if (isNaN(new Date(input.scheduledEnd).getTime())) {
-        throw new BadRequestError("Formato data fine programmata non valido.");
       }
     }
 
@@ -443,12 +445,15 @@ export class InterventionService {
     const targetStart = input.scheduledStart !== undefined ? input.scheduledStart : existing.scheduledStart;
     const targetEnd = input.scheduledEnd !== undefined ? input.scheduledEnd : existing.scheduledEnd;
 
+    if (targetStart && isNaN(new Date(targetStart).getTime())) {
+      throw new BadRequestError("Formato data inizio programmata non valido.");
+    }
+    if (targetEnd && isNaN(new Date(targetEnd).getTime())) {
+      throw new BadRequestError("Formato data fine programmata non valido.");
+    }
     if (targetStart && targetEnd) {
       const startDate = new Date(targetStart);
       const endDate = new Date(targetEnd);
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        throw new BadRequestError("Formato data programmata non valido.");
-      }
       if (endDate.getTime() <= startDate.getTime()) {
         throw new BadRequestError("La data di fine intervento programmata deve essere successiva alla data di inizio.");
       }
