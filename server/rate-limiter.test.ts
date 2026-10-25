@@ -169,4 +169,15 @@ describe("Rate Limiter Middleware", () => {
     const res2 = await request(app).get("/").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", testIp);
     expect(res2.status).toBe(429);
   });
+
+  it("12. close() cleanly disconnects Redis client", async () => {
+    const mockRedis = {
+      status: "ready",
+      quit: vi.fn(async () => "OK"),
+      disconnect: vi.fn(),
+    };
+    const testLimiter = new (rateLimiter.constructor as any)(mockRedis);
+    await testLimiter.close();
+    expect(mockRedis.quit).toHaveBeenCalled();
+  });
 });

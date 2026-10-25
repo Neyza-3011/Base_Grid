@@ -171,11 +171,15 @@ export class RateLimiter {
     return this.redisClient;
   }
 
-  public close() {
+  public async close(): Promise<void> {
     if (this.redisClient) {
       try {
         if (this.redisClient.status === "ready" || this.redisClient.status === "connect") {
-          this.redisClient.quit().catch(() => {});
+          await this.redisClient.quit().catch(() => {
+            try {
+              this.redisClient?.disconnect();
+            } catch {}
+          });
         } else {
           this.redisClient.disconnect();
         }
