@@ -189,19 +189,23 @@ export class DatabaseStore implements IDatabaseAdapter {
     return user || null;
   }
 
-  public async findUserByEmail(email: string): Promise<UserRecord | null> {
+  private findUserByEmailSync(email: string): UserRecord | null {
     const normalized = normalizeEmail(email);
-    for (const u of this.users.values()) {
-      if (u.email === normalized) {
-        return u;
-      }
+    for (const user of this.users.values()) {
+      if (user.email === normalized) return user;
     }
     return null;
   }
 
+  public async findUserByEmail(email: string): Promise<UserRecord | null> {
+    return this.findUserByEmailSync(email);
+  }
+
   public async createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    if (await this.findUserByEmail(normalized)) {
+    // Keep duplicate check and insertion in one synchronous turn. Awaiting the
+    // async public lookup here lets concurrent registrations both pass the check.
+    if (this.findUserByEmailSync(normalized)) {
       throw new Error("Email already registered");
     }
 
@@ -250,7 +254,8 @@ export class DatabaseStore implements IDatabaseAdapter {
 
   public async createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }> {
     const normalized = normalizeEmail(params.email);
-    const existing = await this.findUserByEmail(normalized);
+    // Do not yield between checking email uniqueness and inserting the user.
+    const existing = this.findUserByEmailSync(normalized);
     if (existing) {
       if (existing.provider !== "google") {
         throw new Error("Account exists with non-Google provider");
