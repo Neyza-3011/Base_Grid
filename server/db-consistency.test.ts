@@ -23,6 +23,31 @@ describe("In-memory user creation concurrency contract", () => {
     expect(await db.findUserByEmail(email)).not.toBeNull();
   });
 
+  it("allows at most one concurrent team invite for the same normalized email", async () => {
+    const db = new DatabaseStore();
+    const email = `invite-race-${randomUUID()}@example.test`;
+    const params = {
+      companyId: "comp-rossi-001",
+      companyName: "Rossi Impianti Srl",
+      inviterId: "usr-rossi-admin",
+      email,
+      fullName: "Concurrent Invite",
+      role: "technician" as const,
+      passwordHash: "test-hash",
+      salt: "test-salt",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+
+    const results = await Promise.allSettled([
+      db.createTeamMemberWithInvite({ ...params, tokenHash: randomUUID() }),
+      db.createTeamMemberWithInvite({ ...params, email: ` ${email.toUpperCase()} `, tokenHash: randomUUID() }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(await db.findUserByEmail(email)).not.toBeNull();
+  });
+
   it("reuses the same Google user for concurrent sign-ins with the same normalized email", async () => {
     const db = new DatabaseStore();
     const email = `google-race-${randomUUID()}@example.test`;
