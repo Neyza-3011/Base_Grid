@@ -6,6 +6,7 @@ import httpProxy from "http-proxy";
 import { createApp } from "./server/app";
 import { db } from "./server/db";
 import { tokenStore } from "./server/token-store";
+import { rateLimiter } from "./server/rate-limiter";
 import { asyncHandler } from "./server/async-handler";
 import { runMigrations } from "./server/migrator";
 import { getRuntimeMode } from "./server/runtime-mode";
@@ -322,6 +323,7 @@ async function startServer() {
     nitroProcess,
     db,
     tokenStore,
+    rateLimiter,
     exit: (code) => process.exit(code),
     timeoutMs: 10000,
   });
@@ -343,6 +345,7 @@ export interface ShutdownDependencies {
   nitroProcess?: { kill: (sig: string) => boolean } | null;
   db?: { close?: () => Promise<void> };
   tokenStore?: { getAdapter?: () => { close?: () => Promise<void> } };
+  rateLimiter?: { close?: () => Promise<void> | void };
   exit?: (code: number) => void;
   timeoutMs?: number;
 }
@@ -415,6 +418,16 @@ export function createShutdownHandler(deps: ShutdownDependencies) {
             }
           } catch (err) {
             console.error("Error closing Redis token store:", err);
+          }
+        }
+
+        // 6. Close the Redis rate limiter connection
+        if (deps.rateLimiter && typeof deps.rateLimiter.close === "function") {
+          try {
+            console.log("Closing Redis rate limiter connection...");
+            await deps.rateLimiter.close();
+          } catch (err) {
+            console.error("Error closing Redis rate limiter:", err);
           }
         }
 

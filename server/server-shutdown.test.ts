@@ -6,6 +6,7 @@ describe("Graceful Shutdown Handler (server.ts)", () => {
   let mockNitro: any;
   let mockDb: any;
   let mockTokenStore: any;
+  let mockRateLimiter: any;
   let mockAdapter: any;
   let mockExit: any;
   let callOrder: string[];
@@ -43,6 +44,12 @@ describe("Graceful Shutdown Handler (server.ts)", () => {
       getAdapter: vi.fn(() => mockAdapter),
     };
 
+    mockRateLimiter = {
+      close: vi.fn(async () => {
+        callOrder.push("rateLimiter.close");
+      }),
+    };
+
     mockExit = vi.fn();
   });
 
@@ -52,6 +59,7 @@ describe("Graceful Shutdown Handler (server.ts)", () => {
       nitroProcess: mockNitro,
       db: mockDb,
       tokenStore: mockTokenStore,
+      rateLimiter: mockRateLimiter,
       exit: mockExit,
       timeoutMs: 1000,
     });
@@ -63,6 +71,7 @@ describe("Graceful Shutdown Handler (server.ts)", () => {
       "nitro.kill(SIGTERM)",
       "db.close",
       "redis.close",
+      "rateLimiter.close",
     ]);
     expect(mockExit).toHaveBeenCalledWith(0);
     expect(mockExit).toHaveBeenCalledTimes(1);
