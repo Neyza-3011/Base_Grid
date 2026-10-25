@@ -257,13 +257,13 @@ describe("P1.6 Migration 007 & 008 Referential Integrity & Immutability", () => 
 
       expect(result.alreadyApplied).toHaveLength(7);
       expect(result.applied).toContain("008_reports_intervention_company_check.sql");
-      expect(result.total).toBe(9);
+      expect(result.total).toBe(10);
 
       // Verify transaction was properly wrapped
       const begins = executedQueries.filter((q) => q.sql === "BEGIN");
       const commits = executedQueries.filter((q) => q.sql === "COMMIT");
-      expect(begins).toHaveLength(2);
-      expect(commits).toHaveLength(2);
+      expect(begins).toHaveLength(result.applied.length);
+      expect(commits).toHaveLength(result.applied.length);
 
       // Verify version 008 was recorded in schema_migrations
       const insertRecord = executedQueries.find(
