@@ -255,7 +255,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     expect(item?.assetName).toBeUndefined();
     expect(item?.technicianName).toBeUndefined();
     expect(item?.jobCompleteScore?.readyForBilling).toBe(false);
-    expect(item?.jobCompleteScore?.checks.find((check) => check.key === "report_linked")?.passed).toBe(false);
+    expect(item?.jobCompleteScore?.checks.find((check) => check.id === "report_linked")?.passed).toBe(false);
   });
 
   it("propagates PostgreSQL report-batch failures instead of returning a fabricated missing report", async () => {
