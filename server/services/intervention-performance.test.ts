@@ -11,21 +11,19 @@ const describePostgres = testDatabaseUrl ? describe : describe.skip;
 describePostgres("InterventionService PostgreSQL query-count regression", () => {
   let adminPool: Pool | undefined;
   let testPool: Pool | undefined;
-  let adapter: PostgresAdapter;
-  let service: InterventionService;
+  let adapter: PostgresAdapter | undefined;
+  let service: InterventionService | undefined;
   let schemaName = "";
   let captureQueries = false;
   let failBatchTable: "reports" | "assets" | null = null;
   const capturedQueries: string[] = [];
   let companyA = "";
   let adminA = "";
-  let companyB = "";
   let customerBId = "";
   let locationBId = "";
   let assetBId = "";
   let technicianBId = "";
   let interventionBId = "";
-  const seededInterventionIds: string[] = [];
 
   beforeAll(async () => {
     if (!testDatabaseUrl) return;
@@ -65,10 +63,10 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     // Each intervention deliberately has its own customer, location, asset and
     // technician so repeated shared references cannot hide per-ID query fan-out.
     for (let i = 0; i < 100; i++) {
-      const customer = await adapter.createCustomer(companyA, {
+      const customer = await adapter!.createCustomer(companyA, {
         displayName: `Perf customer ${i}`,
       });
-      const location = await adapter.createLocation(companyA, customer.id, {
+      const location = await adapter!.createLocation(companyA, customer.id, {
         name: `Perf location ${i}`,
         address: `Test address ${i}`,
         city: "Test City",
@@ -88,7 +86,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
         isActive: true,
         emailConfirmed: true,
       });
-      const intervention = await adapter.createIntervention(companyA, {
+      const intervention = await adapter!.createIntervention(companyA, {
         customerId: customer.id,
         locationId: location.id,
         assetId: asset.id,
@@ -99,7 +97,6 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
         createdBy: adminA,
         updatedBy: adminA,
       });
-      seededInterventionIds.push(intervention.id);
       await adapter.createReport(companyA, {
         interventionId: intervention.id,
         customerId: customer.id,
@@ -118,7 +115,6 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       password: "Test-only-password-123!",
       role: "admin",
     });
-    companyB = tenantB.company.id;
     const customerB = await adapter.createCustomer(companyB, { displayName: "Tenant B customer" });
     customerBId = customerB.id;
     const locationB = await adapter.createLocation(companyB, customerB.id, { name: "Tenant B location" });
@@ -194,7 +190,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       captureQueries = true;
       let result;
       try {
-        result = await service.getInterventions(companyA, { limit: pageSize });
+        result = await service!.getInterventions(companyA, { limit: pageSize });
       } finally {
         captureQueries = false;
       }
@@ -226,11 +222,11 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
   );
 
   it("keeps every batched lookup tenant-scoped and treats missing relations as absent", async () => {
-    expect(await adapter.getCustomersByIdsAndCompany([customerBId], companyA)).toEqual([]);
-    expect(await adapter.getLocationsByIdsAndCompany([locationBId], companyA)).toEqual([]);
-    expect(await adapter.getAssetsByIdsAndCompany([assetBId], companyA)).toEqual([]);
-    expect(await adapter.getUsersByIdsAndCompany([technicianBId], companyA)).toEqual([]);
-    expect(await adapter.getReportsByInterventionIdsAndCompany([interventionBId], companyA)).toEqual([]);
+    expect(await adapter!.getCustomersByIdsAndCompany([customerBId], companyA)).toEqual([]);
+    expect(await adapter!.getLocationsByIdsAndCompany([locationBId], companyA)).toEqual([]);
+    expect(await adapter!.getAssetsByIdsAndCompany([assetBId], companyA)).toEqual([]);
+    expect(await adapter!.getUsersByIdsAndCompany([technicianBId], companyA)).toEqual([]);
+    expect(await adapter!.getReportsByInterventionIdsAndCompany([interventionBId], companyA)).toEqual([]);
 
     expect(await adapter.getCustomersByIdsAndCompany(["missing-customer"], companyA)).toEqual([]);
     expect(await adapter.getLocationsByIdsAndCompany(["missing-location"], companyA)).toEqual([]);
@@ -252,7 +248,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       updatedBy: adminA,
     });
 
-    const result = await service.getInterventions(companyA, { limit: 100 });
+    const result = await service!.getInterventions(companyA, { limit: 100 });
     const item = result.items.find((candidate) => candidate.id === intervention.id);
     expect(item).toBeDefined();
     expect(item?.assetName).toBeUndefined();
@@ -266,7 +262,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     async (table) => {
       failBatchTable = table;
       try {
-        await expect(service.getInterventions(companyA, { limit: 10 })).rejects.toThrow(
+        await expect(service!.getInterventions(companyA, { limit: 10 })).rejects.toThrow(
           `simulated ${table} batch read failure`,
         );
       } finally {
