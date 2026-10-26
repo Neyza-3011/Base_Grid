@@ -128,6 +128,27 @@ export async function getAppliedMigrations(clientOrPool: any): Promise<AppliedMi
   return result.rows || [];
 }
 
+/**
+ * Reject ambiguous migration versions before opening a database connection.
+ * Numeric versions are compared without leading zeroes so "001" and "1" collide.
+ */
+function assertUniqueMigrationVersions(migrations: MigrationFile[]): void {
+  const seen = new Map<string, { version: string; name: string }>();
+  for (const migration of migrations) {
+    const canonicalVersion = /^\d+$/.test(migration.version)
+      ? migration.version.replace(/^0+(?=\d)/, "")
+      : migration.version;
+    const previous = seen.get(canonicalVersion);
+    if (previous) {
+      throw new Error(
+        '[Migrator] Duplicate migration version "' + migration.version + '" in "' + migration.name +
+        '" conflicts with "' + previous.version + '" in "' + previous.name + '". Migration versions must be unique.'
+      );
+    }
+    seen.set(canonicalVersion, { version: migration.version, name: migration.name });
+  }
+}
+
 const MIGRATION_ADVISORY_LOCK_KEY = [1111966788, 1296644679] as const;
 const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
 const DEFAULT_MIGRATION_LOCK_POLL_INTERVAL_MS = 100;
@@ -180,6 +201,7 @@ export async function runMigrations(
   if (availableMigrations.length === 0) {
     throw new Error('[Migrator] No SQL migration files supplied for required directory "' + dirPath + '".');
   }
+  assertUniqueMigrationVersions(availableMigrations);
 
   const isPool = typeof poolOrClient.connect === "function";
   const client = isPool ? await poolOrClient.connect() : poolOrClient;
