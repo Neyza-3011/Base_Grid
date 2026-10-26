@@ -888,5 +888,83 @@ describe("P1.7 Job Complete Score Suite", () => {
 
       expect(res.status).toBe(403);
     });
+
+    it("covers the intervention-to-report-to-PDF-to-score API workflow", async () => {
+      const admin = await createTestUserAndLogin(companyA, "admin");
+      const technician = await createTestUserAndLogin(companyA, "technician");
+      const customer = await db.createCustomer(companyA, { displayName: "Cliente Workflow E2E" });
+      const location = await db.createLocation(companyA, customer.id, {
+        name: "Sede Workflow E2E",
+        address: "Via Roma 25",
+        city: "Roma",
+      });
+      const intervention: InterventionRecord = {
+        id: "int-workflow-report-pdf-score",
+        companyId: companyA,
+        customerId: customer.id,
+        locationId: location.id,
+        description: "Verifica impianto workflow",
+        priority: "media",
+        status: "verificato",
+        technicianId: technician.user.id,
+        actualHours: 2,
+        notes: "Verifica conclusa",
+        createdBy: admin.user.id,
+        updatedBy: admin.user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      (db as any).interventions.set(intervention.id, intervention);
+
+      const createReport = await apiRequest("/api/v1/reports", {
+        method: "POST",
+        cookies: technician.cookies,
+        headers: technician.headers,
+        body: {
+          ...validReportPayload,
+          client_name: customer.displayName,
+          client_address: location.address,
+          client_city: location.city,
+          work_hours: 2,
+          status: "submitted",
+          materials_status: "used",
+          materials_used: [{ name: "Cavo", quantity: 2 }],
+          signature_base64:
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          intervention_id: intervention.id,
+        },
+      });
+
+      expect(createReport.status).toBe(201);
+      expect(createReport.body.intervention_id).toBe(intervention.id);
+      expect(createReport.body.customer_id).toBe(customer.id);
+      expect(createReport.body.location_id).toBe(location.id);
+      expect(createReport.body.signature_base64).toBeUndefined();
+      expect(createReport.body.companyId).toBeUndefined();
+
+      const pdf = await apiRequest(`/api/v1/reports/${createReport.body.id}/pdf`, {
+        cookies: admin.cookies,
+        headers: admin.headers,
+      });
+      expect(pdf.status).toBe(200);
+      expect(pdf.headers.get("content-type")).toContain("application/pdf");
+      expect(typeof pdf.data).toBe("string");
+      expect(pdf.data.startsWith("%PDF-")).toBe(true);
+      expect(pdf.data.trimEnd().endsWith("%%EOF")).toBe(true);
+
+      const score = await apiRequest(`/api/v1/interventions/${intervention.id}/score`, {
+        cookies: admin.cookies,
+        headers: admin.headers,
+      });
+      expect(score.status).toBe(200);
+      expect(score.body.readyForBilling).toBe(true);
+      expect(score.body.missingMandatoryCount).toBe(0);
+      expect(score.body.checks.find((check: { id: string }) => check.id === "report_linked")?.passed)
+        .toBe(true);
+      expect(score.body.checks.find((check: { id: string }) => check.id === "signature")?.passed)
+        .toBe(true);
+      expect(score.body.checks.find((check: { id: string }) => check.id === "materials")?.passed)
+        .toBe(true);
+    });
   });
 });
