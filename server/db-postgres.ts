@@ -2318,8 +2318,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     const countSql = `SELECT COUNT(*) AS total FROM interventions WHERE ${filterConditions.join(" AND ")}`;
-    const countRes = await this.pool.query(countSql, filterParams);
-    const totalCount = parseInt(countRes.rows[0]?.total || "0", 10);
 
     const selectConditions = [...filterConditions];
     const selectParams = [...filterParams];
@@ -2343,7 +2341,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
     selectParams.push(fetchLimit);
     const sql = `SELECT * FROM interventions WHERE ${whereClause} ORDER BY "createdAt" DESC, id DESC LIMIT $${paramIdx}`;
 
-    const res = await this.pool.query(sql, selectParams);
+    const [countRes, res] = await Promise.all([
+      this.pool.query(countSql, filterParams),
+      this.pool.query(sql, selectParams),
+    ]);
+    const totalCount = parseInt(countRes.rows[0]?.total || "0", 10);
     const rows = res.rows;
     let nextCursor: string | undefined = undefined;
 

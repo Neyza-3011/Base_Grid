@@ -65,68 +65,135 @@ export class InterventionService {
 
     const result = await this.db.getInterventionsByCompany(companyId, effectiveFilters);
 
-    // Enrich items with related names for UI convenience
-    const enrichedItems: InterventionResponse[] = await Promise.all(
-      result.items.map(async (item) => {
-        const { companyId: _, ...rest } = item;
-        let customerName: string | undefined;
-        let customerPhone: string | undefined;
-        let locationName: string | undefined;
-        let locationAddress: string | undefined;
-        let locationCity: string | undefined;
-        let assetName: string | undefined;
-        let technicianName: string | undefined;
+    // Collect distinct entity IDs across all items in the list to avoid N+1 queries
+    const customerIds = new Set<string>();
+    const locationIds = new Set<string>();
+    const assetIds = new Set<string>();
+    const technicianIds = new Set<string>();
 
-        try {
-          if (item.customerId) {
-            const cust = await this.db.getCustomerByIdAndCompany(item.customerId, companyId);
-            if (cust) {
-              customerName = cust.displayName;
-              customerPhone = cust.phoneNumber;
-            }
-          }
-          if (item.locationId) {
-            const loc = await this.db.getLocationByIdAndCompany(item.locationId, companyId);
-            if (loc) {
-              locationName = loc.name;
-              locationAddress = loc.address;
-              locationCity = loc.city;
-            }
-          }
-          if (item.assetId) {
-            const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
-            if (ast) assetName = ast.name;
-          }
-          if (item.technicianId) {
-            const tech = await this.db.getUserByIdAndCompany(item.technicianId, companyId);
-            if (tech) technicianName = tech.fullName;
-          }
-        } catch {
-          // Non-blocking enrichment failure
-        }
+    for (const item of result.items) {
+      if (item.customerId) customerIds.add(item.customerId);
+      if (item.locationId) locationIds.add(item.locationId);
+      if (item.assetId) assetIds.add(item.assetId);
+      if (item.technicianId) technicianIds.add(item.technicianId);
+    }
 
-        let jobCompleteScore: JobCompleteScoreResult | undefined = undefined;
-        try {
-          const report = await this.db.getReportByInterventionId(companyId, item.id);
-          const asset = item.assetId ? await this.db.getAssetByIdAndCompany(item.assetId, companyId) : null;
-          jobCompleteScore = calculateJobCompleteScore(item, report, asset);
-        } catch {
-          // Non-blocking score calculation failure
-        }
+    // Batch fetch distinct entities concurrently in a single phase
+    const [customers, locations, assets, technicians, reports] = await Promise.all([
+      Promise.all(
+        Array.from(customerIds).map(async (id) => {
+          try {
+            return await this.db.getCustomerByIdAndCompany(id, companyId);
+          } catch {
+            return null;
+          }
+        })
+      ),
+      Promise.all(
+        Array.from(locationIds).map(async (id) => {
+          try {
+            return await this.db.getLocationByIdAndCompany(id, companyId);
+          } catch {
+            return null;
+          }
+        })
+      ),
+      Promise.all(
+        Array.from(assetIds).map(async (id) => {
+          try {
+            return await this.db.getAssetByIdAndCompany(id, companyId);
+          } catch {
+            return null;
+          }
+        })
+      ),
+      Promise.all(
+        Array.from(technicianIds).map(async (id) => {
+          try {
+            return await this.db.getUserByIdAndCompany(id, companyId);
+          } catch {
+            return null;
+          }
+        })
+      ),
+      Promise.all(
+        result.items.map(async (item) => {
+          try {
+            const report = await this.db.getReportByInterventionId(companyId, item.id);
+            return { interventionId: item.id, report };
+          } catch {
+            return { interventionId: item.id, report: null };
+          }
+        })
+      ),
+    ]);
 
-        return {
-          ...rest,
-          jobCompleteScore,
-          customerName,
-          customerPhone,
-          locationName,
-          locationAddress,
-          locationCity,
-          assetName,
-          technicianName,
-        };
-      })
-    );
+    // Build fast request-scoped O(1) lookup maps
+    const customerMap = new Map<string, any>();
+    for (const c of customers) {
+      if (c) customerMap.set(c.id, c);
+    }
+
+    const locationMap = new Map<string, any>();
+    for (const l of locations) {
+      if (l) locationMap.set(l.id, l);
+    }
+
+    const assetMap = new Map<string, any>();
+    for (const a of assets) {
+      if (a) assetMap.set(a.id, a);
+    }
+
+    const technicianMap = new Map<string, any>();
+    for (const t of technicians) {
+      if (t) technicianMap.set(t.id, t);
+    }
+
+    const reportMap = new Map<string, any>();
+    for (const r of reports) {
+      if (r && r.interventionId) reportMap.set(r.interventionId, r.report);
+    }
+
+    // Enrich items using request-scoped lookup maps in O(1) time
+    const enrichedItems: InterventionResponse[] = result.items.map((item) => {
+      const { companyId: _, ...rest } = item;
+
+      const cust = item.customerId ? customerMap.get(item.customerId) : undefined;
+      const customerName = cust?.displayName;
+      const customerPhone = cust?.phoneNumber;
+
+      const loc = item.locationId ? locationMap.get(item.locationId) : undefined;
+      const locationName = loc?.name;
+      const locationAddress = loc?.address;
+      const locationCity = loc?.city;
+
+      const ast = item.assetId ? assetMap.get(item.assetId) : undefined;
+      const assetName = ast?.name;
+
+      const tech = item.technicianId ? technicianMap.get(item.technicianId) : undefined;
+      const technicianName = tech?.fullName;
+
+      let jobCompleteScore: JobCompleteScoreResult | undefined = undefined;
+      try {
+        const report = reportMap.get(item.id) || null;
+        const asset = ast || null; // Reuse cached asset reference without re-querying DB
+        jobCompleteScore = calculateJobCompleteScore(item, report, asset);
+      } catch {
+        // Non-blocking score calculation failure
+      }
+
+      return {
+        ...rest,
+        jobCompleteScore,
+        customerName,
+        customerPhone,
+        locationName,
+        locationAddress,
+        locationCity,
+        assetName,
+        technicianName,
+      };
+    });
 
     return {
       items: enrichedItems,
