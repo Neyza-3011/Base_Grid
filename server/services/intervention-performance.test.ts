@@ -47,10 +47,11 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       max: 10,
     });
     await runMigrations(testPool);
-    adapter = new PostgresAdapter(testPool);
-    service = new InterventionService(adapter);
+    const pgAdapter = new PostgresAdapter(testPool);
+    adapter = pgAdapter;
+    service = new InterventionService(pgAdapter);
 
-    const tenantA = await adapter.createUser({
+    const tenantA = await pgAdapter.createUser({
       email: `perf-admin-${randomUUID()}@example.test`,
       fullName: "Performance Test Admin",
       companyName: "Performance Test A",
@@ -71,11 +72,11 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
         address: `Test address ${i}`,
         city: "Test City",
       });
-      const asset = await adapter.createAsset(companyA, customer.id, location.id, {
+      const asset = await pgAdapter.createAsset(companyA, customer.id, location.id, {
         name: `Perf asset ${i}`,
         assetType: "altro",
       });
-      const technician = await adapter.createTeamMember({
+      const technician = await pgAdapter.createTeamMember({
         companyId: companyA,
         companyName: tenantA.company.name,
         email: `perf-tech-${i}-${randomUUID()}@example.test`,
@@ -97,7 +98,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
         createdBy: adminA,
         updatedBy: adminA,
       });
-      await adapter.createReport(companyA, {
+      await pgAdapter.createReport(companyA, {
         interventionId: intervention.id,
         customerId: customer.id,
         locationId: location.id,
@@ -108,20 +109,20 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       });
     }
 
-    const tenantB = await adapter.createUser({
+    const tenantB = await pgAdapter.createUser({
       email: `perf-admin-b-${randomUUID()}@example.test`,
       fullName: "Performance Test Admin B",
       companyName: "Performance Test B",
       password: "Test-only-password-123!",
       role: "admin",
     });
-    const customerB = await adapter.createCustomer(companyB, { displayName: "Tenant B customer" });
+    const customerB = await pgAdapter.createCustomer(companyB, { displayName: "Tenant B customer" });
     customerBId = customerB.id;
-    const locationB = await adapter.createLocation(companyB, customerB.id, { name: "Tenant B location" });
+    const locationB = await pgAdapter.createLocation(companyB, customerB.id, { name: "Tenant B location" });
     locationBId = locationB.id;
-    const assetB = await adapter.createAsset(companyB, customerB.id, locationB.id, { name: "Tenant B asset" });
+    const assetB = await pgAdapter.createAsset(companyB, customerB.id, locationB.id, { name: "Tenant B asset" });
     assetBId = assetB.id;
-    const technicianB = await adapter.createTeamMember({
+    const technicianB = await pgAdapter.createTeamMember({
       companyId: companyB,
       companyName: tenantB.company.name,
       email: `perf-tech-b-${randomUUID()}@example.test`,
@@ -133,7 +134,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       emailConfirmed: true,
     });
     technicianBId = technicianB.id;
-    const interventionB = await adapter.createIntervention(companyB, {
+    const interventionB = await pgAdapter.createIntervention(companyB, {
       customerId: customerB.id,
       locationId: locationB.id,
       assetId: assetB.id,
@@ -145,7 +146,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       updatedBy: tenantB.user.id,
     });
     interventionBId = interventionB.id;
-    await adapter.createReport(companyB, {
+    await pgAdapter.createReport(companyB, {
       interventionId: interventionB.id,
       customerId: customerB.id,
       locationId: locationB.id,
@@ -188,7 +189,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     async (pageSize) => {
       capturedQueries.length = 0;
       captureQueries = true;
-      let result;
+      let result: Awaited<ReturnType<InterventionService["getInterventions"]>>;
       try {
         result = await service!.getInterventions(companyA, { limit: pageSize });
       } finally {
