@@ -37,6 +37,9 @@ export class RateLimiter {
           ...options,
         });
       }
+      this.redisClient.on?.("error", (err: any) => {
+        console.error("[RedisRateLimiterError] Unexpected error on Redis connection:", err?.message || err);
+      });
     } else {
       const mode = getRuntimeMode();
       if (mode === "production") {

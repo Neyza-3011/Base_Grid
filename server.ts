@@ -293,21 +293,25 @@ async function startServer() {
     proxy.on("error", (e: any, _req: any, res: any) => {
       console.error("[NitroProxyError]", e?.message || e);
       if (res && typeof res.headersSent === "boolean") {
-        if (!res.headersSent) {
+        if (!res.headersSent && typeof res.status === "function") {
           res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
         } else if (typeof res.end === "function") {
           res.end();
         }
+      } else if (res && typeof res.destroy === "function") {
+        res.destroy();
       }
     });
 
     app.use((req, res) => {
       proxy.web(req, res, { target: `http://127.0.0.1:${nitroPort}` }, (e) => {
         console.error("[NitroProxyError]", e?.message || e);
-        if (!res.headersSent) {
-          res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
-        } else {
-          res.end();
+        if (res && typeof res.headersSent === "boolean") {
+          if (!res.headersSent && typeof res.status === "function") {
+            res.status(502).send("Bad Gateway: Nitro Server not ready or failed.");
+          } else if (typeof res.end === "function") {
+            res.end();
+          }
         }
       });
     });
