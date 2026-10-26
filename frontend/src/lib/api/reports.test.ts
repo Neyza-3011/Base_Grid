@@ -9,7 +9,12 @@ import {
   mapDtoToReport,
   formatReportDateTime,
 } from "./reports";
-import { getReports, addReport, removeReport, updateDraftReport as updateStoredDraftReport } from "../reportsStorage";
+import {
+  getReports,
+  addReport,
+  removeReport,
+  updateDraftReport as updateStoredDraftReport,
+} from "../reportsStorage";
 
 describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reportsStorage.ts)", () => {
   beforeEach(() => {
