@@ -15,7 +15,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
   let service: InterventionService;
   let schemaName = "";
   let captureQueries = false;
-  let failReportBatch = false;
+  let failBatchTable: "reports" | "assets" | null = null;
   const capturedQueries: string[] = [];
   let companyA = "";
   let adminA = "";
@@ -165,8 +165,11 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     poolWithSpy.query = (...args: any[]) => {
       const sql = typeof args[0] === "string" ? args[0] : String(args[0]?.text || "");
       if (captureQueries) capturedQueries.push(sql);
-      if (failReportBatch && /FROM\s+reports\b/i.test(sql) && /ANY\s*\(/i.test(sql)) {
-        return Promise.reject(new Error("simulated report batch read failure"));
+      const isTargetBatchQuery =
+        (failBatchTable === "reports" && /FROM\s+reports\b/i.test(sql)) ||
+        (failBatchTable === "assets" && /FROM\s+assets\b/i.test(sql));
+      if (failBatchTable && isTargetBatchQuery && /ANY\s*\(/i.test(sql)) {
+        return Promise.reject(new Error(`simulated ${failBatchTable} batch read failure`));
       }
       return originalQuery(...args);
     };
@@ -258,14 +261,17 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     expect(item?.jobCompleteScore?.checks.find((check) => check.id === "report_linked")?.passed).toBe(false);
   });
 
-  it("propagates PostgreSQL report-batch failures instead of returning a fabricated missing report", async () => {
-    failReportBatch = true;
-    try {
-      await expect(service.getInterventions(companyA, { limit: 10 })).rejects.toThrow(
-        "simulated report batch read failure",
-      );
-    } finally {
-      failReportBatch = false;
-    }
-  });
+  it.each(["reports", "assets"] as const)(
+    "propagates PostgreSQL %s batch failures instead of fabricating a missing relation",
+    async (table) => {
+      failBatchTable = table;
+      try {
+        await expect(service.getInterventions(companyA, { limit: 10 })).rejects.toThrow(
+          `simulated ${table} batch read failure`,
+        );
+      } finally {
+        failBatchTable = null;
+      }
+    },
+  );
 });
