@@ -49,8 +49,8 @@ describePostgres("Migration 010 preflight for existing report data", () => {
     ]);
     const now = new Date().toISOString();
     await testPool.query(
-      'INSERT INTO customers (id, "companyId", "displayName", "createdAt", "updatedAt") VALUES ($1, $2, $3, $6, $6), ($4, $5, $7, $6, $6), ($8, $2, $9, $6, $6)',
-      ["customer-a", "company-a", "Customer A", "customer-a2", "company-a", "customer-a2", "Customer A2", "customer-b", "Customer B", now],
+      'INSERT INTO customers (id, "companyId", "displayName", "createdAt", "updatedAt") VALUES ($1, $2, $3, $10, $10), ($4, $5, $6, $10, $10), ($7, $8, $9, $10, $10)',
+      ["customer-a", "company-a", "Customer A", "customer-a2", "company-a", "Customer A2", "customer-b", "company-b", "Customer B", now],
     );
     await testPool.query(
       'INSERT INTO locations (id, "companyId", "customerId", name, address, city, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $7)',
@@ -123,7 +123,7 @@ describePostgres("Migration 010 preflight for existing report data", () => {
     );
     expect(constraints.rows.map((row) => row.conname).sort()).toEqual([
       "chk_reports_customer_requires_company",
-      "chk_reports_location_customer_tenant_consistency",
+      "chk_reports_location_requires_customer_company",
       "fk_reports_customer_tenant_consistency",
       "fk_reports_location_customer_tenant_consistency",
     ].sort());
