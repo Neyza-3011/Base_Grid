@@ -1,8 +1,32 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "crypto";
-import { PostgresAdapter } from "./db-postgres";
+import { PostgresAdapter, getPostgresPingFailureCategory } from "./db-postgres";
 import { config } from "./config";
 import { CompanyRecord, UserRecord, ReportRecord } from "./types";
+
+describe("getPostgresPingFailureCategory", () => {
+  it.each([
+    [{ code: "ECONNREFUSED" }, /connection refused/i],
+    [{ code: "ENOTFOUND" }, /hostname could not be resolved/i],
+    [{ code: "ETIMEDOUT" }, /timed out/i],
+    [{ code: "28P01" }, /rejected authentication/i],
+    [{ code: "3D000" }, /database does not exist/i],
+    [{ code: "SELF_SIGNED_CERT_IN_CHAIN" }, /TLS certificate validation failed/i],
+    [{ message: "Database ping timed out" }, /ping deadline expired/i],
+  ])("classifies a known database failure without exposing raw error details", (error, expected) => {
+    expect(getPostgresPingFailureCategory(error)).toMatch(expected);
+  });
+
+  it("does not include raw error messages or credentials in diagnostics", () => {
+    const category = getPostgresPingFailureCategory({
+      code: "UNKNOWN_CODE",
+      message: "postgres://user:secret@example.com/private database password=secret",
+    });
+    expect(category).toBe("database connection failed with error code UNKNOWN_CODE");
+    expect(category).not.toContain("secret");
+    expect(category).not.toContain("example.com");
+  });
+});
 
 describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () => {
   let mockPool: any;

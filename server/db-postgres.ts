@@ -26,6 +26,33 @@ import { hashPassword } from "./security";
 import { getRuntimeMode } from "./runtime-mode";
 import { getPostgresConnectionOptions } from "./postgres-connection-options";
 
+/**
+ * Returns a low-risk diagnostic category for PostgreSQL ping failures.
+ * Never logs connection strings, credentials, SQL, or raw provider messages.
+ */
+export function getPostgresPingFailureCategory(error: unknown): string {
+  const candidate = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown }
+    : {};
+  const code = typeof candidate.code === "string" ? candidate.code.toUpperCase() : "";
+
+  if (code === "ECONNREFUSED") return "connection refused by the database host";
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "database hostname could not be resolved";
+  if (code === "ETIMEDOUT" || code === "ESOCKETTIMEDOUT") return "network/database connection timed out";
+  if (code === "ECONNRESET" || code === "EPIPE") return "database connection was reset";
+  if (code === "ENETUNREACH" || code === "EHOSTUNREACH") return "database host is not reachable from this runtime";
+  if (["CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "ERR_TLS_CERT_ALTNAME_INVALID"].includes(code)) {
+    return "TLS certificate validation failed; verify the provider CA and DATABASE_SSL_CA";
+  }
+  if (code === "28P01") return "PostgreSQL rejected authentication credentials";
+  if (code === "3D000") return "configured PostgreSQL database does not exist";
+  if (code === "28000") return "PostgreSQL rejected the connection authorization";
+  if (code === "53300") return "PostgreSQL connection limit reached";
+  if (candidate.message === "Database ping timed out") return "ping deadline expired before the database responded";
+  if (code && /^[A-Z0-9_]{1,32}$/.test(code)) return `database connection failed with error code ${code}`;
+  return "database connection failed without a recognized error code";
+}
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -506,7 +533,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       await Promise.race([doPing(), timeoutPromise]);
       return true;
-    } catch {
+    } catch (error) {
+      console.error("[PostgresAdapter] PostgreSQL ping failed:", getPostgresPingFailureCategory(error));
       return false;
     } finally {
       if (timer) clearTimeout(timer);

@@ -20,7 +20,10 @@ async function startServer() {
   if (mode === "production") {
     // Real Production startup: Strict fail-closed verification of PostgreSQL and Redis
     try {
-      const dbPingOk = await db.ping(3000).catch(() => false);
+      // Keep the ping deadline longer than the configured pool connection timeout,
+      // so a slow initial TLS/DNS handshake is not mistaken for an unreachable database.
+      const poolConnectTimeoutMs = Number(process.env.PG_CONNECTION_TIMEOUT_MS) || 5000;
+      const dbPingOk = await db.ping(Math.max(10000, poolConnectTimeoutMs + 2000)).catch(() => false);
       if (!dbPingOk) {
         throw new Error("PostgreSQL database ping failed or connection unreachable.");
       }
