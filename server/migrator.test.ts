@@ -56,6 +56,28 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
     };
   });
 
+  it("rejects duplicate migration versions before acquiring a database connection", async () => {
+    const migrations: MigrationFile[] = [
+      { version: "001", name: "001_first.sql", sql: "SELECT 1;", checksum: "hash1" },
+      { version: "001", name: "001_duplicate.sql", sql: "SELECT 2;", checksum: "hash2" },
+    ];
+
+    await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(/duplicate migration version/i);
+    expect(mockPool.connect).not.toHaveBeenCalled();
+    expect(executedQueries).toHaveLength(0);
+  });
+
+  it("rejects numeric migration versions that differ only by leading zeroes", async () => {
+    const migrations: MigrationFile[] = [
+      { version: "001", name: "001_first.sql", sql: "SELECT 1;", checksum: "hash1" },
+      { version: "1", name: "1_duplicate.sql", sql: "SELECT 2;", checksum: "hash2" },
+    ];
+
+    await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(/duplicate migration version/i);
+    expect(mockPool.connect).not.toHaveBeenCalled();
+    expect(executedQueries).toHaveLength(0);
+  });
+
   describe("Directory & Migration File Loader", () => {
 
     it("throws explicitly when the required migrations directory is missing", () => {
