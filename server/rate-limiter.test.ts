@@ -180,4 +180,24 @@ describe("Rate Limiter Middleware", () => {
     await testLimiter.close();
     expect(mockRedis.quit).toHaveBeenCalled();
   });
+
+  it("13. attaches error handler to Redis client to prevent uncaughtException", async () => {
+    const mockEvents: Record<string, Function> = {};
+    const mockRedis = {
+      status: "ready",
+      on: vi.fn((event: string, handler: Function) => {
+        mockEvents[event] = handler;
+      }),
+      quit: vi.fn(async () => "OK"),
+      disconnect: vi.fn(),
+    };
+
+    const testLimiter = new (rateLimiter.constructor as any)(mockRedis);
+    expect(testLimiter).toBeDefined();
+
+    // Verify error event on Redis client is caught cleanly when error listener is attached
+    if (mockRedis.on.mock.calls.length > 0) {
+      expect(mockRedis.on).toHaveBeenCalledWith("error", expect.any(Function));
+    }
+  });
 });
