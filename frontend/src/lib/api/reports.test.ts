@@ -9,7 +9,7 @@ import {
   mapDtoToReport,
   formatReportDateTime,
 } from "./reports";
-import { getReports, addReport, removeReport } from "../reportsStorage";
+import { getReports, addReport, removeReport, updateDraftReport as updateStoredDraftReport } from "../reportsStorage";
 
 describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reportsStorage.ts)", () => {
   beforeEach(() => {
@@ -454,6 +454,62 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
           materials_used: [],
         }),
       ).rejects.toThrow("È possibile modificare soltanto un rapportino in bozza.");
+    });
+  });
+
+  describe("reportsStorage.updateDraftReport date contract", () => {
+    it("converts the UI-formatted DD/MM/YYYY date to the API YYYY-MM-DD contract", async () => {
+      let sentBody: Record<string, unknown> | null = null;
+      global.fetch = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+        sentBody = JSON.parse((options?.body as string) || "{}") as Record<string, unknown>;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: "rep-draft-date",
+            date: "2026-09-26",
+            time: "14:30",
+            work_hours: 2,
+            travel_hours: 0.5,
+            status: "draft",
+            client: { name: "Cliente Bozza", address: "Via Roma 1", city: "Roma" },
+            technician: { full_name: "Tecnico Server" },
+            materials_status: "none",
+            materials_used: [],
+            notes: "Bozza aggiornata",
+            created_at: "2026-09-26T14:30:00.000Z",
+          }),
+        };
+      });
+
+      const result = await updateStoredDraftReport("rep-draft-date", {
+        clientName: "Cliente Bozza",
+        clientAddress: "Via Roma 1",
+        clientCity: "Roma",
+        hours: 2,
+        travelHours: 0.5,
+        status: "draft",
+        notes: "Bozza aggiornata",
+        materialsStatus: "none",
+        materials: [],
+        date: "26/09/2026",
+        time: "14:30",
+      });
+
+      expect(result.id).toBe("rep-draft-date");
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/v1/reports/rep-draft-date",
+        expect.objectContaining({ method: "PATCH", credentials: "include" }),
+      );
+      expect(sentBody).toMatchObject({
+        date: "2026-09-26",
+        time: "14:30",
+        status: "draft",
+        materials_status: "none",
+        materials_used: [],
+      });
+      expect(sentBody).not.toHaveProperty("company_id");
+      expect(sentBody).not.toHaveProperty("technician_id");
     });
   });
 
