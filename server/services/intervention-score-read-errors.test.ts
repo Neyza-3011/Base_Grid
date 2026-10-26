@@ -54,7 +54,7 @@ describe("InterventionService Job Complete Score dependency reads", () => {
   });
 
   it("propagates report read failures instead of calculating a score with an artificial null report", async () => {
-    (dbStore as any).getReportByInterventionId = async () => {
+    (dbStore as any).getReportsByInterventionIdsAndCompany = async () => {
       throw new Error("report read failed");
     };
 
@@ -62,7 +62,7 @@ describe("InterventionService Job Complete Score dependency reads", () => {
   });
 
   it("propagates asset read failures instead of classifying the asset as absent", async () => {
-    (dbStore as any).getAssetByIdAndCompany = async () => {
+    (dbStore as any).getAssetsByIdsAndCompany = async () => {
       throw new Error("asset read failed");
     };
 
@@ -70,18 +70,18 @@ describe("InterventionService Job Complete Score dependency reads", () => {
   });
 
   it("continues to calculate a score when required reads succeed and the report is genuinely absent", async () => {
-    const getReport = dbStore.getReportByInterventionId.bind(dbStore);
-    (dbStore as any).getReportByInterventionId = async (tenantId: string, id: string) => {
+    const getReports = dbStore.getReportsByInterventionIdsAndCompany.bind(dbStore);
+    (dbStore as any).getReportsByInterventionIdsAndCompany = async (ids: string[], tenantId: string) => {
       expect(tenantId).toBe(companyId);
-      expect(id).toBe(interventionId);
-      return getReport(tenantId, id);
+      expect(ids).toEqual([interventionId]);
+      return getReports(ids, tenantId);
     };
 
-    const getAsset = dbStore.getAssetByIdAndCompany.bind(dbStore);
-    (dbStore as any).getAssetByIdAndCompany = async (id: string, tenantId: string) => {
+    const getAssets = dbStore.getAssetsByIdsAndCompany.bind(dbStore);
+    (dbStore as any).getAssetsByIdsAndCompany = async (ids: string[], tenantId: string) => {
       expect(tenantId).toBe(companyId);
-      expect(id).toBe(assetId);
-      return getAsset(id, tenantId);
+      expect(ids).toEqual([assetId]);
+      return getAssets(ids, tenantId);
     };
 
     const result = await service.getInterventions(companyId);

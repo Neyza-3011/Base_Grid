@@ -406,6 +406,15 @@ export class DatabaseStore implements IDatabaseAdapter {
     return null;
   }
 
+  public async getReportsByInterventionIdsAndCompany(interventionIds: string[], companyId: string): Promise<ReportRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getReportsByInterventionIdsAndCompany");
+    if (interventionIds.length === 0) return [];
+    const ids = new Set(interventionIds);
+    return Array.from(this.reports.values()).filter(
+      (report) => report.companyId === companyId && Boolean(report.interventionId) && ids.has(report.interventionId!),
+    );
+  }
+
   public async getReportById(companyId: string, reportId: string): Promise<ReportRecord | null> {
     if (!companyId || !reportId) {
       throw new Error("DB_CONTRACT_ERROR: missing companyId/reportId in getReportById");
@@ -657,6 +666,14 @@ export class DatabaseStore implements IDatabaseAdapter {
     const user = this.users.get(userId);
     if (!user || user.companyId !== companyId) return null;
     return { ...user };
+  }
+
+  public async getUsersByIdsAndCompany(userIds: string[], companyId: string): Promise<UserRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getUsersByIdsAndCompany");
+    const ids = new Set(userIds);
+    return Array.from(ids, (id) => this.users.get(id))
+      .filter((user): user is UserRecord => Boolean(user && user.companyId === companyId))
+      .map((user) => ({ ...user }));
   }
 
   public async createTeamMember(params: {
@@ -948,6 +965,13 @@ export class DatabaseStore implements IDatabaseAdapter {
     return customer;
   }
 
+  public async getCustomersByIdsAndCompany(customerIds: string[], companyId: string): Promise<CustomerRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getCustomersByIdsAndCompany");
+    const ids = new Set(customerIds);
+    return Array.from(ids, (id) => this.customers.get(id))
+      .filter((customer): customer is CustomerRecord => Boolean(customer && customer.companyId === companyId));
+  }
+
   public async createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord> {
     const now = new Date().toISOString();
     const id = data.id || `CUS-${randomUUID()}`;
@@ -1040,6 +1064,13 @@ export class DatabaseStore implements IDatabaseAdapter {
     const location = this.locations.get(locationId);
     if (!location || location.companyId !== companyId) return null;
     return location;
+  }
+
+  public async getLocationsByIdsAndCompany(locationIds: string[], companyId: string): Promise<LocationRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getLocationsByIdsAndCompany");
+    const ids = new Set(locationIds);
+    return Array.from(ids, (id) => this.locations.get(id))
+      .filter((location): location is LocationRecord => Boolean(location && location.companyId === companyId));
   }
 
   public async createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord> {
@@ -1163,6 +1194,13 @@ export class DatabaseStore implements IDatabaseAdapter {
     const asset = this.assets.get(assetId);
     if (!asset || asset.companyId !== companyId) return null;
     return asset;
+  }
+
+  public async getAssetsByIdsAndCompany(assetIds: string[], companyId: string): Promise<AssetRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getAssetsByIdsAndCompany");
+    const ids = new Set(assetIds);
+    return Array.from(ids, (id) => this.assets.get(id))
+      .filter((asset): asset is AssetRecord => Boolean(asset && asset.companyId === companyId));
   }
 
   public async createAsset(

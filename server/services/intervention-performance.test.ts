@@ -1,146 +1,275 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Pool } from "pg";
+import { randomUUID } from "crypto";
+import { PostgresAdapter } from "../db-postgres";
+import { runMigrations } from "../migrator";
 import { InterventionService } from "./intervention.service";
-import { DatabaseStore } from "../db";
-import { IDatabaseAdapter } from "../types";
 
-describe("InterventionService Performance & Query Optimization", () => {
-  let dbStore: DatabaseStore;
-  let service: InterventionService;
+const testDatabaseUrl = process.env.MIGRATOR_TEST_DATABASE_URL;
+const describePostgres = testDatabaseUrl ? describe : describe.skip;
 
-  const companyId = "comp-perf-001";
+describePostgres("InterventionService PostgreSQL query-count regression", () => {
+  let adminPool: Pool | undefined;
+  let testPool: Pool | undefined;
+  let adapter: PostgresAdapter | undefined;
+  let service: InterventionService | undefined;
+  let schemaName = "";
+  let captureQueries = false;
+  let failBatchTable: "reports" | "assets" | null = null;
+  const capturedQueries: string[] = [];
+  let companyA = "";
+  let adminA = "";
+  let customerBId = "";
+  let locationBId = "";
+  let assetBId = "";
+  let technicianBId = "";
+  let interventionBId = "";
 
-  beforeEach(async () => {
-    dbStore = new DatabaseStore();
-    service = new InterventionService(dbStore);
-  });
+  beforeAll(async () => {
+    if (!testDatabaseUrl) return;
 
-  it("efficiently batch-fetches distinct entities and avoids N+1 database queries when listing interventions", async () => {
-    // 1. Seed 2 customers, 3 locations, 2 assets, 2 technicians
-    const customer1 = await dbStore.createCustomer(companyId, { displayName: "Cliente Alfa" });
-    const customer2 = await dbStore.createCustomer(companyId, { displayName: "Cliente Beta" });
+    const parsedUrl = new URL(testDatabaseUrl);
+    const databaseName = parsedUrl.pathname.replace(/^\//, "");
+    // Guard against accidentally running destructive test cleanup against a live database.
+    if (
+      !["localhost", "127.0.0.1", "::1"].includes(parsedUrl.hostname) ||
+      !databaseName.endsWith("_test")
+    ) {
+      throw new Error("PostgreSQL performance tests require a loopback *_test database URL.");
+    }
 
-    const location1 = await dbStore.createLocation(companyId, customer1.id, { name: "Sede Alfa 1", address: "Via Roma 1", city: "Milano" });
-    const location2 = await dbStore.createLocation(companyId, customer1.id, { name: "Sede Alfa 2", address: "Via Roma 2", city: "Milano" });
-    const location3 = await dbStore.createLocation(companyId, customer2.id, { name: "Sede Beta 1", address: "Corso Italia 10", city: "Torino" });
-
-    const asset1 = await dbStore.createAsset(companyId, customer1.id, location1.id, { name: "Quadro Elettrico Principal", assetType: "quadro" });
-    const asset2 = await dbStore.createAsset(companyId, customer2.id, location3.id, { name: "Inverter Fotovoltaico", assetType: "inverter" });
-
-    const tech1 = await dbStore.createTeamMember({
-      companyId,
-      companyName: "Perf Company",
-      email: "tech1@perf.it",
-      fullName: "Mario Rossi",
-      role: "technician",
-      passwordHash: "hash",
-      salt: "salt",
-      isActive: true,
-      emailConfirmed: true,
+    adminPool = new Pool({ connectionString: testDatabaseUrl });
+    schemaName = `intervention_perf_${randomUUID().replace(/-/g, "")}`;
+    await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
+    testPool = new Pool({
+      connectionString: testDatabaseUrl,
+      options: `-c search_path=${schemaName}`,
+      max: 10,
     });
+    await runMigrations(testPool);
+    const pgAdapter = new PostgresAdapter(testPool);
+    adapter = pgAdapter;
+    service = new InterventionService(pgAdapter);
 
-    const tech2 = await dbStore.createTeamMember({
-      companyId,
-      companyName: "Perf Company",
-      email: "tech2@perf.it",
-      fullName: "Luigi Verde",
-      role: "technician",
-      passwordHash: "hash",
-      salt: "salt",
-      isActive: true,
-      emailConfirmed: true,
+    const tenantA = await pgAdapter.createUser({
+      email: `perf-admin-${randomUUID()}@example.test`,
+      fullName: "Performance Test Admin",
+      companyName: "Performance Test A",
+      password: "Test-only-password-123!",
+      role: "admin",
     });
+    companyA = tenantA.company.id;
+    adminA = tenantA.user.id;
 
-    // 2. Create 20 interventions referencing these shared entities
-    for (let i = 1; i <= 20; i++) {
-      const isEven = i % 2 === 0;
-      const targetCustomer = isEven ? customer2 : customer1;
-      const targetLocation = isEven ? location3 : (i === 3 ? location2 : location1);
-      const targetAsset = isEven ? asset2 : asset1;
-      const targetTech = isEven ? tech2.id : tech1.id;
-
-      await dbStore.createIntervention(companyId, {
-        customerId: targetCustomer.id,
-        locationId: targetLocation.id,
-        assetId: targetAsset.id,
-        technicianId: targetTech,
-        description: `Intervento Perf ${i}`,
+    // Each intervention deliberately has its own customer, location, asset and
+    // technician so repeated shared references cannot hide per-ID query fan-out.
+    for (let i = 0; i < 100; i++) {
+      const customer = await adapter!.createCustomer(companyA, {
+        displayName: `Perf customer ${i}`,
+      });
+      const location = await adapter!.createLocation(companyA, customer.id, {
+        name: `Perf location ${i}`,
+        address: `Test address ${i}`,
+        city: "Test City",
+      });
+      const asset = await pgAdapter.createAsset(companyA, customer.id, location.id, {
+        name: `Perf asset ${i}`,
+        assetType: "altro",
+      });
+      const technician = await pgAdapter.createTeamMember({
+        companyId: companyA,
+        companyName: tenantA.company.name,
+        email: `perf-tech-${i}-${randomUUID()}@example.test`,
+        fullName: `Perf technician ${i}`,
+        role: "technician",
+        passwordHash: "test-hash",
+        salt: "test-salt",
+        isActive: true,
+        emailConfirmed: true,
+      });
+      const intervention = await adapter!.createIntervention(companyA, {
+        customerId: customer.id,
+        locationId: location.id,
+        assetId: asset.id,
+        technicianId: technician.id,
+        description: `Performance intervention ${i}`,
         priority: "media",
         status: "nuovo",
-        createdBy: "usr-admin",
-        updatedBy: "usr-admin",
+        createdBy: adminA,
+        updatedBy: adminA,
+      });
+      await pgAdapter.createReport(companyA, {
+        interventionId: intervention.id,
+        customerId: customer.id,
+        locationId: location.id,
+        client: { name: customer.displayName },
+        technician: { fullName: technician.fullName },
+        materialsStatus: "none",
+        materialsUsed: [],
       });
     }
 
-    // 3. Instrument DB adapter methods to track call counts
-    const callCounts = {
-      getCustomer: 0,
-      getLocation: 0,
-      getAsset: 0,
-      getUser: 0,
-      getReport: 0,
+    const tenantB = await pgAdapter.createUser({
+      email: `perf-admin-b-${randomUUID()}@example.test`,
+      fullName: "Performance Test Admin B",
+      companyName: "Performance Test B",
+      password: "Test-only-password-123!",
+      role: "admin",
+    });
+    const companyB = tenantB.company.id;
+    const customerB = await pgAdapter.createCustomer(companyB, { displayName: "Tenant B customer" });
+    customerBId = customerB.id;
+    const locationB = await pgAdapter.createLocation(companyB, customerB.id, { name: "Tenant B location" });
+    locationBId = locationB.id;
+    const assetB = await pgAdapter.createAsset(companyB, customerB.id, locationB.id, { name: "Tenant B asset" });
+    assetBId = assetB.id;
+    const technicianB = await pgAdapter.createTeamMember({
+      companyId: companyB,
+      companyName: tenantB.company.name,
+      email: `perf-tech-b-${randomUUID()}@example.test`,
+      fullName: "Tenant B technician",
+      role: "technician",
+      passwordHash: "test-hash",
+      salt: "test-salt",
+      isActive: true,
+      emailConfirmed: true,
+    });
+    technicianBId = technicianB.id;
+    const interventionB = await pgAdapter.createIntervention(companyB, {
+      customerId: customerB.id,
+      locationId: locationB.id,
+      assetId: assetB.id,
+      technicianId: technicianB.id,
+      description: "Tenant B intervention",
+      priority: "media",
+      status: "nuovo",
+      createdBy: tenantB.user.id,
+      updatedBy: tenantB.user.id,
+    });
+    interventionBId = interventionB.id;
+    await pgAdapter.createReport(companyB, {
+      interventionId: interventionB.id,
+      customerId: customerB.id,
+      locationId: locationB.id,
+      client: { name: customerB.displayName },
+      technician: { fullName: technicianB.fullName },
+      materialsStatus: "none",
+      materialsUsed: [],
+    });
+
+    // Count calls sent through the real pg Pool, not in-memory adapter methods.
+    const poolWithSpy = testPool as any;
+    const originalQuery = testPool.query.bind(testPool);
+    poolWithSpy.query = (...args: any[]) => {
+      const sql = typeof args[0] === "string" ? args[0] : String(args[0]?.text || "");
+      if (captureQueries) capturedQueries.push(sql);
+      const isTargetBatchQuery =
+        (failBatchTable === "reports" && /FROM\s+reports\b/i.test(sql)) ||
+        (failBatchTable === "assets" && /FROM\s+assets\b/i.test(sql));
+      if (failBatchTable && isTargetBatchQuery && /ANY\s*\(/i.test(sql)) {
+        return Promise.reject(new Error(`simulated ${failBatchTable} batch read failure`));
+      }
+      return originalQuery(...args);
     };
+  }, 120_000);
 
-    const origGetCustomer = dbStore.getCustomerByIdAndCompany.bind(dbStore);
-    dbStore.getCustomerByIdAndCompany = async (cid, compId) => {
-      callCounts.getCustomer++;
-      return origGetCustomer(cid, compId);
-    };
-
-    const origGetLocation = dbStore.getLocationByIdAndCompany.bind(dbStore);
-    dbStore.getLocationByIdAndCompany = async (lid, compId) => {
-      callCounts.getLocation++;
-      return origGetLocation(lid, compId);
-    };
-
-    const origGetAsset = dbStore.getAssetByIdAndCompany.bind(dbStore);
-    dbStore.getAssetByIdAndCompany = async (aid, compId) => {
-      callCounts.getAsset++;
-      return origGetAsset(aid, compId);
-    };
-
-    const origGetUser = dbStore.getUserByIdAndCompany.bind(dbStore);
-    dbStore.getUserByIdAndCompany = async (uid, compId) => {
-      callCounts.getUser++;
-      return origGetUser(uid, compId);
-    };
-
-    const origGetReport = dbStore.getReportByInterventionId.bind(dbStore);
-    dbStore.getReportByInterventionId = async (compId, iid) => {
-      callCounts.getReport++;
-      return origGetReport(compId, iid);
-    };
-
-    // 4. Call getInterventions for a page of 20 items
-    const result = await service.getInterventions(companyId, { limit: 50 });
-
-    expect(result.items.length).toBe(20);
-
-    // 5. Verify correctness of enriched properties
-    for (const item of result.items) {
-      expect(item.customerName).toBeDefined();
-      expect(item.locationName).toBeDefined();
-      expect(item.assetName).toBeDefined();
-      expect(item.technicianName).toBeDefined();
-      expect(item.jobCompleteScore).toBeDefined();
+  afterAll(async () => {
+    if (adapter) {
+      await adapter.close();
+    } else if (testPool) {
+      await testPool.end();
     }
+    if (adminPool && schemaName) {
+      await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    }
+    if (adminPool) await adminPool.end();
+  }, 30_000);
 
-    // 6. Assert query count efficiency:
-    // With 20 interventions referencing 2 customers, 3 locations, 2 assets, 2 technicians:
-    // - Unoptimized N+1 would execute:
-    //   20 customer queries + 20 location queries + 20 asset queries + 20 technician queries + 20 report queries + 20 duplicate asset queries = 120 queries!
-    // - Optimized batch implementation executes ONLY:
-    //   2 customer queries (1 per distinct customer)
-    //   3 location queries (1 per distinct location)
-    //   2 asset queries (1 per distinct asset)
-    //   2 technician queries (1 per distinct technician)
-    //   20 report queries
-    //   0 duplicate asset queries!
-    expect(callCounts.getCustomer).toBe(2); // Exactly 2 distinct customers
-    expect(callCounts.getLocation).toBe(3);  // Exactly 3 distinct locations
-    expect(callCounts.getAsset).toBe(2);     // Exactly 2 distinct assets (reused without duplicate query)
-    expect(callCounts.getUser).toBe(2);      // Exactly 2 distinct technicians
+  it.each([20, 50, 100])(
+    "uses a constant number of real PostgreSQL queries for a page of %i distinct relations",
+    async (pageSize) => {
+      capturedQueries.length = 0;
+      captureQueries = true;
+      let result: Awaited<ReturnType<InterventionService["getInterventions"]>>;
+      try {
+        result = await service!.getInterventions(companyA, { limit: pageSize });
+      } finally {
+        captureQueries = false;
+      }
 
-    const totalEnrichmentQueries = callCounts.getCustomer + callCounts.getLocation + callCounts.getAsset + callCounts.getUser;
-    expect(totalEnrichmentQueries).toBe(9);  // 9 queries total instead of 100 queries! (91% reduction!)
+      expect(result.items).toHaveLength(pageSize);
+      expect(new Set(result.items.map((item) => item.customerId)).size).toBe(pageSize);
+      expect(new Set(result.items.map((item) => item.locationId)).size).toBe(pageSize);
+      expect(new Set(result.items.map((item) => item.assetId)).size).toBe(pageSize);
+      expect(new Set(result.items.map((item) => item.technicianId)).size).toBe(pageSize);
+      for (const item of result.items) {
+        expect(item.customerName).toBeDefined();
+        expect(item.locationName).toBeDefined();
+        expect(item.assetName).toBeDefined();
+        expect(item.technicianName).toBeDefined();
+        expect(item.jobCompleteScore).toBeDefined();
+      }
+
+      const enrichmentQueries = capturedQueries.filter((sql) =>
+        /FROM\s+(customers|locations|assets|users|reports)\b/i.test(sql),
+      );
+      // Two base-page statements (COUNT + SELECT) plus exactly one query for
+      // each related table, including reports. These are measured pg Pool calls.
+      expect(capturedQueries).toHaveLength(7);
+      expect(enrichmentQueries).toHaveLength(5);
+      expect(enrichmentQueries.filter((sql) => /FROM\s+reports\b/i.test(sql))).toHaveLength(1);
+      expect(enrichmentQueries.filter((sql) => /ANY\s*\(/i.test(sql))).toHaveLength(5);
+    },
+    30_000,
+  );
+
+  it("keeps every batched lookup tenant-scoped and treats missing relations as absent", async () => {
+    expect(await adapter!.getCustomersByIdsAndCompany([customerBId], companyA)).toEqual([]);
+    expect(await adapter!.getLocationsByIdsAndCompany([locationBId], companyA)).toEqual([]);
+    expect(await adapter!.getAssetsByIdsAndCompany([assetBId], companyA)).toEqual([]);
+    expect(await adapter!.getUsersByIdsAndCompany([technicianBId], companyA)).toEqual([]);
+    expect(await adapter!.getReportsByInterventionIdsAndCompany([interventionBId], companyA)).toEqual([]);
+
+    expect(await adapter!.getCustomersByIdsAndCompany(["missing-customer"], companyA)).toEqual([]);
+    expect(await adapter!.getLocationsByIdsAndCompany(["missing-location"], companyA)).toEqual([]);
+    expect(await adapter!.getAssetsByIdsAndCompany(["missing-asset"], companyA)).toEqual([]);
+    expect(await adapter!.getUsersByIdsAndCompany(["missing-user"], companyA)).toEqual([]);
+    expect(await adapter!.getReportsByInterventionIdsAndCompany(["missing-intervention"], companyA)).toEqual([]);
   });
+
+  it("preserves incomplete score behavior for a genuinely missing optional relation", async () => {
+    const customer = await adapter!.createCustomer(companyA, { displayName: "Missing relation customer" });
+    const location = await adapter!.createLocation(companyA, customer.id, { name: "Missing relation location" });
+    const intervention = await adapter!.createIntervention(companyA, {
+      customerId: customer.id,
+      locationId: location.id,
+      description: "No optional asset, technician or report",
+      priority: "media",
+      status: "nuovo",
+      createdBy: adminA,
+      updatedBy: adminA,
+    });
+
+    const result = await service!.getInterventions(companyA, { limit: 100 });
+    const item = result.items.find((candidate) => candidate.id === intervention.id);
+    expect(item).toBeDefined();
+    expect(item?.assetName).toBeUndefined();
+    expect(item?.technicianName).toBeUndefined();
+    expect(item?.jobCompleteScore?.readyForBilling).toBe(false);
+    expect(item?.jobCompleteScore?.checks.find((check) => check.id === "report_linked")?.passed).toBe(false);
+  });
+
+  it.each(["reports", "assets"] as const)(
+    "propagates PostgreSQL %s batch failures instead of fabricating a missing relation",
+    async (table) => {
+      failBatchTable = table;
+      try {
+        await expect(service!.getInterventions(companyA, { limit: 10 })).rejects.toThrow(
+          `simulated ${table} batch read failure`,
+        );
+      } finally {
+        failBatchTable = null;
+      }
+    },
+  );
 });

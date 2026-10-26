@@ -289,6 +289,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   updateDraftReport(companyId: string, reportId: string, updates: Partial<ReportRecord>): Promise<UpdateDraftReportResult>;
   deleteReport(companyId: string, reportId: string): Promise<boolean>;
   getReportByInterventionId(companyId: string, interventionId: string): Promise<ReportRecord | null>;
+  getReportsByInterventionIdsAndCompany(interventionIds: string[], companyId: string): Promise<ReportRecord[]>;
   getGlobalStats(): Promise<any>;
   withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T>;
   createAuthToken(params: {
@@ -314,6 +315,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   // --- Team Management Operations (tenant-scoped) ---
   getUsersByCompany(companyId: string): Promise<UserRecord[]>;
   getUserByIdAndCompany(userId: string, companyId: string): Promise<UserRecord | null>;
+  getUsersByIdsAndCompany(userIds: string[], companyId: string): Promise<UserRecord[]>;
   createTeamMember(params: {
     companyId: string;
     companyName: string;
@@ -357,6 +359,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   // --- Customers Operations ---
   getCustomersByCompany(companyId: string, search?: string, activeOnly?: boolean, limit?: number): Promise<CustomerRecord[]>;
   getCustomerByIdAndCompany(customerId: string, companyId: string): Promise<CustomerRecord | null>;
+  getCustomersByIdsAndCompany(customerIds: string[], companyId: string): Promise<CustomerRecord[]>;
   createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord>;
   updateCustomer(companyId: string, customerId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord | null>;
   archiveCustomer(companyId: string, customerId: string): Promise<CustomerRecord | null>;
@@ -365,6 +368,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   // --- Locations Operations ---
   getLocationsByCustomerAndCompany(customerId: string, companyId: string, search?: string, activeOnly?: boolean, limit?: number): Promise<LocationRecord[]>;
   getLocationByIdAndCompany(locationId: string, companyId: string): Promise<LocationRecord | null>;
+  getLocationsByIdsAndCompany(locationIds: string[], companyId: string): Promise<LocationRecord[]>;
   createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord>;
   updateLocation(companyId: string, locationId: string, data: Partial<LocationRecord>): Promise<LocationRecord | null>;
   archiveLocation(companyId: string, locationId: string): Promise<LocationRecord | null>;
@@ -384,6 +388,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
     }
   ): Promise<AssetRecord[]>;
   getAssetByIdAndCompany(assetId: string, companyId: string): Promise<AssetRecord | null>;
+  getAssetsByIdsAndCompany(assetIds: string[], companyId: string): Promise<AssetRecord[]>;
   createAsset(companyId: string, customerId: string, locationId: string, data: Partial<AssetRecord>): Promise<AssetRecord>;
   updateAsset(companyId: string, assetId: string, data: Partial<AssetRecord>): Promise<AssetRecord | null>;
   archiveAsset(companyId: string, assetId: string): Promise<AssetRecord | null>;
@@ -1102,6 +1107,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return mapReportRow(res.rows[0]);
   }
 
+  public async getReportsByInterventionIdsAndCompany(interventionIds: string[], companyId: string): Promise<ReportRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getReportsByInterventionIdsAndCompany");
+    if (interventionIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM reports WHERE "companyId" = $1 AND "interventionId" = ANY($2::varchar[])`,
+      [companyId, [...new Set(interventionIds)]],
+    );
+    return res.rows.map(mapReportRow);
+  }
+
   public async getReportById(
     companyId: string,
     reportId: string
@@ -1447,6 +1462,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
       [userId, companyId],
     );
     return res.rows[0] ? mapUserRow(res.rows[0]) : null;
+  }
+
+  public async getUsersByIdsAndCompany(userIds: string[], companyId: string): Promise<UserRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getUsersByIdsAndCompany");
+    if (userIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM users WHERE "companyId" = $1 AND id = ANY($2::varchar[])`,
+      [companyId, [...new Set(userIds)]],
+    );
+    return res.rows.map(mapUserRow);
   }
 
   public async createTeamMember(params: {
@@ -1865,6 +1890,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return res.rows[0] ? mapCustomerRow(res.rows[0]) : null;
   }
 
+  public async getCustomersByIdsAndCompany(customerIds: string[], companyId: string): Promise<CustomerRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getCustomersByIdsAndCompany");
+    if (customerIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM customers WHERE "companyId" = $1 AND id = ANY($2::varchar[])`,
+      [companyId, [...new Set(customerIds)]],
+    );
+    return res.rows.map(mapCustomerRow);
+  }
+
   public async createCustomer(companyId: string, data: Partial<CustomerRecord>): Promise<CustomerRecord> {
     const now = new Date().toISOString();
     const id = data.id || `CUS-${randomUUID()}`;
@@ -1970,6 +2005,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
       [locationId, companyId]
     );
     return res.rows[0] ? mapLocationRow(res.rows[0]) : null;
+  }
+
+  public async getLocationsByIdsAndCompany(locationIds: string[], companyId: string): Promise<LocationRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getLocationsByIdsAndCompany");
+    if (locationIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM locations WHERE "companyId" = $1 AND id = ANY($2::varchar[])`,
+      [companyId, [...new Set(locationIds)]],
+    );
+    return res.rows.map(mapLocationRow);
   }
 
   public async createLocation(companyId: string, customerId: string, data: Partial<LocationRecord>): Promise<LocationRecord> {
@@ -2114,6 +2159,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
       [assetId, companyId]
     );
     return res.rows[0] ? mapAssetRow(res.rows[0]) : null;
+  }
+
+  public async getAssetsByIdsAndCompany(assetIds: string[], companyId: string): Promise<AssetRecord[]> {
+    if (!companyId) throw new Error("DB_CONTRACT_ERROR: missing companyId in getAssetsByIdsAndCompany");
+    if (assetIds.length === 0) return [];
+    const res = await this.pool.query(
+      `SELECT * FROM assets WHERE "companyId" = $1 AND id = ANY($2::varchar[])`,
+      [companyId, [...new Set(assetIds)]],
+    );
+    return res.rows.map(mapAssetRow);
   }
 
   public async createAsset(
