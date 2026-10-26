@@ -99,13 +99,7 @@ export class InterventionService {
         })
       ),
       Promise.all(
-        Array.from(assetIds).map(async (id) => {
-          try {
-            return await this.db.getAssetByIdAndCompany(id, companyId);
-          } catch {
-            return null;
-          }
-        })
+        Array.from(assetIds).map((id) => this.db.getAssetByIdAndCompany(id, companyId))
       ),
       Promise.all(
         Array.from(technicianIds).map(async (id) => {
@@ -117,14 +111,10 @@ export class InterventionService {
         })
       ),
       Promise.all(
-        result.items.map(async (item) => {
-          try {
-            const report = await this.db.getReportByInterventionId(companyId, item.id);
-            return { interventionId: item.id, report };
-          } catch {
-            return { interventionId: item.id, report: null };
-          }
-        })
+        result.items.map(async (item) => ({
+          interventionId: item.id,
+          report: await this.db.getReportByInterventionId(companyId, item.id),
+        }))
       ),
     ]);
 
