@@ -230,17 +230,17 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
     expect(await adapter!.getUsersByIdsAndCompany([technicianBId], companyA)).toEqual([]);
     expect(await adapter!.getReportsByInterventionIdsAndCompany([interventionBId], companyA)).toEqual([]);
 
-    expect(await adapter.getCustomersByIdsAndCompany(["missing-customer"], companyA)).toEqual([]);
-    expect(await adapter.getLocationsByIdsAndCompany(["missing-location"], companyA)).toEqual([]);
-    expect(await adapter.getAssetsByIdsAndCompany(["missing-asset"], companyA)).toEqual([]);
-    expect(await adapter.getUsersByIdsAndCompany(["missing-user"], companyA)).toEqual([]);
-    expect(await adapter.getReportsByInterventionIdsAndCompany(["missing-intervention"], companyA)).toEqual([]);
+    expect(await adapter!.getCustomersByIdsAndCompany(["missing-customer"], companyA)).toEqual([]);
+    expect(await adapter!.getLocationsByIdsAndCompany(["missing-location"], companyA)).toEqual([]);
+    expect(await adapter!.getAssetsByIdsAndCompany(["missing-asset"], companyA)).toEqual([]);
+    expect(await adapter!.getUsersByIdsAndCompany(["missing-user"], companyA)).toEqual([]);
+    expect(await adapter!.getReportsByInterventionIdsAndCompany(["missing-intervention"], companyA)).toEqual([]);
   });
 
   it("preserves incomplete score behavior for a genuinely missing optional relation", async () => {
-    const customer = await adapter.createCustomer(companyA, { displayName: "Missing relation customer" });
-    const location = await adapter.createLocation(companyA, customer.id, { name: "Missing relation location" });
-    const intervention = await adapter.createIntervention(companyA, {
+    const customer = await adapter!.createCustomer(companyA, { displayName: "Missing relation customer" });
+    const location = await adapter!.createLocation(companyA, customer.id, { name: "Missing relation location" });
+    const intervention = await adapter!.createIntervention(companyA, {
       customerId: customer.id,
       locationId: location.id,
       description: "No optional asset, technician or report",
