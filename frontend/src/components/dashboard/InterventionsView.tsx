@@ -16,14 +16,11 @@ import {
   X,
   Loader2,
   ChevronRight,
-  Filter,
   FileText,
-  AlertTriangle,
   PlayCircle,
   PauseCircle,
   ShieldCheck,
   Receipt,
-  RotateCcw,
   Phone,
   Navigation,
   LucideIcon,
@@ -35,7 +32,6 @@ import {
   getInterventions,
   getInterventionById,
   createIntervention,
-  updateIntervention,
   transitionInterventionStatus,
 } from "@/lib/api/interventions";
 import { Customer, Location, fetchCustomers, fetchLocations } from "@/lib/api/customers";
@@ -263,6 +259,22 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
   const [transitionTechId, setTransitionTechId] = useState("");
   const [transitionActualHours, setTransitionActualHours] = useState("");
   const [transitionNotes, setTransitionNotes] = useState("");
+
+  // Keyboard Escape listener for closing active modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showCreateModal) {
+          setShowCreateModal(false);
+        } else if (selectedIntervention) {
+          setSelectedIntervention(null);
+          setTransitionTarget(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCreateModal, selectedIntervention]);
 
   // Load Reference Data
   useEffect(() => {
@@ -513,6 +525,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Cerca descrizione, problema o note..."
+              aria-label="Cerca interventi per descrizione, problema o note"
               className="w-full bg-[#182030] text-white text-sm pl-9 pr-4 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary placeholder:text-white/40"
             />
           </div>
@@ -522,6 +535,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
+              aria-label="Filtra per stato intervento"
               className="w-full bg-[#182030] text-white text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
             >
               <option value="">Tutti gli stati</option>
@@ -538,6 +552,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
+              aria-label="Filtra per priorità"
               className="w-full bg-[#182030] text-white text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
             >
               <option value="">Tutte le priorità</option>
@@ -554,6 +569,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
             <select
               value={filterCustomer}
               onChange={(e) => setFilterCustomer(e.target.value)}
+              aria-label="Filtra per cliente"
               className="w-full bg-[#182030] text-white text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
             >
               <option value="">Tutti i clienti</option>
@@ -571,6 +587,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               <select
                 value={filterTechnician}
                 onChange={(e) => setFilterTechnician(e.target.value)}
+                aria-label="Filtra per tecnico"
                 className="w-full bg-[#182030] text-white text-sm px-3 py-2 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
               >
                 <option value="">Tutti i tecnici</option>
@@ -628,8 +645,17 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
             return (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Visualizza dettagli intervento: ${item.description}`}
                 onClick={() => setSelectedIntervention(item)}
-                className="bg-[#111622] hover:bg-[#141b2b] border border-white/10 hover:border-white/20 rounded-2xl p-5 transition cursor-pointer space-y-4 group"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedIntervention(item);
+                  }
+                }}
+                className="bg-[#111622] hover:bg-[#141b2b] border border-white/10 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#090D16] rounded-2xl p-5 transition cursor-pointer space-y-4 group"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 flex-wrap">
@@ -759,16 +785,30 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
       {/* CREATE MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#111622] border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowCreateModal(false)}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-intervention-title"
+            tabIndex={-1}
+            className="relative bg-[#111622] border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-white shadow-2xl animate-in fade-in duration-200 outline-none"
+          >
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2.5">
                 <Wrench className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-bold">Crea Nuovo Intervento</h3>
+                <h3 id="create-intervention-title" className="text-lg font-bold">
+                  Crea Nuovo Intervento
+                </h3>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
+                aria-label="Chiudi creazione intervento"
+                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -784,10 +824,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Customer */}
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1">
+                    <label
+                      htmlFor="create-customer-select"
+                      className="block text-xs font-medium text-white/70 mb-1"
+                    >
                       Cliente *
                     </label>
                     <select
+                      id="create-customer-select"
                       value={formCustomerId}
                       onChange={(e) => setFormCustomerId(e.target.value)}
                       required
@@ -804,10 +848,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
                   {/* Location */}
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1">
+                    <label
+                      htmlFor="create-location-select"
+                      className="block text-xs font-medium text-white/70 mb-1"
+                    >
                       Sede / Cantiere *
                     </label>
                     <select
+                      id="create-location-select"
                       value={formLocationId}
                       onChange={(e) => setFormLocationId(e.target.value)}
                       disabled={!formCustomerId || loadingFormLocations}
@@ -831,10 +879,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
                   {/* Asset */}
                   <div>
-                    <label className="block text-xs font-medium text-white/70 mb-1">
+                    <label
+                      htmlFor="create-asset-select"
+                      className="block text-xs font-medium text-white/70 mb-1"
+                    >
                       Impianto / Asset (opzionale)
                     </label>
                     <select
+                      id="create-asset-select"
                       value={formAssetId}
                       onChange={(e) => setFormAssetId(e.target.value)}
                       disabled={!formLocationId || loadingFormAssets}
@@ -860,10 +912,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               {/* Description & Problem */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-description-input"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Descrizione Intervento *
                   </label>
                   <input
+                    id="create-description-input"
                     type="text"
                     value={formDescription}
                     onChange={(e) => setFormDescription(e.target.value)}
@@ -874,10 +930,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-problem-textarea"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Problema / Segnalazione Riscontrata
                   </label>
                   <textarea
+                    id="create-problem-textarea"
                     rows={2}
                     value={formProblem}
                     onChange={(e) => setFormProblem(e.target.value)}
@@ -890,8 +950,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               {/* Priority, Technician & Hours */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">Priorità</label>
+                  <label
+                    htmlFor="create-priority-select"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
+                    Priorità
+                  </label>
                   <select
+                    id="create-priority-select"
                     value={formPriority}
                     onChange={(e) => setFormPriority(e.target.value as InterventionPriority)}
                     className="w-full bg-[#182030] text-white text-sm px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
@@ -904,10 +970,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-technician-select"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Tecnico Iniziale (opzionale)
                   </label>
                   <select
+                    id="create-technician-select"
                     value={formTechnicianId}
                     onChange={(e) => setFormTechnicianId(e.target.value)}
                     className="w-full bg-[#182030] text-white text-sm px-3 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-primary"
@@ -922,10 +992,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-estimated-hours-input"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Ore Stimate
                   </label>
                   <input
+                    id="create-estimated-hours-input"
                     type="number"
                     step="0.5"
                     min="0"
@@ -940,10 +1014,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
               {/* Scheduling Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-scheduled-start-input"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Inizio Programmato
                   </label>
                   <input
+                    id="create-scheduled-start-input"
                     type="datetime-local"
                     value={formScheduledStart}
                     onChange={(e) => setFormScheduledStart(e.target.value)}
@@ -952,10 +1030,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1">
+                  <label
+                    htmlFor="create-scheduled-end-input"
+                    className="block text-xs font-medium text-white/70 mb-1"
+                  >
                     Fine Programmata
                   </label>
                   <input
+                    id="create-scheduled-end-input"
                     type="datetime-local"
                     value={formScheduledEnd}
                     onChange={(e) => setFormScheduledEnd(e.target.value)}
@@ -966,8 +1048,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1">Note Interne</label>
+                <label
+                  htmlFor="create-notes-textarea"
+                  className="block text-xs font-medium text-white/70 mb-1"
+                >
+                  Note Interne
+                </label>
                 <textarea
+                  id="create-notes-textarea"
                   rows={2}
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
@@ -1002,8 +1090,22 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
       {/* DETAIL & TRANSITION MODAL */}
       {selectedIntervention && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#111622] border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => {
+              setSelectedIntervention(null);
+              setTransitionTarget(null);
+            }}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-intervention-title"
+            tabIndex={-1}
+            className="relative bg-[#111622] border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-white shadow-2xl animate-in fade-in duration-200 outline-none"
+          >
             <div className="flex items-start justify-between border-b border-white/10 pb-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -1023,7 +1125,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                     Priorità {PRIORITY_CONFIG[selectedIntervention.priority]?.label}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-white mt-1">
+                <h3 id="detail-intervention-title" className="text-lg font-bold text-white mt-1">
                   {selectedIntervention.description}
                 </h3>
               </div>
@@ -1044,7 +1146,8 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                     setSelectedIntervention(null);
                     setTransitionTarget(null);
                   }}
-                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
+                  aria-label="Chiudi dettagli intervento"
+                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1381,10 +1484,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
 
                     {!isTechnician && transitionTarget === "assegnato" && (
                       <div>
-                        <label className="block text-xs font-medium text-white/70 mb-1">
+                        <label
+                          htmlFor="transition-technician-select"
+                          className="block text-xs font-medium text-white/70 mb-1"
+                        >
                           Seleziona Tecnico da Assegnare *
                         </label>
                         <select
+                          id="transition-technician-select"
                           value={transitionTechId}
                           onChange={(e) => setTransitionTechId(e.target.value)}
                           required
@@ -1403,10 +1510,14 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                     {(transitionTarget === "completato" ||
                       transitionTarget === "in_lavorazione") && (
                       <div>
-                        <label className="block text-xs font-medium text-white/70 mb-1">
+                        <label
+                          htmlFor="transition-hours-input"
+                          className="block text-xs font-medium text-white/70 mb-1"
+                        >
                           Ore Effettive di Lavoro (opzionale)
                         </label>
                         <input
+                          id="transition-hours-input"
                           type="number"
                           step="0.5"
                           min="0"
@@ -1419,12 +1530,16 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
                     )}
 
                     <div>
-                      <label className="block text-xs font-medium text-white/70 mb-1">
+                      <label
+                        htmlFor="transition-notes-input"
+                        className="block text-xs font-medium text-white/70 mb-1"
+                      >
                         {isTechnician
                           ? "Note operative sul campo (opzionale)"
                           : "Note sul cambio di stato (opzionale)"}
                       </label>
                       <input
+                        id="transition-notes-input"
                         type="text"
                         value={transitionNotes}
                         onChange={(e) => setTransitionNotes(e.target.value)}
