@@ -78,44 +78,15 @@ export class InterventionService {
       if (item.technicianId) technicianIds.add(item.technicianId);
     }
 
-    // Batch fetch distinct entities concurrently in a single phase
+    // Each relation type is fetched with one tenant-scoped adapter query per page.
+    // Customer/location/technician enrichment remains non-blocking as before; score
+    // dependencies (asset/report) must propagate read failures rather than fake nulls.
     const [customers, locations, assets, technicians, reports] = await Promise.all([
-      Promise.all(
-        Array.from(customerIds).map(async (id) => {
-          try {
-            return await this.db.getCustomerByIdAndCompany(id, companyId);
-          } catch {
-            return null;
-          }
-        })
-      ),
-      Promise.all(
-        Array.from(locationIds).map(async (id) => {
-          try {
-            return await this.db.getLocationByIdAndCompany(id, companyId);
-          } catch {
-            return null;
-          }
-        })
-      ),
-      Promise.all(
-        Array.from(assetIds).map((id) => this.db.getAssetByIdAndCompany(id, companyId))
-      ),
-      Promise.all(
-        Array.from(technicianIds).map(async (id) => {
-          try {
-            return await this.db.getUserByIdAndCompany(id, companyId);
-          } catch {
-            return null;
-          }
-        })
-      ),
-      Promise.all(
-        result.items.map(async (item) => ({
-          interventionId: item.id,
-          report: await this.db.getReportByInterventionId(companyId, item.id),
-        }))
-      ),
+      this.db.getCustomersByIdsAndCompany(Array.from(customerIds), companyId).catch(() => []),
+      this.db.getLocationsByIdsAndCompany(Array.from(locationIds), companyId).catch(() => []),
+      this.db.getAssetsByIdsAndCompany(Array.from(assetIds), companyId),
+      this.db.getUsersByIdsAndCompany(Array.from(technicianIds), companyId).catch(() => []),
+      this.db.getReportsByInterventionIdsAndCompany(result.items.map((item) => item.id), companyId),
     ]);
 
     // Build fast request-scoped O(1) lookup maps
@@ -140,8 +111,12 @@ export class InterventionService {
     }
 
     const reportMap = new Map<string, any>();
-    for (const r of reports) {
-      if (r && r.interventionId) reportMap.set(r.interventionId, r.report);
+    for (const report of reports) {
+      // Match the previous single-report lookup contract: use at most one report
+      // for each intervention, without changing response shape or score semantics.
+      if (report.interventionId && !reportMap.has(report.interventionId)) {
+        reportMap.set(report.interventionId, report);
+      }
     }
 
     // Enrich items using request-scoped lookup maps in O(1) time
