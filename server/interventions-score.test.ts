@@ -135,6 +135,8 @@ async function apiRequest(
 
   return {
     status: res.status,
+    headers: res.headers,
+    rawText: text,
     body: json,
   };
 }
@@ -951,9 +953,9 @@ describe("P1.7 Job Complete Score Suite", () => {
       });
       expect(pdf.status).toBe(200);
       expect(pdf.headers.get("content-type")).toContain("application/pdf");
-      expect(typeof pdf.data).toBe("string");
-      expect(pdf.data.startsWith("%PDF-")).toBe(true);
-      expect(pdf.data.trimEnd().endsWith("%%EOF")).toBe(true);
+      expect(typeof pdf.rawText).toBe("string");
+      expect(pdf.rawText.startsWith("%PDF-")).toBe(true);
+      expect(pdf.rawText.trimEnd().endsWith("%%EOF")).toBe(true);
 
       const score = await apiRequest(`/api/v1/interventions/${intervention.id}/score`, {
         cookies: admin.cookies,
