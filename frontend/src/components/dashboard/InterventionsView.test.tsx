@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { InterventionsView } from "./InterventionsView";
+import { UserSession } from "@/lib/auth";
+
+const mockAdminUser: UserSession = {
+  id: "usr-1",
+  companyId: "comp-1",
+  companyName: "Test Company",
+  email: "admin@test.com",
+  role: "admin",
+  fullName: "Admin User",
+};
 
 describe("InterventionsView Component Accessibility and Semantics", () => {
   beforeEach(() => {
@@ -18,7 +28,7 @@ describe("InterventionsView Component Accessibility and Semantics", () => {
   it("renders accessible filter bar with aria-label attributes", () => {
     const html = renderToString(
       React.createElement(InterventionsView, {
-        currentUser: { id: "usr-1", role: "admin" } as any,
+        currentUser: mockAdminUser,
       }),
     );
 
@@ -32,7 +42,7 @@ describe("InterventionsView Component Accessibility and Semantics", () => {
   it("renders header and action controls properly", () => {
     const html = renderToString(
       React.createElement(InterventionsView, {
-        currentUser: { id: "usr-1", role: "admin" } as any,
+        currentUser: mockAdminUser,
       }),
     );
 
