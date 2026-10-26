@@ -135,8 +135,8 @@ export async function getAppliedMigrations(clientOrPool: any): Promise<AppliedMi
 function assertUniqueMigrationVersions(migrations: MigrationFile[]): void {
   const seen = new Map<string, { version: string; name: string }>();
   for (const migration of migrations) {
-    const canonicalVersion = /^\\d+$/.test(migration.version)
-      ? migration.version.replace(/^0+(?=\\d)/, "")
+    const canonicalVersion = /^\d+$/.test(migration.version)
+      ? migration.version.replace(/^0+(?=\d)/, "")
       : migration.version;
     const previous = seen.get(canonicalVersion);
     if (previous) {
