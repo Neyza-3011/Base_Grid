@@ -116,6 +116,7 @@ describePostgres("InterventionService PostgreSQL query-count regression", () => 
       password: "Test-only-password-123!",
       role: "admin",
     });
+    const companyB = tenantB.company.id;
     const customerB = await pgAdapter.createCustomer(companyB, { displayName: "Tenant B customer" });
     customerBId = customerB.id;
     const locationB = await pgAdapter.createLocation(companyB, customerB.id, { name: "Tenant B location" });
