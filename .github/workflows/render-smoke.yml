@@ -1,0 +1,75 @@
+name: Render Smoke Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Check the live Render service every six hours (UTC).
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-smoke-tests
+  cancel-in-progress: false
+
+jobs:
+  render-smoke:
+    name: Render liveness and readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RENDER_BASE_URL: ${{ vars.RENDER_BASE_URL }}
+
+    steps:
+      - name: Validate Render URL configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RENDER_BASE_URL}" ]]; then
+            echo "::error::Set the repository Actions variable RENDER_BASE_URL to the public HTTPS URL of the Render backend."
+            exit 1
+          fi
+          if [[ ! "${RENDER_BASE_URL}" =~ ^https:// ]]; then
+            echo "::error::RENDER_BASE_URL must use HTTPS."
+            exit 1
+          fi
+
+      - name: Check Render health and readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${RENDER_BASE_URL%/}"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          check_endpoint() {
+            local path="$1"
+            local expected_status="$2"
+            local url="${base_url}${path}"
+            local attempt
+            local http_code
+
+            for attempt in $(seq 1 18); do
+              http_code="$(curl --silent --show-error --location --max-time 15 \
+                --output "$response_file" --write-out '%{http_code}' "$url" 2>/dev/null || true)"
+
+              if [[ "$http_code" == "200" ]] && jq --exit-status --arg status "$expected_status" '.status == $status' "$response_file" >/dev/null 2>&1; then
+                echo "PASS: ${path} returned HTTP 200 and the expected status."
+                return 0
+              fi
+
+              echo "Attempt ${attempt}/18: ${path} did not return the expected healthy response (HTTP ${http_code:-unknown})."
+              if [[ "$attempt" -lt 18 ]]; then
+                sleep 10
+              fi
+            done
+
+            echo "::error::Render endpoint ${path} failed its smoke check after retries."
+            return 1
+          }
+
+          # /health checks that the backend process is alive.
+          check_endpoint "/health" "healthy"
+          # /ready verifies the configured PostgreSQL and Redis dependencies.
+          check_endpoint "/ready" "ready"
