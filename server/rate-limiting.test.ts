@@ -131,6 +131,28 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
     expect(res.body.detail).toContain("reinvio email");
   });
 
+  it("should return 429 when resend-verification account limit is exceeded across different IPs", async () => {
+    const email = `resend-account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@example.test`;
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post("/api/v1/auth/resend-verification")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", `10.42.0.${i + 1}`)
+        .send({ email });
+      expect(res.status).not.toBe(429);
+    }
+
+    // A fourth request from a different IP must still hit the account-specific bucket.
+    const res = await request(app)
+      .post("/api/v1/auth/resend-verification")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", "10.42.0.4")
+      .send({ email: email.toUpperCase() });
+
+    expect(res.status).toBe(429);
+    expect(res.body.detail).toContain("questo account");
+  });
+
   it("should return 429 when login email/account limit is exceeded independently of IP", async () => {
     // 10 requests from different IPs (spoofted via X-Forwarded-For) but same email
     const uniqueAccountEmail = `account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@test.com`;
