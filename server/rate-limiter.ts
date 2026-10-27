@@ -267,6 +267,13 @@ export const forgotPasswordLimiter = rateLimiter.middleware({
   errorMessage: "Troppe richieste di reset password. Riprova più tardi.",
 });
 
+export const forgotPasswordAccountLimiter = rateLimiter.middleware({
+  points: 3,
+  duration: 60 * 60, // 3 password-reset requests per hour per normalized account email
+  keyPrefix: "rl:forgot-password:acct",
+  errorMessage: "Troppe richieste di reset password. Riprova più tardi.",
+}, getEmailHashKey);
+
 export const resetPasswordLimiter = rateLimiter.middleware({
   points: 5,
   duration: 60 * 60, // 1 hour
