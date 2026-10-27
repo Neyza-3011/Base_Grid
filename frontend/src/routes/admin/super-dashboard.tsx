@@ -85,8 +85,8 @@ export function SuperDashboard() {
         navigate({ to: "/" });
         return;
       }
-      if (usr.role !== "superadmin") {
-        toast.error("Area riservata al Master Super-Admin (saas@rapporti.it).");
+      if (usr.platformRole !== "ceo") {
+        toast.error("Area riservata al CEO della piattaforma.");
         navigate({ to: "/dashboard" });
         return;
       }
