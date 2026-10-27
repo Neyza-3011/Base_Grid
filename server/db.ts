@@ -80,6 +80,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       email: normalizeEmail(config.SUPERADMIN_EMAIL),
       fullName: "System SuperAdmin",
       role: "superadmin",
+      platformRole: "ceo",
       companyId: masterCompanyId,
       companyName: masterCompany.name,
       passwordHash: saHash,
@@ -325,6 +326,8 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updated: UserRecord = {
       ...user,
       ...updates,
+      // Platform authority can only be set by trusted bootstrap/migration paths.
+      platformRole: user.platformRole ?? null,
       updatedAt: new Date().toISOString(),
     };
     this.users.set(id, updated);
