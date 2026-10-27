@@ -27,7 +27,9 @@ import {
   refreshLimiter,
   forgotPasswordLimiter,
   resetPasswordLimiter,
-  googleAuthLimiter
+  googleAuthLimiter,
+  verifyEmailLimiter,
+  resendVerificationLimiter
 } from "../rate-limiter";
 import { TeamService } from "../services/team.service";
 import { getRuntimeMode } from "../runtime-mode";
@@ -160,7 +162,7 @@ authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res:
  * POST /api/v1/auth/verify-email
  * Verifies user's email address using single-use hashed verification token.
  */
-authRouter.post("/verify-email", asyncHandler(async (req: any, res: any): Promise<void> => {
+authRouter.post("/verify-email", verifyEmailLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { token } = req.body;
 
@@ -200,7 +202,7 @@ authRouter.post("/verify-email", asyncHandler(async (req: any, res: any): Promis
  * POST /api/v1/auth/resend-verification
  * Resends verification email with new single-use token. Responds identically to prevent email enumeration.
  */
-authRouter.post("/resend-verification", asyncHandler(async (req: any, res: any): Promise<void> => {
+authRouter.post("/resend-verification", resendVerificationLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
     if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
