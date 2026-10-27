@@ -2,6 +2,19 @@ import { IDatabaseAdapter } from "../db";
 import { CreateCustomerInput, CreateLocationInput, CustomerRecord, LocationRecord, UpdateCustomerInput, UpdateLocationInput } from "../types";
 import { BadRequestError, NotFoundError } from "../errors";
 
+function validateInputObject(input: unknown, entityName = "I dati"): void {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new BadRequestError(`${entityName} inviati non sono validi.`);
+  }
+}
+
+function validateOptionalStringField(value: unknown, fieldName: string, nullable = false): void {
+  if (value === undefined || (nullable && value === null)) return;
+  if (typeof value !== "string") {
+    throw new BadRequestError(`${fieldName} deve essere una stringa valida.`);
+  }
+}
+
 export class CustomerService {
   constructor(private db: IDatabaseAdapter) {}
 
@@ -18,7 +31,16 @@ export class CustomerService {
   }
 
   public async createCustomer(companyId: string, input: CreateCustomerInput): Promise<CustomerRecord> {
-    if (!input.displayName || input.displayName.trim().length < 2) {
+    validateInputObject(input, "I dati cliente");
+    validateOptionalStringField(input.legalName, "Ragione sociale", true);
+    validateOptionalStringField(input.vatNumber, "Partita IVA", true);
+    validateOptionalStringField(input.taxCode, "Codice fiscale", true);
+    validateOptionalStringField(input.pec, "PEC", true);
+    validateOptionalStringField(input.phoneNumber, "Telefono", true);
+    validateOptionalStringField(input.email, "Email", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
+    if (!input.displayName || typeof input.displayName !== "string" || input.displayName.trim().length < 2) {
       throw new BadRequestError("Il nome del cliente è obbligatorio e deve avere almeno 2 caratteri.");
     }
 
@@ -29,8 +51,20 @@ export class CustomerService {
   }
 
   public async updateCustomer(companyId: string, customerId: string, input: UpdateCustomerInput): Promise<CustomerRecord> {
-    if (input.displayName !== undefined && input.displayName.trim().length < 2) {
-      throw new BadRequestError("Il nome del cliente, se specificato, deve avere almeno 2 caratteri.");
+    validateInputObject(input, "I dati cliente");
+    validateOptionalStringField(input.displayName, "Nome cliente", true);
+    validateOptionalStringField(input.legalName, "Ragione sociale", true);
+    validateOptionalStringField(input.vatNumber, "Partita IVA", true);
+    validateOptionalStringField(input.taxCode, "Codice fiscale", true);
+    validateOptionalStringField(input.pec, "PEC", true);
+    validateOptionalStringField(input.phoneNumber, "Telefono", true);
+    validateOptionalStringField(input.email, "Email", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
+    if (input.displayName !== undefined && input.displayName !== null) {
+      if (typeof input.displayName !== "string" || input.displayName.trim().length < 2) {
+        throw new BadRequestError("Il nome del cliente, se specificato, deve avere almeno 2 caratteri.");
+      }
     }
 
     const updated = await this.db.updateCustomer(companyId, customerId, {
@@ -60,16 +94,21 @@ export class CustomerService {
   }
 
   public async createLocation(companyId: string, customerId: string, input: CreateLocationInput): Promise<LocationRecord> {
+    validateInputObject(input, "I dati sede");
+    validateOptionalStringField(input.postalCode, "CAP", true);
+    validateOptionalStringField(input.province, "Provincia", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
     // Ensure customer exists
     await this.getCustomerById(companyId, customerId);
 
-    if (!input.name || input.name.trim().length < 1) {
+    if (!input.name || typeof input.name !== "string" || input.name.trim().length < 1) {
       throw new BadRequestError("Il nome della sede è obbligatorio.");
     }
-    if (!input.address || input.address.trim().length < 1) {
+    if (!input.address || typeof input.address !== "string" || input.address.trim().length < 1) {
       throw new BadRequestError("L'indirizzo è obbligatorio.");
     }
-    if (!input.city || input.city.trim().length < 1) {
+    if (!input.city || typeof input.city !== "string" || input.city.trim().length < 1) {
       throw new BadRequestError("La città è obbligatoria.");
     }
 
@@ -82,8 +121,18 @@ export class CustomerService {
   }
 
   public async updateLocation(companyId: string, locationId: string, input: UpdateLocationInput): Promise<LocationRecord> {
-    if (input.name !== undefined && input.name.trim().length < 1) {
-      throw new BadRequestError("Il nome della sede, se specificato, non può essere vuoto.");
+    validateInputObject(input, "I dati sede");
+    validateOptionalStringField(input.name, "Nome sede", true);
+    validateOptionalStringField(input.address, "Indirizzo", true);
+    validateOptionalStringField(input.city, "Città", true);
+    validateOptionalStringField(input.province, "Provincia", true);
+    validateOptionalStringField(input.postalCode, "CAP", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
+    if (input.name !== undefined && input.name !== null) {
+      if (typeof input.name !== "string" || input.name.trim().length < 1) {
+        throw new BadRequestError("Il nome della sede, se specificato, non può essere vuoto.");
+      }
     }
 
     const updated = await this.db.updateLocation(companyId, locationId, {
