@@ -1,4 +1,6 @@
 import { JobCompleteScoreResult } from "./services/job-complete-score.domain";
+export type PlatformRole = "ceo";
+
 export type UserRole =
   | "superadmin"
   | "owner"
@@ -33,6 +35,8 @@ export interface UserRecord {
   email: string;
   fullName: string;
   role: UserRole;
+  /** Trusted platform authority, independent from tenant-scoped company role. */
+  platformRole?: PlatformRole | null;
   companyId: string;
   companyName: string;
   passwordHash: string;

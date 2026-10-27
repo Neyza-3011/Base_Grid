@@ -1995,14 +1995,13 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       techB = await db.updateUser(resTechB.user.id, { companyId: compB.id, role: "technician" });
       tokenTechB = generateTokens(techB).accessToken;
 
-      // SuperAdmin
-      const resSA = await db.createUser({
-        email: "super@admin.com",
-        fullName: "Super Admin",
-        password: "Password123!",
-        companyName: "Super Admin Co",
-      });
-      superAdmin = await db.updateUser(resSA.user.id, { role: "superadmin" });
+      // Use the trusted platform account seeded by the test bootstrap.
+      // A tenant user cannot gain platform authority through the generic update path.
+      const { config } = await import("./config");
+      superAdmin = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
+      if (!superAdmin || superAdmin.platformRole !== "ceo") {
+        throw new Error("Trusted platform CEO test account was not seeded.");
+      }
       tokenSuperAdmin = generateTokens(superAdmin).accessToken;
 
       // Reports

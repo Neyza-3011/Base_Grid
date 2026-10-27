@@ -63,6 +63,7 @@ function mapUserRow(row: any): UserRecord {
     email: row.email,
     fullName: row.fullName,
     role: row.role as UserRole,
+    platformRole: row.platformRole === "ceo" ? "ceo" : null,
     companyId: row.companyId,
     companyName: row.companyName,
     passwordHash: row.passwordHash,
@@ -593,8 +594,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
         const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
         try {
           await this.pool.query(
-            `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            `INSERT INTO users (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt, "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt", "platformRole")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
             [
               masterUserId,
               saEmail,
@@ -610,6 +611,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
               "+39 02 1234567",
               now,
               now,
+              "ceo",
             ],
           );
         } catch (insertErr: any) {
@@ -629,7 +631,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
               recheck.rows[0].email === saEmail
             ) {
               await this.pool.query(
-                `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+                `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3, "platformRole" = 'ceo' WHERE id = $4`,
                 [hash, salt, now, masterUserId],
               );
             } else {
@@ -645,7 +647,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
           // CASE B: Matching user exists with expected identity -> safe update/reconciliation
           const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
           await this.pool.query(
-            `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+            `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3, "platformRole" = 'ceo' WHERE id = $4`,
             [hash, salt, now, masterUserId],
           );
         } else if (existing.id !== masterUserId && existing.email === saEmail) {
@@ -991,7 +993,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const existing = await this.findUserById(id);
     if (!existing) return null;
 
-    const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const updated = {
+      ...existing,
+      ...updates,
+      // This generic update path must never mutate platform authority.
+      platformRole: existing.platformRole ?? null,
+      updatedAt: new Date().toISOString(),
+    };
 
     await this.pool.query(
       `UPDATE users 

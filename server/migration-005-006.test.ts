@@ -365,11 +365,11 @@ describe("Migration 005 Immutability & Migration 006 Correctness", () => {
   // 5. Full migration set loads in correct order
   // =========================================================================
   describe("Migration ordering — full set", () => {
-    it("loads all migrations (001-010) in deterministic numerical order", () => {
+    it("loads all migrations (001-011) in deterministic numerical order", () => {
       const migrations = loadMigrationsFromDir(migrationsDir);
       const versions = migrations.map((m) => m.version);
 
-      expect(versions).toEqual(["001", "002", "003", "004", "005", "006", "007", "008", "009", "010"]);
+      expect(versions).toEqual(["001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011"]);
     });
   });
 });
