@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../security";
 import { db } from "../db";
-import { CompanyRecord, UserRecord, UserRole } from "../types";
+import { CompanyRecord, PlatformRole, UserRecord, UserRole } from "../types";
 import { asyncHandler } from "../async-handler";
 import { config } from "../config";
 
@@ -116,14 +116,25 @@ export function requireRole(allowedRoles: UserRole[]) {
 }
 
 /**
- * Authorization Middleware: Enforce SuperAdmin
+ * Authorization Middleware: Enforce trusted platform-level authority.
+ * Platform roles are loaded from the persisted user record, never from JWT/client input.
+ */
+export function requirePlatformRole(platformRole: PlatformRole) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user || req.user.platformRole !== platformRole) {
+      res.status(403).json({ detail: "Accesso negato: permessi piattaforma insufficienti." });
+      return;
+    }
+    next();
+  };
+}
+
+/**
+ * Backward-compatible guard name for existing platform administration routes.
+ * Existing superadmin records are migrated to platformRole=ceo.
  */
 export function requireSuperAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== "superadmin") {
-    res.status(403).json({ detail: "Area riservata esclusivamente al Master Super-Admin." });
-    return;
-  }
-  next();
+  return requirePlatformRole("ceo")(req, res, next);
 }
 
 /**
