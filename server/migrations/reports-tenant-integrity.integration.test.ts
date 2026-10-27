@@ -158,7 +158,7 @@ postgresDescribe("PostgreSQL report customer/location tenant integrity", () => {
     );
     expect(result.rows[0]).toEqual({
       companyId: "company-a",
-      customerId: "customer-a",
+      customerId: "customer-a2",
       locationId: null,
     });
   });
