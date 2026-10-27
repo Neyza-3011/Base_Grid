@@ -4,7 +4,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS "platformRole" VARCHAR(32);
 
 UPDATE users
 SET "platformRole" = 'ceo'
-WHERE role = 'superadmin'
+WHERE id = 'usr-superadmin-001'
+  AND role = 'superadmin'
   AND ("platformRole" IS NULL OR "platformRole" = '');
 
 DO $$
