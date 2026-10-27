@@ -123,4 +123,44 @@ postgresDescribe("PostgreSQL report customer/location tenant integrity", () => {
       locationId: null,
     });
   });
+
+  it("rejects tenant-inconsistent updates as well as inserts", async () => {
+    const reportId = "report-update-tenant-integrity";
+    await testPool.query(
+      'INSERT INTO reports (id, "companyId", "customerId") VALUES ($1, $2, $3)',
+      [reportId, "company-a", "customer-a"],
+    );
+
+    await expect(
+      testPool.query(
+        'UPDATE reports SET "customerId" = $1 WHERE id = $2',
+        ["customer-b", reportId],
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+
+    await expect(
+      testPool.query(
+        'UPDATE reports SET "customerId" = $1, "locationId" = $2 WHERE id = $3',
+        ["customer-a2", "location-a", reportId],
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+
+    await expect(
+      testPool.query(
+        'UPDATE reports SET "companyId" = NULL WHERE id = $1',
+        [reportId],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+
+    const result = await testPool.query(
+      'SELECT "companyId", "customerId", "locationId" FROM reports WHERE id = $1',
+      [reportId],
+    );
+    expect(result.rows[0]).toEqual({
+      companyId: "company-a",
+      customerId: "customer-a",
+      locationId: null,
+    });
+  });
+
 });
