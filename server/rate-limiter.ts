@@ -253,6 +253,13 @@ export const resendVerificationLimiter = rateLimiter.middleware({
   errorMessage: "Troppe richieste di reinvio email. Riprova più tardi.",
 });
 
+export const resendVerificationAccountLimiter = rateLimiter.middleware({
+  points: 3,
+  duration: 60 * 60, // 3 resend requests per hour per normalized account email
+  keyPrefix: "rl:resend-verification:acct",
+  errorMessage: "Troppe richieste di reinvio email per questo account. Riprova più tardi.",
+}, getEmailHashKey);
+
 export const forgotPasswordLimiter = rateLimiter.middleware({
   points: 3,
   duration: 60 * 60, // 1 hour
