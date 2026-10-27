@@ -49,7 +49,7 @@ function parseUserSession(data: {
     email: data.email,
     fullName: data.fullName,
     role: data.role as UserRole,
-    platformRole: data.platformRole === "ceo" ? "ceo" : null,
+    ...(data.platformRole === "ceo" ? { platformRole: "ceo" as const } : {}),
     companyId: data.companyId,
     companyName: data.companyName,
     provider: data.provider || "local",
