@@ -167,7 +167,7 @@ export class ReportsService {
 
     // 3. Client details resolution
     let resolvedClientName = typeof client_name === "string" ? client_name.trim() : "";
-    if (!resolvedClientName && interventionRecord && customerRecord) {
+    if (!resolvedClientName && customerRecord) {
       resolvedClientName = customerRecord.displayName;
     }
     if (!resolvedClientName || resolvedClientName.length > 255) {
@@ -185,7 +185,7 @@ export class ReportsService {
         );
       }
       clientAddress = client_address.trim();
-    } else if (interventionRecord && locationRecord) {
+    } else if (locationRecord) {
       clientAddress = locationRecord.address || "";
     }
 
@@ -195,7 +195,7 @@ export class ReportsService {
         throw new ValidationError("Città cliente non valida (massimo 100 caratteri).");
       }
       clientCity = client_city.trim();
-    } else if (interventionRecord && locationRecord) {
+    } else if (locationRecord) {
       clientCity = locationRecord.city || "";
     }
 

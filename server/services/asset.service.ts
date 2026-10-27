@@ -9,6 +9,19 @@ import {
 import { BadRequestError, NotFoundError } from "../errors";
 import { isValidCalendarDate } from "../validation";
 
+function validateInputObject(input: unknown, entityName = "I dati asset"): void {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new BadRequestError(`${entityName} inviati non sono validi.`);
+  }
+}
+
+function validateOptionalStringField(value: unknown, fieldName: string, nullable = false): void {
+  if (value === undefined || (nullable && value === null)) return;
+  if (typeof value !== "string") {
+    throw new BadRequestError(`${fieldName} deve essere una stringa valida.`);
+  }
+}
+
 export const VALID_ASSET_TYPES: readonly AssetType[] = [
   "quadro",
   "fotovoltaico",
@@ -61,8 +74,16 @@ export class AssetService {
     companyId: string,
     input: CreateAssetInput
   ): Promise<AssetRecord> {
+    validateInputObject(input, "I dati impianto/asset");
+    validateOptionalStringField(input.manufacturer, "Produttore", true);
+    validateOptionalStringField(input.model, "Modello", true);
+    validateOptionalStringField(input.serialNumber, "Numero di serie", true);
+    validateOptionalStringField(input.installationDate, "Data di installazione", true);
+    validateOptionalStringField(input.warrantyEndDate, "Data fine garanzia", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
     // 1. Validate required fields
-    if (!input.name || input.name.trim().length < 2) {
+    if (!input.name || typeof input.name !== "string" || input.name.trim().length < 2) {
       throw new BadRequestError("Il nome dell'impianto/asset è obbligatorio e deve avere almeno 2 caratteri.");
     }
 
@@ -138,11 +159,22 @@ export class AssetService {
     assetId: string,
     input: UpdateAssetInput
   ): Promise<AssetRecord> {
+    validateInputObject(input, "I dati impianto/asset");
+    validateOptionalStringField(input.name, "Nome impianto/asset", true);
+    validateOptionalStringField(input.manufacturer, "Produttore", true);
+    validateOptionalStringField(input.model, "Modello", true);
+    validateOptionalStringField(input.serialNumber, "Numero di serie", true);
+    validateOptionalStringField(input.installationDate, "Data di installazione", true);
+    validateOptionalStringField(input.warrantyEndDate, "Data fine garanzia", true);
+    validateOptionalStringField(input.notes, "Note", true);
+
     const existing = await this.getAssetById(companyId, assetId);
 
     // Validate name if provided
-    if (input.name !== undefined && input.name.trim().length < 2) {
-      throw new BadRequestError("Il nome dell'impianto/asset, se specificato, deve avere almeno 2 caratteri.");
+    if (input.name !== undefined && input.name !== null) {
+      if (typeof input.name !== "string" || input.name.trim().length < 2) {
+        throw new BadRequestError("Il nome dell'impianto/asset, se specificato, deve avere almeno 2 caratteri.");
+      }
     }
 
     // Validate assetType if provided
