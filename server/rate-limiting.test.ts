@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import { createApp } from "./app";
 import { rateLimiter } from "./rate-limiter";
@@ -152,5 +152,52 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
         
     expect(res.status).toBe(429);
     expect(res.body.detail).toContain("account");
+  });
+
+  it("fails closed on email verification endpoints when Redis is unavailable in production", async () => {
+    const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    (rateLimiter as any).redisClient = null;
+
+    try {
+      const verifyRes = await request(app)
+        .post("/api/v1/auth/verify-email")
+        .set("X-Test-RateLimit", "enable")
+        .send({ token: "test-token" });
+      expect(verifyRes.status).toBe(503);
+      expect(verifyRes.body.detail).toContain("RL-1");
+
+      const resendRes = await request(app)
+        .post("/api/v1/auth/resend-verification")
+        .set("X-Test-RateLimit", "enable")
+        .send({ email: "test@example.test" });
+      expect(resendRes.status).toBe(503);
+      expect(resendRes.body.detail).toContain("RL-1");
+    } finally {
+      if (originalMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalMode;
+    }
+  });
+
+  it("fails closed when Redis rate-limit evaluation errors in production", async () => {
+    const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    (rateLimiter as any).redisClient = {
+      status: "ready",
+      eval: vi.fn().mockRejectedValue(new Error("simulated Redis outage")),
+    };
+
+    try {
+      const res = await request(app)
+        .post("/api/v1/auth/verify-email")
+        .set("X-Test-RateLimit", "enable")
+        .send({ token: "test-token" });
+      expect(res.status).toBe(503);
+      expect(res.body.detail).toContain("RL-2");
+      expect(JSON.stringify(res.body)).not.toContain("simulated Redis outage");
+    } finally {
+      if (originalMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalMode;
+    }
   });
 });
