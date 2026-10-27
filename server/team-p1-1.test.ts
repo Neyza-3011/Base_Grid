@@ -401,3 +401,69 @@ describe("P1.1 — Team & Onboarding Foundation Tests", () => {
     });
   });
 });
+
+
+describe("P0-ROLE — platform authority cannot be granted through tenant flows", () => {
+  it("ignores client-supplied platformRole and superadmin role during registration", async () => {
+    const email = `platform-escalation-${Date.now()}@buildcorp.it`;
+    const res = await apiRequest("/api/v1/auth/register", {
+      method: "POST",
+      body: {
+        email,
+        password: "SecurePassword123!",
+        full_name: "Test Registration",
+        company_name: "Test Impianti Srl",
+        role: "superadmin",
+        platformRole: "ceo",
+      },
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe("owner");
+    expect(res.body.platformRole).toBeUndefined();
+
+    const storedUser = await db.findUserByEmail(email);
+    expect(storedUser?.role).toBe("owner");
+    expect(storedUser?.platformRole ?? null).toBeNull();
+  });
+
+  it("rejects attempts to invite a member with a platform role as a company role", async () => {
+    const inviter = (await db.findUserByEmail("admin@rossi.it"))!;
+    const teamService = new TeamService(db);
+
+    await expect(
+      teamService.inviteTeamMember(
+        inviter.companyId,
+        inviter.companyName,
+        inviter.id,
+        {
+          email: `ceo-invite-${Date.now()}@rossi.it`,
+          fullName: "Unauthorized Platform User",
+          role: "ceo",
+        } as any,
+      ),
+    ).rejects.toThrow(/ruolo non valido o non assegnabile/i);
+  });
+
+  it("does not persist a client-supplied platformRole during ordinary team updates", async () => {
+    const inviter = (await db.findUserByEmail("admin@rossi.it"))!;
+    const teamService = new TeamService(db);
+    const email = `platform-update-${Date.now()}@rossi.it`;
+    const invited = await teamService.inviteTeamMember(
+      inviter.companyId,
+      inviter.companyName,
+      inviter.id,
+      { email, fullName: "Ordinary Team Member", role: "technician" },
+    );
+
+    const updated = await teamService.updateTeamMember(
+      inviter.companyId,
+      invited.member.id,
+      inviter.id,
+      { fullName: "Updated Team Member", platformRole: "ceo" } as any,
+    );
+
+    expect(updated.fullName).toBe("Updated Team Member");
+    expect((await db.getUserByIdAndCompany(invited.member.id, inviter.companyId))?.platformRole ?? null).toBeNull();
+  });
+});
