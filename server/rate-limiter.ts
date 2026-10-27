@@ -239,6 +239,20 @@ export const refreshLimiter = rateLimiter.middleware({
   failClosed: true, // MUST fail closed for security (refresh is sensitive and tokenStore is already fail-closed)
 });
 
+export const verifyEmailLimiter = rateLimiter.middleware({
+  points: 10,
+  duration: 15 * 60, // 10 attempts per 15 minutes per IP
+  keyPrefix: "rl:verify-email",
+  errorMessage: "Troppi tentativi di verifica email. Riprova più tardi.",
+});
+
+export const resendVerificationLimiter = rateLimiter.middleware({
+  points: 3,
+  duration: 60 * 60, // 3 resend requests per hour per IP
+  keyPrefix: "rl:resend-verification",
+  errorMessage: "Troppe richieste di reinvio email. Riprova più tardi.",
+});
+
 export const forgotPasswordLimiter = rateLimiter.middleware({
   points: 3,
   duration: 60 * 60, // 1 hour

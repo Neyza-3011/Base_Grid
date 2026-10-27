@@ -90,6 +90,47 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
     }
   });
 
+  it("should return 429 when email verification attempts exceed the per-IP limit", async () => {
+    const testIp = `192.168.251.${Math.floor(Math.random() * 100) + 1}`;
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app)
+        .post("/api/v1/auth/verify-email")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", testIp)
+        .send({ token: `invalid-verification-token-${i}` });
+      expect(res.status).not.toBe(429);
+    }
+
+    const res = await request(app)
+      .post("/api/v1/auth/verify-email")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", testIp)
+      .send({ token: "invalid-verification-token-final" });
+    expect(res.status).toBe(429);
+    expect(res.body.detail).toContain("verifica email");
+  });
+
+  it("should return 429 when email verification resend requests exceed the per-IP limit", async () => {
+    const testIp = `192.168.252.${Math.floor(Math.random() * 100) + 1}`;
+    const email = `unknown-resend-${Date.now()}@example.test`;
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post("/api/v1/auth/resend-verification")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", testIp)
+        .send({ email });
+      expect(res.status).not.toBe(429);
+    }
+
+    const res = await request(app)
+      .post("/api/v1/auth/resend-verification")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", testIp)
+      .send({ email });
+    expect(res.status).toBe(429);
+    expect(res.body.detail).toContain("reinvio email");
+  });
+
   it("should return 429 when login email/account limit is exceeded independently of IP", async () => {
     // 10 requests from different IPs (spoofted via X-Forwarded-For) but same email
     const uniqueAccountEmail = `account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@test.com`;
