@@ -129,15 +129,19 @@ export async function getAppliedMigrations(clientOrPool: any): Promise<AppliedMi
 }
 
 /**
- * Reject ambiguous migration versions before opening a database connection.
  * Numeric versions are compared without leading zeroes so "001" and "1" collide.
+ */
+function canonicalizeMigrationVersion(version: string): string {
+  return /^\d+$/.test(version) ? version.replace(/^0+(?=\d)/, "") : version;
+}
+
+/**
+ * Reject ambiguous migration versions before opening a database connection.
  */
 function assertUniqueMigrationVersions(migrations: MigrationFile[]): void {
   const seen = new Map<string, { version: string; name: string }>();
   for (const migration of migrations) {
-    const canonicalVersion = /^\d+$/.test(migration.version)
-      ? migration.version.replace(/^0+(?=\d)/, "")
-      : migration.version;
+    const canonicalVersion = canonicalizeMigrationVersion(migration.version);
     const previous = seen.get(canonicalVersion);
     if (previous) {
       throw new Error(
@@ -146,6 +150,39 @@ function assertUniqueMigrationVersions(migrations: MigrationFile[]): void {
       );
     }
     seen.set(canonicalVersion, { version: migration.version, name: migration.name });
+  }
+}
+
+/**
+ * Fail closed if the database migration history uses ambiguous numeric versions
+ * or a migration file would be rerun under a differently padded version.
+ */
+function assertNoAppliedMigrationVersionCollisions(
+  migrations: MigrationFile[],
+  appliedRecords: AppliedMigrationRecord[],
+): void {
+  const appliedByCanonicalVersion = new Map<string, AppliedMigrationRecord>();
+  for (const record of appliedRecords) {
+    const canonicalVersion = canonicalizeMigrationVersion(record.version);
+    const previous = appliedByCanonicalVersion.get(canonicalVersion);
+    if (previous && previous.version !== record.version) {
+      throw new Error(
+        '[Migrator] Applied migration history contains duplicate numeric versions "' + previous.version +
+        '" and "' + record.version + '". Manual intervention required.'
+      );
+    }
+    appliedByCanonicalVersion.set(canonicalVersion, record);
+  }
+
+  for (const migration of migrations) {
+    const applied = appliedByCanonicalVersion.get(canonicalizeMigrationVersion(migration.version));
+    if (applied && applied.version !== migration.version) {
+      throw new Error(
+        '[Migrator] Migration version "' + migration.version + '" in "' + migration.name +
+        '" collides with already-applied database migration version "' + applied.version +
+        '" ("' + applied.name + '"). Manual intervention required.'
+      );
+    }
   }
 }
 
@@ -219,6 +256,7 @@ export async function runMigrations(
 
     await ensureMigrationsTable(client);
     const appliedRecords = await getAppliedMigrations(client);
+    assertNoAppliedMigrationVersionCollisions(availableMigrations, appliedRecords);
     const appliedMap = new Map<string, AppliedMigrationRecord>();
     for (const record of appliedRecords) appliedMap.set(record.version, record);
 

@@ -78,6 +78,38 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
     expect(executedQueries).toHaveLength(0);
   });
 
+  it("rejects a migration file that collides with an already-applied numeric version", async () => {
+    appliedRowsInDb = [
+      { version: "1", name: "1_initial.sql", applied_at: "2026-01-01", checksum: "hash1" },
+    ];
+    const migrations: MigrationFile[] = [
+      { version: "001", name: "001_initial.sql", sql: "SELECT 1;", checksum: "hash1" },
+    ];
+
+    await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(
+      /collides with already-applied database migration version/i,
+    );
+    expect(executedQueries.some(({ sql }) => sql === "BEGIN")).toBe(false);
+    expect(executedQueries.some(({ sql }) => sql.includes("SELECT 1;"))).toBe(false);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it("rejects ambiguous numeric versions already present in migration history", async () => {
+    appliedRowsInDb = [
+      { version: "001", name: "001_initial.sql", applied_at: "2026-01-01", checksum: "hash1" },
+      { version: "1", name: "1_duplicate.sql", applied_at: "2026-01-02", checksum: "hash2" },
+    ];
+    const migrations: MigrationFile[] = [
+      { version: "001", name: "001_initial.sql", sql: "SELECT 1;", checksum: "hash1" },
+    ];
+
+    await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(
+      /applied migration history contains duplicate numeric versions/i,
+    );
+    expect(executedQueries.some(({ sql }) => sql === "BEGIN")).toBe(false);
+    expect(executedQueries.some(({ sql }) => sql.includes("SELECT 1;"))).toBe(false);
+  });
+
   describe("Directory & Migration File Loader", () => {
 
     it("throws explicitly when the required migrations directory is missing", () => {
