@@ -26,6 +26,7 @@ import {
   registerLimiter,
   refreshLimiter,
   forgotPasswordLimiter,
+  forgotPasswordAccountLimiter,
   resetPasswordLimiter,
   googleAuthLimiter,
   verifyEmailLimiter,
@@ -258,7 +259,7 @@ authRouter.post("/resend-verification", [resendVerificationLimiter, resendVerifi
  * POST /api/v1/auth/forgot-password
  * Initiates password reset flow. Responds indistinguishably to prevent user enumeration.
  */
-authRouter.post("/forgot-password", forgotPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
+authRouter.post("/forgot-password", [forgotPasswordLimiter, forgotPasswordAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== "string") {

@@ -153,6 +153,28 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
     expect(res.body.detail).toContain("questo account");
   });
 
+  it("should return 429 when forgot-password account limit is exceeded across different IPs", async () => {
+    const email = `forgot-account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@example.test`;
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post("/api/v1/auth/forgot-password")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", `10.43.0.${i + 1}`)
+        .send({ email });
+      expect(res.status).not.toBe(429);
+    }
+
+    const res = await request(app)
+      .post("/api/v1/auth/forgot-password")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", "10.43.0.4")
+      .send({ email: email.toUpperCase() });
+
+    expect(res.status).toBe(429);
+    expect(res.body.detail).toContain("reset password");
+    expect(res.body.detail).not.toContain("account");
+  });
+
   it("should return 429 when login email/account limit is exceeded independently of IP", async () => {
     // 10 requests from different IPs (spoofted via X-Forwarded-For) but same email
     const uniqueAccountEmail = `account-limit-${Date.now()}-${Math.floor(Math.random() * 1000)}@test.com`;
