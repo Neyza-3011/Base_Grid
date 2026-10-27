@@ -53,4 +53,39 @@ describe("platform role authorization", () => {
     expect(res.statusCode).toBe(200);
     expect(next).toHaveBeenCalledOnce();
   });
+
+  it("denies requests when authentication middleware did not populate a user", () => {
+    const { res, next } = runGuard(requirePlatformRole("ceo"), undefined);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      detail: "Accesso negato: permessi piattaforma insufficienti.",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it.each(["superadmin", "admin", "owner", "", undefined])(
+    "does not treat tenant or legacy role value %s as CEO platform authority",
+    (platformRole) => {
+      const { res, next } = runGuard(requirePlatformRole("ceo"), {
+        id: "untrusted-role",
+        role: "superadmin",
+        platformRole,
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(next).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the legacy requireSuperAdmin alias restricted to the CEO platform role", () => {
+    const { res, next } = runGuard(requireSuperAdmin, {
+      id: "company-owner",
+      role: "owner",
+      platformRole: null,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
 });
