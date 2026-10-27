@@ -128,7 +128,7 @@ postgresDescribe("PostgreSQL report customer/location tenant integrity", () => {
     const reportId = "report-update-tenant-integrity";
     await testPool.query(
       'INSERT INTO reports (id, "companyId", "customerId") VALUES ($1, $2, $3)',
-      [reportId, "company-a", "customer-a"],
+      [reportId, "company-a", "customer-a2"],
     );
 
     await expect(
