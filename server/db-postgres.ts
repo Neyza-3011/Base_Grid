@@ -631,7 +631,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
               recheck.rows[0].email === saEmail
             ) {
               await this.pool.query(
-                `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+                `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3, "platformRole" = 'ceo' WHERE id = $4`,
                 [hash, salt, now, masterUserId],
               );
             } else {
@@ -647,7 +647,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
           // CASE B: Matching user exists with expected identity -> safe update/reconciliation
           const { hash, salt } = hashPassword(config.SUPERADMIN_PASSWORD);
           await this.pool.query(
-            `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3 WHERE id = $4`,
+            `UPDATE users SET "passwordHash" = $1, salt = $2, "updatedAt" = $3, "platformRole" = 'ceo' WHERE id = $4`,
             [hash, salt, now, masterUserId],
           );
         } else if (existing.id !== masterUserId && existing.email === saEmail) {
