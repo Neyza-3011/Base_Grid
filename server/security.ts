@@ -291,7 +291,7 @@ export function toSafeUserSession(user: UserRecord): SafeUserSession {
     email: user.email,
     fullName: user.fullName,
     role: user.role,
-    platformRole: user.platformRole ?? null,
+    ...(user.platformRole === "ceo" ? { platformRole: "ceo" as const } : {}),
     companyId: user.companyId,
     companyName: user.companyName,
     provider: user.provider,
