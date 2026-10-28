@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { X, Printer, Download, FileText, ExternalLink } from "lucide-react";
 import { validatePdfBlob } from "./pdfBlobValidation";
+import { trapDialogTab } from "./pdfPreviewAccessibility";
 
 export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClose: () => void }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   const onCloseRef = useRef(onClose);
 
@@ -62,13 +64,21 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
     };
   }, [reportId]);
 
-  // Focus management: move focus to close button upon mount
+  // Move focus into the dialog and restore it to the opener when the dialog closes.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      closeButtonRef.current?.focus();
-    }, 50);
-    return () => clearTimeout(timer);
+    previousActiveElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+
+    return () => {
+      const previousActiveElement = previousActiveElementRef.current;
+      if (previousActiveElement?.isConnected) previousActiveElement.focus();
+    };
   }, []);
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    trapDialogTab(event, dialogRef.current, document.activeElement);
+  };
 
   // Keyboard accessibility: Escape key handling
   useEffect(() => {
@@ -125,6 +135,7 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
         aria-modal="true"
         aria-labelledby="pdf-modal-title"
         tabIndex={-1}
+        onKeyDown={handleDialogKeyDown}
         className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-[#090D16] shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden outline-none"
       >
         <div className="flex flex-wrap sm:flex-nowrap items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 gap-2.5 sm:gap-4 border-b border-white/10 bg-slate-900/60 backdrop-blur rounded-t-2xl">
