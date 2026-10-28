@@ -3047,6 +3047,24 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       await db.updateUser(user.id, { isActive: true });
     });
 
+    it("denies platform CEO access when the persisted CEO role is attached to a non-canonical email", async () => {
+      const master = (await db.findUserById("usr-superadmin-001"))!;
+      expect(master.platformRole).toBe("ceo");
+      const { accessToken } = generateTokens(master);
+
+      try {
+        await db.updateUser(master.id, { email: "not-the-ceo@buildcorp.it" });
+        const response = await apiRequest("/api/v1/admin/stats", {
+          cookies: { access_token: accessToken, csrf_token: "csrf" },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.body.detail).toMatch(/identità CEO non valida/i);
+      } finally {
+        await db.updateUser(master.id, { email: "jack.cardinali15@gmail.com" });
+      }
+    });
+
     it("enforces authoritative DB user role/companyId even if JWT claims were forged/tampered", async () => {
       const user = await db.findUserByEmail("tech@rossi.it")!; // Role is 'technician'
       const secret = getJwtSecret();
