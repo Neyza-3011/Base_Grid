@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9` (2026-10-28, merge of PR #92).
+Baseline: `main` at `8bb7c8ae1625caaab5816a486eafb32b2848a323` (2026-10-28, merge of PR #94).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -21,6 +21,9 @@ Baseline: `main` at `2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9` (2026-10-28, merg
 - PR #90 (`1d6b935a40ca0a70e961faeb5145a44ee8e807b6`) adds persisted-state assertions for cross-tenant location alias mutations; CI run [40718853029](https://github.com/Neyza-3011/Base_Grid/actions/runs/40718853029) passed.
 - PR #91 (`988dba939702bfa7fc28d50e37920b544e70365c`) replaces the hard-coded customer count with adapter-backed counts and regression tests; CI run [40718888230](https://github.com/Neyza-3011/Base_Grid/actions/runs/40718888230) passed.
 - PR #92 (`2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9`) extracts PDF blob validation and adds focused valid/invalid blob tests. Current `main` CI run [40721405563](https://github.com/Neyza-3011/Base_Grid/actions/runs/40721405563) passed lint, backend/frontend type-check, Vitest and build. The broader live PDF UX flow remains unverified.
+- PR #93 (`9f2acfadb0d6e8a772b95e21a54acb2352cb1192`) synchronizes this roadmap through PR #92; merged as `c7763917b48f2ecd54ba2a68c1d04f683d07f0c3`.
+- PR #94 (`9769606c7974f1d50856ee51ab5897d0ae0f0d3a`) adds HTTP coverage for company settings authentication, client-supplied `companyId`, and subscription-status privilege separation. PR CI [40722437444](https://github.com/Neyza-3011/Base_Grid/actions/runs/40722437444) passed; merge commit is `8bb7c8ae1625caaab5816a486eafb32b2848a323`. This is focused coverage, not completion of the full route-by-route P0-ROLE audit.
+- Current `main` CI [40724198410](https://github.com/Neyza-3011/Base_Grid/actions/runs/40724198410) passed after PR #94. The combined commit status currently reports Vercel success.
 
 ## Ordered checkpoints
 
@@ -28,7 +31,7 @@ Baseline: `main` at `2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9` (2026-10-28, merg
 
 Status: `IN_PROGRESS`
 
-Evidence: PRs #84, #85, #86 and #87 are merged. CI passed for each referenced change. Coverage now includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member isolation, cross-tenant location isolation, and existing asset/intervention/report isolation tests.
+Evidence: PRs #84–#87 and #94 are merged; referenced CI runs passed. Coverage includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member and location isolation, existing asset/intervention/report isolation tests, and focused company-settings HTTP tests. This is still not a complete route-by-route audit.
 
 Acceptance criteria:
 - Keep company roles scoped to their own company and platform CEO authority separate from company administration.
@@ -78,6 +81,8 @@ Acceptance criteria:
 
 Status: `NOT_STARTED`
 
+Audit evidence: the route tree contains `/wizard`, which creates a rapportino, and invite-acceptance routes; no dedicated required first-run company-setup route or onboarding-progress API/model was found in the searched frontend routes, API route mounts, or migration `002_team_and_onboarding.sql`. This is a targeted search, not a full product-wide proof. Do not confuse the rapportino wizard with company onboarding.
+
 Acceptance criteria:
 - Require minimal company setup after account creation/authentication before normal workflows.
 - Persist progress server-side so refresh/relogin cannot bypass required steps.
@@ -97,7 +102,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #92 is merged and current `main` CI run `40721405563` passes. Focused unit tests cover PDF signature/MIME/size validation. End-to-end preview behavior, loading/error recovery, close/reopen cleanup, focus management, responsive layouts and accessibility acceptance criteria remain unverified.
+Evidence: PR #92 is merged; current `main` CI run `40724198410` passes after PR #94. Focused unit tests cover PDF signature/MIME/size validation. The current component has loading/error handling, Escape close, initial focus and object-URL cleanup on unmount, but no focus trap or focus restoration to the opener is apparent in the audited component. Print-iframe failure cleanup and end-to-end preview behavior remain unverified.
 
 Acceptance criteria:
 - Reproduce reported preview failures and trace generation, response headers/body, browser preview, object URL lifecycle and error states.
