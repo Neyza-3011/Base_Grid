@@ -14,7 +14,7 @@ import { verifyCsrf } from "./middleware/auth";
 import { securityHeaders } from "./middleware/security-headers";
 import { assertValidJwtSecret } from "./security";
 import { config } from "./config";
-import { generalApiLimiter } from "./rate-limiter";
+import { generalApiLimiter, rateLimiter } from "./rate-limiter";
 import { db } from "./db";
 import { tokenStore } from "./token-store";
 import { asyncHandler } from "./async-handler";
@@ -73,12 +73,13 @@ export function createApp(): Express {
       }
 
       try {
-        const [dbOk, redisOk] = await Promise.all([
+        const [dbOk, redisOk, rateLimiterOk] = await Promise.all([
           db.ping(2000).catch(() => false),
           tokenStore.ping(2000).catch(() => false),
+          rateLimiter.ping(2000).catch(() => false),
         ]);
 
-        if (dbOk && redisOk) {
+        if (dbOk && redisOk && rateLimiterOk) {
           res.status(200).json({ status: "ready" });
         } else {
           res.status(503).json({ status: "not_ready" });

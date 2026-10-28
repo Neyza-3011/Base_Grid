@@ -163,6 +163,39 @@ export class RateLimiter {
     }
   }
 
+  public async ping(timeoutMs = 2000): Promise<boolean> {
+    if (!this.redisClient) {
+      return true;
+    }
+    try {
+      let timer: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("RateLimiter Redis ping timed out")), timeoutMs);
+      });
+
+      const executePing = async (): Promise<boolean> => {
+        if (this.redisClient!.status === "wait") {
+          await this.redisClient!.connect().catch(() => {});
+        }
+        const res = await this.redisClient!.ping();
+        return res === "PONG";
+      };
+
+      try {
+        const res = await Promise.race([executePing(), timeoutPromise]);
+        return res;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (err) {
+      console.error("[RateLimiterRedisPingError]", {
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
   public async getRedisClient(): Promise<Redis | null> {
     if (this.redisClient) {
       try {
