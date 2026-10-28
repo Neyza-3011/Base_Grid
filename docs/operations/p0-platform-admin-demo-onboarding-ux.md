@@ -38,7 +38,7 @@ Implementation note: inspect all route → middleware → service → adapter pa
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is being pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration.
+Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration; this follow-up also checks the canonical email in `requirePlatformRole("ceo")`, with a regression test for a mismatched persisted identity.
 
 Acceptance criteria:
 - CEO-only platform console lists and manages companies and account lifecycle across tenants.
