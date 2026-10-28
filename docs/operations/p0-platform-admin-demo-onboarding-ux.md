@@ -8,14 +8,14 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `d40e9ea28c93cdf234c870c7118ac1c8a4c9b823` (2026-10-28, merge of PR #87).
+Baseline: `main` at `4007c5fba31585c6004e4103834041f016c15aed` (2026-10-28, merge of PR #88).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
 - PR #87 adds HTTP regression tests for client-supplied `role`/`platformRole` on registration, team invitation and profile update. CI run `40710324312` passed lint, backend/frontend type-check, Vitest and build.
 - `server/assets.test.ts` already covers cross-tenant asset list/read/update/archive/reactivate and rejects cross-tenant location use on creation.
 - `server/interventions.test.ts` and report tests contain existing cross-tenant coverage; this is not a complete route-by-route audit.
-- `server/routes/admin.ts` exposes only read-only `/stats` and `/tenants` routes and applies `authenticate` plus `requireSuperAdmin` router-wide. The new PR adds integration coverage for company-admin denial and canonical CEO access to both endpoints; that new CI is pending.
+- PR #88 adds HTTP integration tests proving a company admin receives 403 on `/api/v1/admin/stats` and `/api/v1/admin/tenants`, while the canonical CEO can read both endpoints. CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build; merge commit is `4007c5fba31585c6004e4103834041f016c15aed`.
 - The latest repository search did not find active clone/sandbox API implementation references beyond roadmap requirements, but this is a search-based review and not yet a complete UI/config/seeder audit.
 
 ## Ordered checkpoints
