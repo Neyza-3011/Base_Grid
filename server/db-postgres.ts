@@ -1330,12 +1330,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const tenants = await this.pool.query("SELECT COUNT(*) FROM companies");
     const users = await this.pool.query("SELECT COUNT(*) FROM users");
     const reports = await this.pool.query("SELECT COUNT(*) FROM reports");
+    const customers = await this.pool.query("SELECT COUNT(*) FROM customers");
 
     return {
       total_tenants: parseInt(tenants.rows[0]?.count || "0", 10),
       total_users: parseInt(users.rows[0]?.count || "0", 10),
       total_reports: parseInt(reports.rows[0]?.count || "0", 10),
-      total_clients: 42,
+      total_clients: parseInt(customers.rows[0]?.count || "0", 10),
       system_status: "Operational · 100% Zero-Trust Active (PostgreSQL)",
     };
   }
