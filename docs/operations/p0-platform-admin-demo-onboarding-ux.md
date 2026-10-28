@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `4007c5fba31585c6004e4103834041f016c15aed` (2026-10-28, merge of PR #88).
+Baseline: `main` at `2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9` (2026-10-28, merge of PR #92).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -17,6 +17,10 @@ Baseline: `main` at `4007c5fba31585c6004e4103834041f016c15aed` (2026-10-28, merg
 - `server/interventions.test.ts` and report tests contain existing cross-tenant coverage; this is not a complete route-by-route audit.
 - PR #88 adds HTTP integration tests proving a company admin receives 403 on `/api/v1/admin/stats` and `/api/v1/admin/tenants`, while the canonical CEO can read both endpoints. CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build; merge commit is `4007c5fba31585c6004e4103834041f016c15aed`.
 - The latest repository search did not find active clone/sandbox API implementation references beyond roadmap requirements, but this is a search-based review and not yet a complete UI/config/seeder audit.
+- PR #89 (`1b704b9a07e6f143f965dc0128e3ad1156f005b7`) adds persisted-state assertions after cross-tenant intervention update/transition attempts; CI run [40718550835](https://github.com/Neyza-3011/Base_Grid/actions/runs/40718550835) passed.
+- PR #90 (`1d6b935a40ca0a70e961faeb5145a44ee8e807b6`) adds persisted-state assertions for cross-tenant location alias mutations; CI run [40718853029](https://github.com/Neyza-3011/Base_Grid/actions/runs/40718853029) passed.
+- PR #91 (`988dba939702bfa7fc28d50e37920b544e70365c`) replaces the hard-coded customer count with adapter-backed counts and regression tests; CI run [40718888230](https://github.com/Neyza-3011/Base_Grid/actions/runs/40718888230) passed.
+- PR #92 (`2a831abb2728f3d5a9154764a1c0fadc2fbcb7a9`) extracts PDF blob validation and adds focused valid/invalid blob tests. Current `main` CI run [40721405563](https://github.com/Neyza-3011/Base_Grid/actions/runs/40721405563) passed lint, backend/frontend type-check, Vitest and build. The broader live PDF UX flow remains unverified.
 
 ## Ordered checkpoints
 
@@ -38,7 +42,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. PR #88 adds HTTP integration coverage for company-admin denial and canonical CEO access; its CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build. A separate audit found `total_clients` hardcoded to `42` in both database adapters; PR #91 proposes counting actual customer records and adding adapter regression tests, pending CI. The console remains read-only; company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
+Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. PR #88 adds HTTP integration coverage for company-admin denial and canonical CEO access; its CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build. A separate audit found `total_clients` hardcoded to `42` in both database adapters; PR #91 removes the hard-coded `total_clients: 42` from both adapters and adds regression coverage; CI run `40718888230` passed. The console remains read-only; company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
 
 Acceptance criteria:
 - CEO-only console can list/manage companies and account lifecycle across tenants.
@@ -91,7 +95,9 @@ Acceptance criteria:
 
 ### P0-PDF-UX — PDF preview, responsive UI and UX defects
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
+
+Evidence: PR #92 is merged and current `main` CI run `40721405563` passes. Focused unit tests cover PDF signature/MIME/size validation. End-to-end preview behavior, loading/error recovery, close/reopen cleanup, focus management, responsive layouts and accessibility acceptance criteria remain unverified.
 
 Acceptance criteria:
 - Reproduce reported preview failures and trace generation, response headers/body, browser preview, object URL lifecycle and error states.
