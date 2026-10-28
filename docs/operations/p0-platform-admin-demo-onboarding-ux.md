@@ -8,7 +8,7 @@ Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Audit findings on the verified baseline
 
-Baseline audited for this update: `main` at `e53d22f8e6726c8109807774f5dc3bdf6b704b11` (2026-10-28).
+Baseline audited for this update: `main` at `21da1cf6b7652dcf2f81b47d487ee29256421c84` (2026-10-28; PR #84 merged).
 
 - `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
 - Registration in `server/routes/auth.ts` creates the first user as `owner`.
@@ -23,6 +23,8 @@ Baseline audited for this update: `main` at `e53d22f8e6726c8109807774f5dc3bdf6b7
 ### P0-ROLE — Separate platform authority from company roles
 
 Status: `IN_PROGRESS`
+
+Evidence update: PR #84 is merged; its CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. This follow-up adds an HTTP-level regression test for tenant A attempting to read and deactivate a tenant B team member, including an assertion that tenant B's account remains active. The new test is not yet verified until the current PR CI completes.
 
 Acceptance criteria:
 - Keep company roles (including the company's Admin) scoped to one company.

@@ -893,6 +893,34 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
     });
   });
 
+  describe("7.1 Team member tenant isolation", () => {
+    it("prevents a tenant admin from reading or deactivating another tenant's member", async () => {
+      const { user: userB } = await db.createUser({
+        email: "tenant-b-member@buildcorp.it",
+        fullName: "Tenant B Member",
+        password: "Password123!",
+        companyName: "Tenant B Srl",
+      });
+      const userA = (await db.findUserByEmail("admin@rossi.it"))!;
+      const { accessToken } = generateTokens(userA);
+
+      const readResponse = await apiRequest(`/api/v1/users/team/${userB.id}`, {
+        cookies: { access_token: accessToken },
+      });
+      expect(readResponse.status).toBe(404);
+
+      const deactivateResponse = await apiRequest(`/api/v1/users/team/${userB.id}/deactivate`, {
+        method: "POST",
+        cookies: { access_token: accessToken, csrf_token: "csrf-token" },
+        headers: { "x-csrf-token": "csrf-token" },
+      });
+      expect(deactivateResponse.status).toBe(404);
+
+      const unchangedUserB = await db.findUserById(userB.id);
+      expect(unchangedUserB?.isActive).toBe(true);
+    });
+  });
+
   describe("8. JWT Secret Security & Strict Environment Enforcement", async () => {
     it("fails startup in production when JWT_SECRET and SECRET_KEY are missing", async () => {
       expect(() =>
