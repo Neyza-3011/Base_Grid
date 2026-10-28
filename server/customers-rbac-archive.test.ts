@@ -425,6 +425,13 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
         headers: authB.headers,
       });
       expect(reactRes.status).toBe(404);
+
+      // Rejected cross-tenant mutations must leave the owning tenant's record unchanged.
+      const persistedCustomer = await db.getCustomerByIdAndCompany(custA.id, companyA);
+      expect(persistedCustomer).not.toBeNull();
+      expect(persistedCustomer?.companyId).toBe(companyA);
+      expect(persistedCustomer?.displayName).toBe("Tenant A Secret Customer");
+      expect(persistedCustomer?.isActive).toBe(true);
     });
 
     it("prevents Tenant B from reading, updating, archiving or reactivating Tenant A's location", async () => {
