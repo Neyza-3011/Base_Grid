@@ -462,6 +462,13 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
         headers: authB.headers,
       });
       expect(reactRes.status).toBe(404);
+
+      // The backward-compatible alias must enforce the same tenant boundary
+      // without mutating the location after any rejected operation.
+      const persisted = await db.getLocationByIdAndCompany(locA.id, companyA);
+      expect(persisted).not.toBeNull();
+      expect(persisted?.name).toBe("Tenant A Location");
+      expect(persisted?.isActive).toBe(true);
     });
   });
 
