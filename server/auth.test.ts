@@ -921,6 +921,43 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
     });
   });
 
+  describe("7.2 Location tenant isolation", () => {
+    it("prevents a tenant admin from reading or modifying another tenant's location", async () => {
+      const { user: userB } = await db.createUser({
+        email: "tenant-b-location-owner@buildcorp.it",
+        fullName: "Tenant B Location Owner",
+        password: "Password123!",
+        companyName: "Tenant B Locations Srl",
+      });
+      const customerB = await db.createCustomer(userB.companyId, {
+        displayName: "Tenant B Customer",
+      });
+      const locationB = await db.createLocation(userB.companyId, customerB.id, {
+        name: "Tenant B Site",
+        address: "Via Test 10",
+        city: "Roma",
+      });
+      const userA = (await db.findUserByEmail("admin@rossi.it"))!;
+      const { accessToken } = generateTokens(userA);
+
+      const readResponse = await apiRequest(`/api/v1/locations/${locationB.id}`, {
+        cookies: { access_token: accessToken },
+      });
+      expect(readResponse.status).toBe(404);
+
+      const updateResponse = await apiRequest(`/api/v1/locations/${locationB.id}`, {
+        method: "PUT",
+        cookies: { access_token: accessToken, csrf_token: "csrf-token" },
+        headers: { "x-csrf-token": "csrf-token" },
+        body: { name: "Unauthorized overwrite" },
+      });
+      expect(updateResponse.status).toBe(404);
+
+      const unchangedLocation = await db.getLocationByIdAndCompany(locationB.id, userB.companyId);
+      expect(unchangedLocation?.name).toBe("Tenant B Site");
+    });
+  });
+
   describe("8. JWT Secret Security & Strict Environment Enforcement", async () => {
     it("fails startup in production when JWT_SECRET and SECRET_KEY are missing", async () => {
       expect(() =>

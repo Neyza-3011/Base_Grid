@@ -24,7 +24,7 @@ Baseline audited for this update: `main` at `1c96cc95fa306bcdffccf338aaa9a823100
 
 Status: `IN_PROGRESS`
 
-Evidence update: PR #84 is merged; its CI run `40665887239` passed lint, backend/frontend type-check, Vitest and build. PR #85 is merged; CI run `40668715854` passed the same checks and its HTTP regression test proves tenant A cannot read or deactivate a tenant B team member, with no state change to the target account. The current follow-up adds HTTP tests for role/platform-role injection through registration, team invitation and profile update; these tests remain unverified until the current PR CI completes.
+Evidence update: PR #84 is merged; CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. PR #85 is merged at `1c96cc95fa306bcdffccf338aaa9a823100b174c`; its CI passed lint, backend/frontend type-check, Vitest and build, including an HTTP regression test that tenant A cannot read/deactivate tenant B's member and cannot cause a deactivation side effect. This follow-up adds HTTP-level coverage for tenant A attempting to read and modify a tenant B location, including an assertion that the stored location name remains unchanged. The new test is not verified until this PR's CI completes.
 
 Acceptance criteria:
 - Keep company roles (including the company's Admin) scoped to one company.
