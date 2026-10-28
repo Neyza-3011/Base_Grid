@@ -28,6 +28,8 @@ export interface ServerConfig {
   GOOGLE_CLIENT_ID?: string;
 }
 
+export const PLATFORM_CEO_EMAIL = "jack.cardinali15@gmail.com";
+
 export function loadConfig(env = process.env): ServerConfig {
   const mode = getRuntimeMode(env);
   
@@ -67,6 +69,12 @@ export function loadConfig(env = process.env): ServerConfig {
     if (!SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD) {
       throw new Error(
         "CRITICAL CONFIG ERROR: SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD must be set in production to secure the master tenant."
+      );
+    }
+
+    if (SUPERADMIN_EMAIL.trim().toLowerCase() !== PLATFORM_CEO_EMAIL) {
+      throw new Error(
+        "CRITICAL CONFIG ERROR: SUPERADMIN_EMAIL must match the trusted platform CEO identity."
       );
     }
     
@@ -169,13 +177,13 @@ export function loadConfig(env = process.env): ServerConfig {
     }
   } else if (mode === "ai-studio") {
     // Standalone Google AI Studio Cloud Run container mode
-    if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
+    if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
     if (!SUPERADMIN_PASSWORD) SUPERADMIN_PASSWORD = crypto.randomBytes(16).toString("hex") + "Aa1!";
     if (!FRONTEND_URL) FRONTEND_URL = "http://localhost:" + (Number(env.PORT) || 3000);
     if (!CORS_ORIGINS_RAW) CORS_ORIGINS_RAW = FRONTEND_URL;
   } else {
     // Development / Test defaults
-    if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = "saas@rapporti.it";
+    if (!SUPERADMIN_EMAIL) SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
     if (!SUPERADMIN_PASSWORD) SUPERADMIN_PASSWORD = "SuperAdmin2026!";
     if (!FRONTEND_URL) FRONTEND_URL = "http://localhost:5173";
     if (!CORS_ORIGINS_RAW) CORS_ORIGINS_RAW = FRONTEND_URL;
