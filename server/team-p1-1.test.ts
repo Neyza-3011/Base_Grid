@@ -404,6 +404,18 @@ describe("P1.1 — Team & Onboarding Foundation Tests", () => {
 
 
 describe("P0-ROLE — platform authority cannot be granted through tenant flows", () => {
+  it("seeds platform CEO authority only for the canonical trusted email", async () => {
+    const master = await db.findUserById("usr-superadmin-001");
+    expect(master?.email).toBe("jack.cardinali15@gmail.com");
+    expect(master?.role).toBe("superadmin");
+    expect(master?.platformRole).toBe("ceo");
+
+    const legacyAddress = await db.findUserByEmail("saas@rapporti.it");
+    if (legacyAddress) {
+      expect(legacyAddress.platformRole ?? null).toBeNull();
+    }
+  });
+
   it("ignores client-supplied platformRole and superadmin role during registration", async () => {
     const email = `platform-escalation-${Date.now()}@buildcorp.it`;
     const res = await apiRequest("/api/v1/auth/register", {
