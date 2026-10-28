@@ -8,15 +8,15 @@ Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Audit findings on the verified baseline
 
-Baseline audited for this update: `main` at `21da1cf6b7652dcf2f81b47d487ee29256421c84` (2026-10-28; PR #84 merged).
+Baseline audited for this update: `main` at `1c96cc95fa306bcdffccf338aaa9a823100b174c` (2026-10-28; PR #85 merged).
 
 - `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
-- Registration in `server/routes/auth.ts` creates the first user as `owner`.
-- `ASSIGNABLE_ROLES` excludes `superadmin`, which is a useful existing safeguard.
-- `server/middleware/auth.ts` authorizes global access by checking the persisted role string `superadmin`; authenticated users are also required to resolve a company through `user.companyId`.
-- Company settings are scoped through the authenticated user's `companyId`. The code reviewed here does not establish a separate platform identity/role model or a CEO console.
-- PR #82 is merged; its CI run passed lint, backend/frontend type-check, Vitest, and build.
-- This remains a targeted source review, not an exhaustive endpoint audit.
+- Registration in `server/routes/auth.ts` explicitly creates the first user as `owner` and does not consume client-supplied `role` or `platformRole` fields.
+- `ASSIGNABLE_ROLES` excludes `superadmin`, and team invitation/update flows validate the role against this allowlist.
+- `server/middleware/auth.ts` loads the persisted user, validates the current auth version, resolves the user's company, and binds CEO authorization to the canonical platform email.
+- Team member service methods scope lookup and mutations by the authenticated user's `companyId`; PR #85 adds HTTP-level coverage for cross-tenant read/deactivation attempts.
+- PR #85 merged as `1c96cc95fa306bcdffccf338aaa9a823100b174c`. Its GitHub Actions CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
+- This remains a targeted source review, not an exhaustive endpoint audit. The new platform-role injection tests in the current change have not yet been run by CI.
 
 ## Ordered checkpoints
 
@@ -24,7 +24,7 @@ Baseline audited for this update: `main` at `21da1cf6b7652dcf2f81b47d487ee292564
 
 Status: `IN_PROGRESS`
 
-Evidence update: PR #84 is merged; its CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. This follow-up adds an HTTP-level regression test for tenant A attempting to read and deactivate a tenant B team member, including an assertion that tenant B's account remains active. The new test is not yet verified until the current PR CI completes.
+Evidence update: PR #84 is merged; its CI run `40665887239` passed lint, backend/frontend type-check, Vitest and build. PR #85 is merged; CI run `40668715854` passed the same checks and its HTTP regression test proves tenant A cannot read or deactivate a tenant B team member, with no state change to the target account. The current follow-up adds HTTP tests for role/platform-role injection through registration, team invitation and profile update; these tests remain unverified until the current PR CI completes.
 
 Acceptance criteria:
 - Keep company roles (including the company's Admin) scoped to one company.
@@ -40,7 +40,7 @@ Implementation note: inspect all route → middleware → service → adapter pa
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration; this follow-up also checks the canonical email in `requirePlatformRole("ceo")`, with a regression test for a mismatched persisted identity.
+Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration; authorization middleware also checks the canonical email.
 
 Acceptance criteria:
 - CEO-only platform console lists and manages companies and account lifecycle across tenants.
@@ -53,7 +53,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: the prior PR #82 added a frontend guard and removed the dashboard entry point. This PR deletes the sandbox route source and removes its generated route-tree references. A wider audit for other demo/clone references and automated direct-access tests remains outstanding.
+Evidence: the prior PR #82 added a frontend guard and removed the dashboard entry point. PR #83/#84 removed the sandbox route source and generated route-tree references and constrained CEO identity. A wider audit for other demo/clone references and automated direct-access tests remains outstanding.
 
 Acceptance criteria:
 - Locate all sandbox/demo/clone entry points in UI, routes, APIs, seeders, and configuration.
