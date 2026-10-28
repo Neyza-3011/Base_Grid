@@ -455,6 +455,8 @@ export interface SafeUserSession {
   email: string;
   fullName: string;
   role: UserRole;
+  /** Trusted platform authority, independent from the company-scoped role. */
+  platformRole?: PlatformRole | null;
   companyId: string;
   companyName: string;
   provider: string;

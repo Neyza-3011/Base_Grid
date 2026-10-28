@@ -14,6 +14,7 @@ export type UserSession = {
   email: string;
   fullName: string;
   role: UserRole;
+  platformRole?: "ceo" | null;
   companyId: string;
   companyName: string;
   provider?: string;
@@ -37,6 +38,7 @@ function parseUserSession(data: {
   email: string;
   fullName: string;
   role: string;
+  platformRole?: "ceo" | null;
   companyId: string;
   companyName: string;
   provider?: string;
@@ -47,6 +49,7 @@ function parseUserSession(data: {
     email: data.email,
     fullName: data.fullName,
     role: data.role as UserRole,
+    ...(data.platformRole === "ceo" ? { platformRole: "ceo" as const } : {}),
     companyId: data.companyId,
     companyName: data.companyName,
     provider: data.provider || "local",
