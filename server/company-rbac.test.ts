@@ -75,10 +75,11 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
   });
 
   it("ignores client-supplied companyId and blocks non-platform roles from changing subscription status", async () => {
+    const tenantBEmail = `tenant-b-company-settings-${Date.now()}@example.test`;
     const registration = await apiRequest("/api/v1/auth/register", {
       method: "POST",
       body: {
-        email: `tenant-b-company-settings-${Date.now()}@example.test`,
+        email: tenantBEmail,
         password: "SecurePassword123!",
         full_name: "Tenant B Owner",
         company_name: "Tenant B Original",
@@ -88,13 +89,7 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(registration.body.companyId).toBeTruthy();
 
     const tenantBCompanyId = registration.body.companyId as string;
-    const tenantBToken = await tokenFor(`tenant-b-company-settings-${new Date().getTime()}@example.test`).catch(() => "");
-    // The registration email contains a timestamp; resolve the created owner from the company record instead.
-    const tenantBUser = [...((db as any).users.values() as Iterable<any>)].find(
-      (user) => user.companyId === tenantBCompanyId && user.email.endsWith("@example.test"),
-    );
-    expect(tenantBUser).toBeTruthy();
-    const accessToken = tenantBToken || generateTokens(tenantBUser).accessToken;
+    const accessToken = await tokenFor(tenantBEmail);
 
     const companyABefore = await db.findCompanyById("comp-rossi-001");
     const companyBBefore = await db.findCompanyById(tenantBCompanyId);
