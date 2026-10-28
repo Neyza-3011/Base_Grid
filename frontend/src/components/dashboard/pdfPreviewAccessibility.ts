@@ -15,8 +15,8 @@ export function trapDialogTab(
     dialog.querySelectorAll(
       "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex='-1'])",
     ),
-  ).filter((element) =>
-    element.tabIndex >= 0 && element.getAttribute("aria-hidden") !== "true",
+  ).filter(
+    (element) => element.tabIndex >= 0 && element.getAttribute("aria-hidden") !== "true",
   );
 
   if (focusable.length === 0) {
