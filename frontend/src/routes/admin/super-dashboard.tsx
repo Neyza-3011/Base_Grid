@@ -12,7 +12,6 @@ import {
   LogOut,
   ExternalLink,
   RefreshCw,
-  Layers,
 } from "lucide-react";
 import { fetchServerSession, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
@@ -129,13 +128,6 @@ export function SuperDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            to="/admin/sandbox"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30 text-xs font-semibold transition"
-          >
-            <Layers className="h-3.5 w-3.5 text-indigo-400" /> Cloned Sandbox Test Env
-          </Link>
-
           <Link
             to="/dashboard"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white/80 hover:text-white transition"
