@@ -458,11 +458,12 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(deletedFailure).toBe(false);
   });
 
-  it("getGlobalStats counts companies, users, reports", async () => {
+  it("getGlobalStats counts companies, users, reports, and customers", async () => {
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ count: "5" }] })
       .mockResolvedValueOnce({ rows: [{ count: "12" }] })
-      .mockResolvedValueOnce({ rows: [{ count: "48" }] });
+      .mockResolvedValueOnce({ rows: [{ count: "48" }] })
+      .mockResolvedValueOnce({ rows: [{ count: "19" }] });
 
     const adapter = new PostgresAdapter(mockPool);
     const stats = await adapter.getGlobalStats();
@@ -470,6 +471,8 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(stats.total_tenants).toBe(5);
     expect(stats.total_users).toBe(12);
     expect(stats.total_reports).toBe(48);
+    expect(stats.total_clients).toBe(19);
+    expect(mockPool.query).toHaveBeenNthCalledWith(4, "SELECT COUNT(*) FROM customers");
     expect(stats.system_status).toContain("PostgreSQL");
   });
 
