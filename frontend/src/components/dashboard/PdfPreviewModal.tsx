@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { X, Printer, Download, FileText, ExternalLink } from "lucide-react";
+import { validatePdfBlob } from "./pdfBlobValidation";
 
 export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClose: () => void }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -37,12 +38,7 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
         }
 
         const blob = await res.blob();
-        if (blob.size < 8 || (blob.type && blob.type !== "application/pdf")) {
-          throw new Error("Il server non ha restituito un PDF valido.");
-        }
-        if ((await blob.slice(0, 5).text()) !== "%PDF-") {
-          throw new Error("La risposta del server non contiene un documento PDF valido.");
-        }
+        await validatePdfBlob(blob);
         if (!isMounted) return;
         currentUrl = window.URL.createObjectURL(blob);
         setPdfUrl(currentUrl);
