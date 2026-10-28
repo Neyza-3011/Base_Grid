@@ -573,6 +573,13 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
         headers: authB.headers,
       });
       expect(reactRes.status).toBe(404);
+
+      // Rejected cross-tenant mutations must not change the persisted record.
+      const persistedAsset = await db.getAssetByIdAndCompany(assetA.id, companyA);
+      expect(persistedAsset).not.toBeNull();
+      expect(persistedAsset?.companyId).toBe(companyA);
+      expect(persistedAsset?.name).toBe("Quadro Elettrico Tenant A");
+      expect(persistedAsset?.isActive).toBe(true);
     });
   });
 });
