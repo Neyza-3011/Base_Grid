@@ -11,8 +11,10 @@ let baseUrl: string;
 
 beforeEach(async () => {
   process.env.JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long-secure!";
-  const { config } = await import("./config");
+  const { config, PLATFORM_CEO_EMAIL } = await import("./config");
   config.EMAIL_VERIFICATION_ENABLED = false;
+  // Keep this suite deterministic even when the runner injects a legacy SUPERADMIN_EMAIL.
+  config.SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
   db.seedInitialData?.();
   tokenStore.setAvailability(true);
 
