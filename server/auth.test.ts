@@ -813,7 +813,8 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
 
   describe("7. Role-Based Access Control & Tenant Isolation", async () => {
     it("allows Master SuperAdmin to access /api/v1/admin/stats and /api/v1/admin/tenants", async () => {
-      const superAdmin = await db.findUserByEmail("saas@rapporti.it")!;
+      const superAdmin = await db.findUserById("usr-superadmin-001");
+      expect(superAdmin).not.toBeNull();
       const { accessToken } = generateTokens(superAdmin);
 
       const res = await apiRequest("/api/v1/admin/stats", {
