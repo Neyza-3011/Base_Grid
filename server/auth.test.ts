@@ -20,8 +20,10 @@ const TEST_JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long
 
 beforeEach(async () => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
-  const { config } = await import("./config");
+  const { config, PLATFORM_CEO_EMAIL } = await import("./config");
   config.EMAIL_VERIFICATION_ENABLED = false;
+  // Keep the seeded platform CEO aligned with the canonical identity in every CI environment.
+  config.SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
   db.seedInitialData();
   const app = createApp();
   await new Promise<void>((resolve) => {
@@ -811,7 +813,8 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
 
   describe("7. Role-Based Access Control & Tenant Isolation", async () => {
     it("allows Master SuperAdmin to access /api/v1/admin/stats and /api/v1/admin/tenants", async () => {
-      const superAdmin = await db.findUserByEmail("saas@rapporti.it")!;
+      const superAdmin = await db.findUserById("usr-superadmin-001");
+      expect(superAdmin).not.toBeNull();
       const { accessToken } = generateTokens(superAdmin);
 
       const res = await apiRequest("/api/v1/admin/stats", {
@@ -3045,6 +3048,25 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
 
       // Re-activate user
       await db.updateUser(user.id, { isActive: true });
+    });
+
+    it("denies platform CEO access when the persisted CEO role is attached to a non-canonical email", async () => {
+      const master = (await db.findUserById("usr-superadmin-001"))!;
+      expect(master.platformRole).toBe("ceo");
+      const originalEmail = master.email;
+      const { accessToken } = generateTokens(master);
+
+      try {
+        await db.updateUser(master.id, { email: "not-the-ceo@buildcorp.it" });
+        const response = await apiRequest("/api/v1/admin/stats", {
+          cookies: { access_token: accessToken, csrf_token: "csrf" },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.body.detail).toMatch(/identità CEO non valida/i);
+      } finally {
+        await db.updateUser(master.id, { email: originalEmail });
+      }
     });
 
     it("enforces authoritative DB user role/companyId even if JWT claims were forged/tampered", async () => {
