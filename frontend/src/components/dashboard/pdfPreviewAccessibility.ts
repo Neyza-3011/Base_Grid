@@ -1,20 +1,4 @@
-type FocusableElement = {
-  focus: () => void;
-  disabled?: boolean;
-  tabIndex?: number;
-  getAttribute: (name: string) => string | null;
-};
-
-type DialogElement = {
-  querySelectorAll: (selectors: string) => ArrayLike<FocusableElement>;
-  contains: (element: unknown) => boolean;
-};
-
-type TabKeyEvent = {
-  key: string;
-  shiftKey: boolean;
-  preventDefault: () => void;
-};
+export type TabKeyEvent = Pick<KeyboardEvent, "key" | "shiftKey" | "preventDefault">;
 
 /**
  * Keep keyboard Tab navigation inside a modal dialog.
@@ -22,8 +6,8 @@ type TabKeyEvent = {
  */
 export function trapDialogTab(
   event: TabKeyEvent,
-  dialog: DialogElement | null,
-  activeElement: unknown,
+  dialog: HTMLElement | null,
+  activeElement: Element | null,
 ): void {
   if (event.key !== "Tab" || !dialog) return;
 
@@ -32,9 +16,7 @@ export function trapDialogTab(
       "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex='-1'])",
     ),
   ).filter((element) =>
-    !element.disabled &&
-    (element.tabIndex === undefined || element.tabIndex >= 0) &&
-    element.getAttribute("aria-hidden") !== "true",
+    element.tabIndex >= 0 && element.getAttribute("aria-hidden") !== "true",
   );
 
   if (focusable.length === 0) {
