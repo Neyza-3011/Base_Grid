@@ -8,14 +8,15 @@ Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Audit findings on the verified baseline
 
-Baseline audited for this update: `main` at `b925aaf4a2f9ca6766fdf269b656357a3d1bc2c6` (2026-10-28).
+Baseline audited for this update: `main` at `e53d22f8e6726c8109807774f5dc3bdf6b704b11` (2026-10-28).
 
 - `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
 - Registration in `server/routes/auth.ts` creates the first user as `owner`.
 - `ASSIGNABLE_ROLES` excludes `superadmin`, which is a useful existing safeguard.
 - `server/middleware/auth.ts` authorizes global access by checking the persisted role string `superadmin`; authenticated users are also required to resolve a company through `user.companyId`.
 - Company settings are scoped through the authenticated user's `companyId`. The code reviewed here does not establish a separate platform identity/role model or a CEO console.
-- This is a targeted source review, not an exhaustive endpoint audit. No local tests were run during this audit.
+- PR #82 is merged; its CI run passed lint, backend/frontend type-check, Vitest, and build.
+- This remains a targeted source review, not an exhaustive endpoint audit.
 
 ## Ordered checkpoints
 
@@ -37,7 +38,7 @@ Implementation note: inspect all route → middleware → service → adapter pa
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (now an alias for `requirePlatformRole("ceo")`). The current implementation only reads stats/tenant summaries; lifecycle management, persistent audit events, destructive-operation safeguards and session revocation are not verified as implemented.
+Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is being pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration.
 
 Acceptance criteria:
 - CEO-only platform console lists and manages companies and account lifecycle across tenants.
@@ -50,7 +51,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: source review found a sandbox route with synthetic in-memory rows and a local-only simulated report action; the route previously lacked a CEO platform-role check, and the CEO dashboard linked to it. This PR adds a frontend CEO guard and removes the dashboard entry point. Backend/API/seed/config audit and automated route-access tests remain outstanding.
+Evidence: the prior PR #82 added a frontend guard and removed the dashboard entry point. This PR deletes the sandbox route source and removes its generated route-tree references. A wider audit for other demo/clone references and automated direct-access tests remains outstanding.
 
 Acceptance criteria:
 - Locate all sandbox/demo/clone entry points in UI, routes, APIs, seeders, and configuration.

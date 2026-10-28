@@ -42,7 +42,6 @@ type GlobalStats = {
   total_users: number;
   total_reports: number;
   total_clients: number;
-  sandbox_mode_active: boolean;
   system_status: string;
 };
 

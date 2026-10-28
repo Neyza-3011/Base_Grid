@@ -16,7 +16,6 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as WizardRouteImport } from './routes/wizard'
-import { Route as AdminSandboxRouteImport } from './routes/admin/sandbox'
 import { Route as AdminSuperDashboardRouteImport } from './routes/admin/super-dashboard'
 
 const IndexRoute = IndexRouteImport.update({
@@ -54,11 +53,6 @@ const WizardRoute = WizardRouteImport.update({
   path: '/wizard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSandboxRoute = AdminSandboxRouteImport.update({
-  id: '/admin/sandbox',
-  path: '/admin/sandbox',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminSuperDashboardRoute = AdminSuperDashboardRouteImport.update({
   id: '/admin/super-dashboard',
   path: '/admin/super-dashboard',
@@ -73,7 +67,6 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wizard': typeof WizardRoute
-  '/admin/sandbox': typeof AdminSandboxRoute
   '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRoutesByTo {
@@ -84,7 +77,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wizard': typeof WizardRoute
-  '/admin/sandbox': typeof AdminSandboxRoute
   '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRoutesById {
@@ -96,7 +88,6 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/wizard': typeof WizardRoute
-  '/admin/sandbox': typeof AdminSandboxRoute
   '/admin/super-dashboard': typeof AdminSuperDashboardRoute
 }
 export interface FileRouteTypes {
@@ -109,7 +100,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
-    | '/admin/sandbox'
     | '/admin/super-dashboard'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -120,7 +110,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
-    | '/admin/sandbox'
     | '/admin/super-dashboard'
   id:
     | '__root__'
@@ -131,7 +120,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
-    | '/admin/sandbox'
     | '/admin/super-dashboard'
   fileRoutesById: FileRoutesById
 }
@@ -143,7 +131,6 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   WizardRoute: typeof WizardRoute
-  AdminSandboxRoute: typeof AdminSandboxRoute
   AdminSuperDashboardRoute: typeof AdminSuperDashboardRoute
 }
 
@@ -198,13 +185,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WizardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/sandbox': {
-      id: '/admin/sandbox'
-      path: '/admin/sandbox'
-      fullPath: '/admin/sandbox'
-      preLoaderRoute: typeof AdminSandboxRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/super-dashboard': {
       id: '/admin/super-dashboard'
       path: '/admin/super-dashboard'
@@ -223,7 +203,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   WizardRoute: WizardRoute,
-  AdminSandboxRoute: AdminSandboxRoute,
   AdminSuperDashboardRoute: AdminSuperDashboardRoute,
 }
 export const routeTree = rootRouteImport

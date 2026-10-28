@@ -86,7 +86,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
           BASEGRID_RUNTIME_MODE: "production",
           JWT_SECRET: "valid-production-secret-key-at-least-32-chars",
           REDIS_URL: "redis://127.0.0.1:6379",
-          SUPERADMIN_EMAIL: "admin@example.com",
+          SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
           SUPERADMIN_PASSWORD: "SuperAdminPassword123!",
           FRONTEND_URL: "https://app.basegrid.io",
           CORS_ORIGINS: "https://app.basegrid.io",
@@ -99,7 +99,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
         BASEGRID_RUNTIME_MODE: "ai-studio",
       } as any);
 
-      expect(config.SUPERADMIN_EMAIL).toBe("saas@rapporti.it");
+      expect(config.SUPERADMIN_EMAIL).toBe("jack.cardinali15@gmail.com");
       expect(config.SUPERADMIN_PASSWORD.length).toBeGreaterThanOrEqual(12);
       expect(config.JWT_SECRET.length).toBeGreaterThanOrEqual(32);
 
@@ -113,7 +113,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
           BASEGRID_RUNTIME_MODE: "production",
           JWT_SECRET: "valid-production-secret-key-at-least-32-chars",
           DATABASE_URL: "postgres://user:pass@localhost:5432/db",
-          SUPERADMIN_EMAIL: "admin@example.com",
+          SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
           SUPERADMIN_PASSWORD: "SuperAdminPassword123!",
           FRONTEND_URL: "https://app.basegrid.io",
           CORS_ORIGINS: "https://app.basegrid.io",
@@ -217,7 +217,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
         JWT_SECRET: "valid-production-secret-key-at-least-32-chars",
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         REDIS_URL: "redis://127.0.0.1:6379",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "SuperAdminPassword123!",
         FRONTEND_URL: "https://app.basegrid.io",
         CORS_ORIGINS: "https://app.basegrid.io",
@@ -268,7 +268,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
 
   describe("SuperAdmin Bootstrap Idempotency & Collision Safety", () => {
     it("11 & 12. handles Case A, Case B, Case C, and Case D safely", async () => {
-      const targetEmail = (config.SUPERADMIN_EMAIL || "saas@rapporti.it").trim().toLowerCase();
+      const targetEmail = (config.SUPERADMIN_EMAIL || "jack.cardinali15@gmail.com").trim().toLowerCase();
       const mockPool = {
         query: vi.fn(),
       };
@@ -321,7 +321,7 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
     });
 
     it("handles concurrent startup duplicate-key race condition without crashing", async () => {
-      const targetEmail = (config.SUPERADMIN_EMAIL || "saas@rapporti.it").trim().toLowerCase();
+      const targetEmail = (config.SUPERADMIN_EMAIL || "jack.cardinali15@gmail.com").trim().toLowerCase();
       const mockPool = {
         query: vi.fn(),
       };

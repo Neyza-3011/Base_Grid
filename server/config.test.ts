@@ -20,7 +20,7 @@ describe("Configuration Security", () => {
         JWT_SECRET: "secure-long-jwt-secret-key-that-is-at-least-32-chars",
         REDIS_URL: "redis://127.0.0.1:6379",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "short",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: SUPERADMIN_PASSWORD must be at least 12 characters/i);
@@ -34,7 +34,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: REDIS_URL must be provided/i);
@@ -48,7 +48,7 @@ describe("Configuration Security", () => {
         REDIS_URL: "redis://127.0.0.1:6379",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: DATABASE_URL must be provided/i);
@@ -62,7 +62,7 @@ describe("Configuration Security", () => {
         REDIS_URL: "redis://127.0.0.1:6379",
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS must be explicitly provided/i);
@@ -75,7 +75,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "http://localhost:5173",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain localhost/i);
@@ -88,7 +88,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "*",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/CRITICAL CONFIG ERROR: CORS_ORIGINS cannot contain wildcard/i);
@@ -101,7 +101,7 @@ describe("Configuration Security", () => {
       REDIS_URL: "redis://127.0.0.1:6379",
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
     };
 
@@ -123,7 +123,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "http://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
       } as any)
     ).toThrow(/FRONTEND_URL must be a valid HTTPS URL/i);
@@ -136,7 +136,7 @@ describe("Configuration Security", () => {
       REDIS_URL: "redis://127.0.0.1:6379",
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
     };
 
@@ -157,7 +157,7 @@ describe("Configuration Security", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
       EMAIL_VERIFICATION_ENABLED: "false",
     } as any);
@@ -176,7 +176,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_VERIFICATION_ENABLED: "true",
       } as any)
@@ -190,7 +190,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "smtp",
         EMAIL_VERIFICATION_ENABLED: "true",
@@ -207,7 +207,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "resend",
         EMAIL_VERIFICATION_ENABLED: "true",
@@ -222,7 +222,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         EMAIL_PROVIDER: "resend",
         EMAIL_API_KEY: "re_123456",
@@ -239,7 +239,7 @@ describe("Configuration Security", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
       EMAIL_VERIFICATION_ENABLED: "false", // or not set
     } as any);
@@ -256,7 +256,7 @@ describe("Configuration Security", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com,https://api.example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
       EMAIL_PROVIDER: "resend",
       EMAIL_API_KEY: "re_123456789_test_key",
@@ -264,7 +264,7 @@ describe("Configuration Security", () => {
     } as any);
 
     expect(config.NODE_ENV).toBe("production");
-    expect(config.SUPERADMIN_EMAIL).toBe("admin@example.com");
+    expect(config.SUPERADMIN_EMAIL).toBe("jack.cardinali15@gmail.com");
     expect(config.EMAIL_PROVIDER).toBe("resend");
     expect(config.CORS_ORIGINS).toEqual(["https://example.com", "https://api.example.com"]);
   });
@@ -275,7 +275,7 @@ describe("Configuration Security", () => {
     } as any);
     
     expect(config.NODE_ENV).toBe("development");
-    expect(config.SUPERADMIN_EMAIL).toBe("saas@rapporti.it"); // Has fallback
+    expect(config.SUPERADMIN_EMAIL).toBe("jack.cardinali15@gmail.com"); // Has fallback
     expect(config.CORS_ORIGINS).toContain("http://localhost:5173");
     expect(config.PORT).toBe(3000);
   });
@@ -288,7 +288,7 @@ describe("Configuration Security", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       FRONTEND_URL: "https://example.com",
       CORS_ORIGINS: "https://example.com",
-      SUPERADMIN_EMAIL: "admin@example.com",
+      SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
       SUPERADMIN_PASSWORD: "super-secure-password",
       EMAIL_PROVIDER: "resend",
       EMAIL_API_KEY: "re_123456789_test_key",
@@ -321,7 +321,7 @@ describe("Configuration Security", () => {
           DATABASE_URL: "postgres://user:pass@localhost:5432/db",
           FRONTEND_URL: "https://example.com",
           CORS_ORIGINS: "https://example.com",
-          SUPERADMIN_EMAIL: "admin@example.com",
+          SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
           SUPERADMIN_PASSWORD: "super-secure-password",
           GOOGLE_AUTH_ENABLED: "true",
           // GOOGLE_CLIENT_ID is missing
@@ -337,7 +337,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         GOOGLE_AUTH_ENABLED: "true",
         GOOGLE_CLIENT_ID: "123456789-test.apps.googleusercontent.com",
@@ -355,7 +355,7 @@ describe("Configuration Security", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
         FRONTEND_URL: "https://example.com",
         CORS_ORIGINS: "https://example.com",
-        SUPERADMIN_EMAIL: "admin@example.com",
+        SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
         SUPERADMIN_PASSWORD: "super-secure-password",
         GOOGLE_AUTH_ENABLED: "false",
       } as any);

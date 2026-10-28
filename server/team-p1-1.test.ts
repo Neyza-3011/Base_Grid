@@ -11,8 +11,10 @@ let baseUrl: string;
 
 beforeEach(async () => {
   process.env.JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long-secure!";
-  const { config } = await import("./config");
+  const { config, PLATFORM_CEO_EMAIL } = await import("./config");
   config.EMAIL_VERIFICATION_ENABLED = false;
+  // Keep this suite deterministic even when the runner injects a legacy SUPERADMIN_EMAIL.
+  config.SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
   db.seedInitialData?.();
   tokenStore.setAvailability(true);
 
@@ -404,6 +406,18 @@ describe("P1.1 — Team & Onboarding Foundation Tests", () => {
 
 
 describe("P0-ROLE — platform authority cannot be granted through tenant flows", () => {
+  it("seeds platform CEO authority only for the canonical trusted email", async () => {
+    const master = await db.findUserById("usr-superadmin-001");
+    expect(master?.email).toBe("jack.cardinali15@gmail.com");
+    expect(master?.role).toBe("superadmin");
+    expect(master?.platformRole).toBe("ceo");
+
+    const legacyAddress = await db.findUserByEmail("saas@rapporti.it");
+    if (legacyAddress) {
+      expect(legacyAddress.platformRole ?? null).toBeNull();
+    }
+  });
+
   it("ignores client-supplied platformRole and superadmin role during registration", async () => {
     const email = `platform-escalation-${Date.now()}@buildcorp.it`;
     const res = await apiRequest("/api/v1/auth/register", {

@@ -11,7 +11,7 @@ const requiredEnv = {
   REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   FRONTEND_URL: "https://app.basegrid.io",
   CORS_ORIGINS: "https://app.basegrid.io",
-  SUPERADMIN_EMAIL: "superadmin@example.com",
+  SUPERADMIN_EMAIL: "jack.cardinali15@gmail.com",
   SUPERADMIN_PASSWORD: "SuperAdminPassword1234!",
   EMAIL_PROVIDER: "resend",
   EMAIL_API_KEY: "re_123456789_test_key",

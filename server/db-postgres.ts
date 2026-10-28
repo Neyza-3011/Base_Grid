@@ -1336,7 +1336,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
       total_users: parseInt(users.rows[0]?.count || "0", 10),
       total_reports: parseInt(reports.rows[0]?.count || "0", 10),
       total_clients: 42,
-      sandbox_mode_active: false,
       system_status: "Operational · 100% Zero-Trust Active (PostgreSQL)",
     };
   }

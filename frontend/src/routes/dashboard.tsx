@@ -301,22 +301,16 @@ function Dashboard() {
           <span>Fatturazione & Abbonamento</span>
         </Link>
 
-        {(currentUser.role === "superadmin" || currentUser.role === "admin") && (
+        {currentUser.platformRole === "ceo" && (
           <div className="pt-3 mt-3 border-t border-white/10 space-y-1">
             <div className="px-3 text-[10px] uppercase font-bold text-emerald-400 tracking-wider">
-              Super-Admin Area
+              Platform CEO
             </div>
             <Link
               to="/admin/super-dashboard"
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-emerald-300 hover:bg-emerald-500/10 transition"
             >
               <ShieldCheck className="h-4 w-4 text-emerald-400" /> Control Panel
-            </Link>
-            <Link
-              to="/admin/sandbox"
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-indigo-300 hover:bg-indigo-500/10 transition"
-            >
-              <BaseGridLogo className="h-3.5 w-3.5" iconOnly /> Cloned Sandbox
             </Link>
           </div>
         )}
