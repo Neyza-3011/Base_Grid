@@ -14,7 +14,9 @@ describe("validatePdfBlob", () => {
 
   it("rejects responses that are too small to be a PDF", async () => {
     const blob = new Blob(["%PDF-"], { type: "application/pdf" });
-    await expect(validatePdfBlob(blob)).rejects.toThrow("Il server non ha restituito un PDF valido.");
+    await expect(validatePdfBlob(blob)).rejects.toThrow(
+      "Il server non ha restituito un PDF valido.",
+    );
   });
 
   it("rejects a non-PDF MIME type", async () => {
