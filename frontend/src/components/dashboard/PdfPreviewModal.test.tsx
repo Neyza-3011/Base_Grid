@@ -35,7 +35,6 @@ describe("PdfPreviewModal Component", () => {
   });
 });
 
-
 describe("PDF preview dialog keyboard focus trap", () => {
   function makeFocusable(tabIndex = 0, ariaHidden: string | null = null) {
     return {
