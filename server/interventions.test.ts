@@ -415,6 +415,13 @@ describe("Interventions Backend Module (P1.4)", () => {
         body: { targetStatus: "da_assegnare" },
       });
       expect(resTrans.status).toBe(404);
+
+      // Both rejected requests must leave the tenant-owned record unchanged.
+      const persisted = await db.getInterventionByIdAndCompany(createdA.id, companyA);
+      expect(persisted).not.toBeNull();
+      expect(persisted?.description).toBe("Intervento Company A");
+      expect(persisted?.status).toBe(createdA.status);
+      expect(persisted?.updatedBy).toBe(createdA.updatedBy);
     });
   });
 
