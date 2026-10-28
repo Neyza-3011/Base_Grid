@@ -537,7 +537,6 @@ export class DatabaseStore implements IDatabaseAdapter {
       total_users: this.users.size,
       total_reports: this.reports.size,
       total_clients: 42,
-      sandbox_mode_active: false,
       system_status: "Operational · 100% Zero-Trust Active (In-Memory)",
     };
   }
