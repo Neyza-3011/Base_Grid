@@ -536,7 +536,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       total_tenants: this.companies.size,
       total_users: this.users.size,
       total_reports: this.reports.size,
-      total_clients: 42,
+      total_clients: this.customers.size,
       system_status: "Operational · 100% Zero-Trust Active (In-Memory)",
     };
   }
