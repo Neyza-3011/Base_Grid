@@ -20,8 +20,10 @@ const TEST_JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long
 
 beforeEach(async () => {
   process.env.JWT_SECRET = TEST_JWT_SECRET;
-  const { config } = await import("./config");
+  const { config, PLATFORM_CEO_EMAIL } = await import("./config");
   config.EMAIL_VERIFICATION_ENABLED = false;
+  // Keep the seeded platform CEO aligned with the canonical identity in every CI environment.
+  config.SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
   db.seedInitialData();
   const app = createApp();
   await new Promise<void>((resolve) => {
@@ -3050,6 +3052,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
     it("denies platform CEO access when the persisted CEO role is attached to a non-canonical email", async () => {
       const master = (await db.findUserById("usr-superadmin-001"))!;
       expect(master.platformRole).toBe("ceo");
+      const originalEmail = master.email;
       const { accessToken } = generateTokens(master);
 
       try {
@@ -3061,7 +3064,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         expect(response.status).toBe(403);
         expect(response.body.detail).toMatch(/identità CEO non valida/i);
       } finally {
-        await db.updateUser(master.id, { email: "jack.cardinali15@gmail.com" });
+        await db.updateUser(master.id, { email: originalEmail });
       }
     });
 
