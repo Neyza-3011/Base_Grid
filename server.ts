@@ -45,6 +45,11 @@ async function startServer() {
       if (!redisOk) {
         throw new Error("Redis token store ping failed or connection unreachable.");
       }
+
+      const rateLimiterOk = await rateLimiter.ping(3000).catch(() => false);
+      if (!rateLimiterOk) {
+        throw new Error("Redis rate limiter ping failed or connection unreachable.");
+      }
       console.log("Infrastructure (PostgreSQL and Redis) verified successfully.");
     } catch (err) {
       console.error("CRITICAL STARTUP ERROR: Database or Redis verification failed in production:", err);

@@ -84,6 +84,22 @@ describe("P0.4.4-H1 — Production Readiness & Liveness (/health vs /ready)", ()
       expect(res.body).toEqual({ status: "not_ready" });
     });
 
+    it("fails closed with 503 and { status: 'not_ready' } when RateLimiter ping fails", async () => {
+      const { rateLimiter } = await import("./rate-limiter");
+      vi.spyOn(rateLimiter, "ping").mockResolvedValueOnce(false);
+      const res = await request(app).get("/ready");
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ status: "not_ready" });
+    });
+
+    it("fails closed with 503 and { status: 'not_ready' } when RateLimiter ping throws an exception", async () => {
+      const { rateLimiter } = await import("./rate-limiter");
+      vi.spyOn(rateLimiter, "ping").mockRejectedValueOnce(new Error("RateLimiter connection lost"));
+      const res = await request(app).get("/ready");
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ status: "not_ready" });
+    });
+
     it("fails closed with 503 and { status: 'not_ready' } when DB ping throws an exception", async () => {
       vi.spyOn(db, "ping").mockRejectedValueOnce(new Error("FATAL: connection terminated unexpectedly"));
       const res = await request(app).get("/ready");

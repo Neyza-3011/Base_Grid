@@ -200,4 +200,30 @@ describe("Rate Limiter Middleware", () => {
       expect(mockRedis.on).toHaveBeenCalledWith("error", expect.any(Function));
     }
   });
+
+  it("14. ping() returns true when redisClient is null (local memory mode)", async () => {
+    const testLimiter = new (rateLimiter.constructor as any)(null);
+    const result = await testLimiter.ping();
+    expect(result).toBe(true);
+  });
+
+  it("15. ping() returns true when redisClient pings PONG", async () => {
+    const mockRedis = {
+      status: "ready",
+      ping: vi.fn(async () => "PONG"),
+    };
+    const testLimiter = new (rateLimiter.constructor as any)(mockRedis);
+    const result = await testLimiter.ping();
+    expect(result).toBe(true);
+  });
+
+  it("16. ping() returns false when redisClient throws", async () => {
+    const mockRedis = {
+      status: "ready",
+      ping: vi.fn(async () => { throw new Error("Connection refused"); }),
+    };
+    const testLimiter = new (rateLimiter.constructor as any)(mockRedis);
+    const result = await testLimiter.ping();
+    expect(result).toBe(false);
+  });
 });
