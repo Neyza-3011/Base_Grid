@@ -8,7 +8,7 @@ Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Audit findings on the verified baseline
 
-Baseline audited for this update: `main` at `21da1cf6b7652dcf2f81b47d487ee29256421c84` (2026-10-28; PR #84 merged).
+Baseline audited for this update: `main` at `1c96cc95fa306bcdffccf338aaa9a823100b174c` (2026-10-28; PR #85 merged).
 
 - `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
 - Registration in `server/routes/auth.ts` creates the first user as `owner`.
@@ -24,7 +24,7 @@ Baseline audited for this update: `main` at `21da1cf6b7652dcf2f81b47d487ee292564
 
 Status: `IN_PROGRESS`
 
-Evidence update: PR #84 is merged; its CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. This follow-up adds an HTTP-level regression test for tenant A attempting to read and deactivate a tenant B team member, including an assertion that tenant B's account remains active. The new test is not yet verified until the current PR CI completes.
+Evidence update: PR #84 is merged; CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. PR #85 is merged at `1c96cc95fa306bcdffccf338aaa9a823100b174c`; its CI passed lint, backend/frontend type-check, Vitest and build, including an HTTP regression test that tenant A cannot read/deactivate tenant B's member and cannot cause a deactivation side effect. This follow-up adds HTTP-level coverage for tenant A attempting to read and modify a tenant B location, including an assertion that the stored location name remains unchanged. The new test is not verified until this PR's CI completes.
 
 Acceptance criteria:
 - Keep company roles (including the company's Admin) scoped to one company.
