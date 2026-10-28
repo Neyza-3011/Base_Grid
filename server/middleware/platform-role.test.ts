@@ -46,6 +46,7 @@ describe("platform role authorization", () => {
   it("authorizes platform authority independently of the tenant role", () => {
     const { res, next } = runGuard(requirePlatformRole("ceo"), {
       id: "platform-ceo",
+      email: "jack.cardinali15@gmail.com",
       role: "owner",
       platformRole: "ceo",
     });
