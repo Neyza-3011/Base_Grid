@@ -8,7 +8,7 @@ Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Audit findings on the verified baseline
 
-Baseline: `main` at `875d01914cf5a89bc33df21babc01950beedabd5` (2026-10-27).
+Baseline audited for this update: `main` at `b925aaf4a2f9ca6766fdf269b656357a3d1bc2c6` (2026-10-28).
 
 - `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
 - Registration in `server/routes/auth.ts` creates the first user as `owner`.
@@ -35,7 +35,9 @@ Implementation note: inspect all route → middleware → service → adapter pa
 
 ### P0-CEO-CONSOLE — Platform-wide administration
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
+
+Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (now an alias for `requirePlatformRole("ceo")`). The current implementation only reads stats/tenant summaries; lifecycle management, persistent audit events, destructive-operation safeguards and session revocation are not verified as implemented.
 
 Acceptance criteria:
 - CEO-only platform console lists and manages companies and account lifecycle across tenants.
@@ -46,7 +48,9 @@ Acceptance criteria:
 
 ### P0-REMOVE-SANDBOX-CLONE — Remove general sandbox/clone access
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
+
+Evidence: source review found a sandbox route with synthetic in-memory rows and a local-only simulated report action; the route previously lacked a CEO platform-role check, and the CEO dashboard linked to it. This PR adds a frontend CEO guard and removes the dashboard entry point. Backend/API/seed/config audit and automated route-access tests remain outstanding.
 
 Acceptance criteria:
 - Locate all sandbox/demo/clone entry points in UI, routes, APIs, seeders, and configuration.

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -78,16 +78,24 @@ function SandboxEnvironment() {
   const [reports, setReports] = useState<Report[]>(SANDBOX_REPORTS);
   const [currentUser, setUser] = useState<UserSession | null>(null);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
+    let active = true;
     fetchServerSession().then((usr) => {
-      if (usr) {
-        setUser(usr);
-      } else {
-        toast.error("Sessione non valida o scaduta. Effettua l'accesso.");
+      if (!active) return;
+      if (!usr || usr.platformRole !== "ceo") {
+        toast.error("Area riservata al CEO della piattaforma.");
+        navigate({ to: "/dashboard" });
+        return;
       }
+      setUser(usr);
+      toast.info("Ambiente sandbox dimostrativo attivo (dati sintetici locali).");
     });
-    toast.info("Ambiente Cloned Sandbox attivo (Dati di test isolati).");
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   const handleSimulateNewReport = () => {
     const newRep: Report = {
