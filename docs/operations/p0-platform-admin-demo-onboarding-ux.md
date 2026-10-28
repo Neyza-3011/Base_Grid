@@ -38,7 +38,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. The console currently offers read-only statistics and tenant summaries. The current PR adds HTTP integration coverage for access by a company admin versus the canonical CEO; CI has not yet completed for this addition. Company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
+Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. PR #88 adds HTTP integration coverage for company-admin denial and canonical CEO access; its CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build. A separate audit found `total_clients` hardcoded to `42` in both database adapters; PR #89 proposes counting actual customer records and adding adapter regression tests, pending CI. The console remains read-only; company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
 
 Acceptance criteria:
 - CEO-only console can list/manage companies and account lifecycle across tenants.
