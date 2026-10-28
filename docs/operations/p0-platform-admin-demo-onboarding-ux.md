@@ -2,21 +2,21 @@
 
 ## Governance
 
-This document records the newly approved product requirements. It does not claim that any feature below is implemented or release-ready. Each implementation must be delivered in a separate, narrowly scoped pull request, with tests and direct evidence. Do not merge or deploy automatically.
+This roadmap tracks verified evidence, not claims of completion. Every implementation is a narrow PR with tests and direct evidence. Do not merge or deploy autonomously.
 
-Statuses allowed: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNVERIFIED`.
+Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNVERIFIED`.
 
-## Audit findings on the verified baseline
+## Latest verified baseline
 
-Baseline audited for this update: `main` at `1c96cc95fa306bcdffccf338aaa9a823100b174c` (2026-10-28; PR #85 merged).
+Baseline: `main` at `d40e9ea28c93cdf234c870c7118ac1c8a4c9b823` (2026-10-28, merge of PR #87).
 
-- `server/types.ts` defines a single `UserRole` union containing both `superadmin` and company roles such as `owner` and `admin`.
-- Registration in `server/routes/auth.ts` explicitly creates the first user as `owner` and does not consume client-supplied `role` or `platformRole` fields.
-- `ASSIGNABLE_ROLES` excludes `superadmin`, and team invitation/update flows validate the role against this allowlist.
-- `server/middleware/auth.ts` loads the persisted user, validates the current auth version, resolves the user's company, and binds CEO authorization to the canonical platform email.
-- Team member service methods scope lookup and mutations by the authenticated user's `companyId`; PR #85 adds HTTP-level coverage for cross-tenant read/deactivation attempts.
-- PR #85 merged as `1c96cc95fa306bcdffccf338aaa9a823100b174c`. Its GitHub Actions CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
-- This remains a targeted source review, not an exhaustive endpoint audit. The new platform-role injection tests in the current change have not yet been run by CI.
+- PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
+- PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
+- PR #87 adds HTTP regression tests for client-supplied `role`/`platformRole` on registration, team invitation and profile update. CI run `40710324312` passed lint, backend/frontend type-check, Vitest and build.
+- `server/assets.test.ts` already covers cross-tenant asset list/read/update/archive/reactivate and rejects cross-tenant location use on creation.
+- `server/interventions.test.ts` and report tests contain existing cross-tenant coverage; this is not a complete route-by-route audit.
+- `server/routes/admin.ts` exposes only read-only `/stats` and `/tenants` routes and applies `authenticate` plus `requireSuperAdmin` router-wide. The new PR adds integration coverage for company-admin denial and canonical CEO access to both endpoints; that new CI is pending.
+- The latest repository search did not find active clone/sandbox API implementation references beyond roadmap requirements, but this is a search-based review and not yet a complete UI/config/seeder audit.
 
 ## Ordered checkpoints
 
@@ -24,89 +24,86 @@ Baseline audited for this update: `main` at `1c96cc95fa306bcdffccf338aaa9a823100
 
 Status: `IN_PROGRESS`
 
-Evidence update: PR #84 is merged; CI run #40665887239 passed lint, backend/frontend type-check, Vitest and build. PR #85 is merged at `1c96cc95fa306bcdffccf338aaa9a823100b174c`; its CI passed lint, backend/frontend type-check, Vitest and build, including an HTTP regression test that tenant A cannot read/deactivate tenant B's member and cannot cause a deactivation side effect. This follow-up adds HTTP-level coverage for tenant A attempting to read and modify a tenant B location, including an assertion that the stored location name remains unchanged. The new test is not verified until this PR's CI completes.
+Evidence: PRs #84, #85, #86 and #87 are merged. CI passed for each referenced change. Coverage now includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member isolation, cross-tenant location isolation, and existing asset/intervention/report isolation tests.
 
 Acceptance criteria:
-- Keep company roles (including the company's Admin) scoped to one company.
-- Represent platform-level CEO authority separately from company administration; never accept a platform role from registration, invite payloads, profile updates, or ordinary team-management APIs.
-- Provision the CEO identity only through a trusted server-side mechanism. Do not rely on frontend visibility, a user-editable email, or an unprotected database role.
-- Preserve least privilege for company admins and prevent cross-company access by default.
-- Cover positive and negative authorization paths with automated tests: registration/invitation cannot create a CEO; company admin cannot grant platform access; tenant A cannot administer tenant B; platform access is rejected when identity/configuration is invalid.
-- Review session invalidation, auditability, migration/backfill safety, and existing `superadmin` compatibility before changing persisted roles.
-
-Implementation note: inspect all route → middleware → service → adapter paths before choosing a migration. Do not rename/remove the existing `superadmin` role until all usages and existing records are accounted for. If a deployment environment variable is needed, document it for a separately authorized operator change; do not alter external provider settings.
+- Keep company roles scoped to their own company and platform CEO authority separate from company administration.
+- Never accept platform authority from registration, invite payloads, profile updates or ordinary team-management APIs.
+- Provision CEO identity only through trusted server-side mechanisms; fail closed for invalid identity/configuration.
+- Complete a route → middleware → service → adapter review for every tenant-scoped endpoint, including negative authorization paths and no-side-effect assertions.
+- Review session invalidation, auditability, migration/backfill safety and existing `superadmin` compatibility before persisted-role changes.
+- Do not remove or rename legacy `superadmin` values until all usages and records are accounted for.
 
 ### P0-CEO-CONSOLE — Platform-wide administration
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #80 is merged and GitHub Actions CI passed for the trusted `platformRole` session field and frontend CEO gate. Existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin` (an alias for `requirePlatformRole("ceo")`). The current console only reads statistics and tenant summaries; editing company settings, managing users/account lifecycle, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified. The CEO identity is pinned to `jack.cardinali15@gmail.com` through server-side config validation and a restrictive migration; authorization middleware also checks the canonical email.
+Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. The console currently offers read-only statistics and tenant summaries. The current PR adds HTTP integration coverage for access by a company admin versus the canonical CEO; CI has not yet completed for this addition. Company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
 
 Acceptance criteria:
-- CEO-only platform console lists and manages companies and account lifecycle across tenants.
-- Every endpoint enforces platform authorization server-side; company Admin remains restricted to its own tenant.
-- Sensitive operations (suspend/reactivate company or user, update platform settings, delete an account) validate permissions, prevent accidental destructive actions, record audit events, and revoke affected sessions where required.
-- Account/company deletion has explicit dependency, retention, backup, and recovery behavior; no hidden cascade surprises.
-- Tests cover unauthorized access, cross-tenant IDOR, destructive operations, and session revocation.
+- CEO-only console can list/manage companies and account lifecycle across tenants.
+- Every endpoint enforces platform authorization server-side; company Admin remains tenant-scoped.
+- Sensitive operations require explicit safeguards, persistent audit events and session revocation where appropriate.
+- Deletion behavior documents dependencies, retention, backup and recovery; no implicit destructive cascades.
+- Tests cover unauthorized access, cross-tenant IDOR, destructive operations and session revocation.
 
 ### P0-REMOVE-SANDBOX-CLONE — Remove general sandbox/clone access
 
 Status: `IN_PROGRESS`
 
-Evidence: the prior PR #82 added a frontend guard and removed the dashboard entry point. PR #83/#84 removed the sandbox route source and generated route-tree references and constrained CEO identity. A wider audit for other demo/clone references and automated direct-access tests remains outstanding.
+Evidence: PR #82 added a frontend guard and removed the dashboard entry point; PR #83/#84 removed the sandbox route source and generated route-tree references. The latest search did not find an active clone/sandbox API implementation, but a full UI/routes/API/seeders/config audit and direct-access regression tests are still outstanding.
 
 Acceptance criteria:
-- Locate all sandbox/demo/clone entry points in UI, routes, APIs, seeders, and configuration.
-- Remove or disable user-facing global clone functionality unless a narrowly authorized internal demo flow is required.
-- Ensure hidden UI is not treated as authorization: endpoints must also reject unauthorized calls.
-- Tests prove ordinary users cannot clone data or create demo tenants through direct API requests.
+- Audit every sandbox/demo/clone entry point across UI, routes, APIs, seeders and configuration.
+- Remove/disable general global clone functionality unless a specifically authorized internal demo flow is required.
+- Do not rely on hidden UI for authorization; direct API calls must also be rejected.
+- Add tests proving ordinary users cannot clone data or create demo tenants.
 
 ### P0-DEMO-DATA — Synthetic data for the authorized demo account only
 
 Status: `NOT_STARTED`
 
 Acceptance criteria:
-- Populate only the explicitly authorized account `jack.cardinali15@gmail.com` with realistic but wholly synthetic company/customer/location/asset/intervention/report data for demonstrations.
-- Never copy real customer data, create demo content for other tenants, or grant CEO permissions as a side effect of seeding.
+- Populate only the explicitly authorized account `jack.cardinali15@gmail.com` with wholly synthetic company/customer/location/asset/intervention/report data.
+- Never copy real customer data, create demo content for other tenants, or grant CEO permissions as a seeding side effect.
 - Use an explicit, idempotent, opt-in seed operation that verifies the intended account/tenant server-side and fails closed on mismatch.
-- Mark generated records as demo data where the schema permits; document cleanup and ensure generated data cannot be mistaken for real customer records.
-- Add tests for idempotency and tenant isolation. Do not run the seeder against production until the target account/tenant and operation are explicitly verified.
+- Mark generated records as demo data where possible; document cleanup and test idempotency/tenant isolation.
+- Do not run the seeder against production until the target account/tenant and operation are explicitly verified.
 
 ### P0-ONBOARDING — Required first-run setup
 
 Status: `NOT_STARTED`
 
 Acceptance criteria:
-- After account creation and successful authentication, require completion of a minimal company setup before entering normal product workflows.
-- Make only explicitly designated nonessential setup steps skippable; persist progress server-side so refresh/relogin does not bypass required steps.
-- Validate required fields server-side and provide accessible loading, validation, error, and recovery states.
-- Cover new/existing users, incomplete setup, reloads, expired sessions, and direct API access.
+- Require minimal company setup after account creation/authentication before normal workflows.
+- Persist progress server-side so refresh/relogin cannot bypass required steps.
+- Validate fields server-side and provide accessible loading, validation, error and recovery states.
+- Test new/existing users, incomplete setup, reloads, expired sessions and direct API access.
 
 ### P0-TUTORIAL — Optional product tour
 
 Status: `NOT_STARTED`
 
 Acceptance criteria:
-- Provide a tutorial separate from mandatory onboarding.
-- Allow users to skip, dismiss, and resume/restart it without blocking normal workflows.
-- Persist tutorial state per user and make controls keyboard-accessible.
-- Verify responsive layouts and ensure the tour remains usable when a target control is unavailable.
+- Keep tutorial separate from mandatory onboarding; allow skip, dismiss, resume and restart.
+- Persist per-user tutorial state and support keyboard access.
+- Verify responsive layouts and behavior when a target control is unavailable.
 
 ### P0-PDF-UX — PDF preview, responsive UI and UX defects
 
 Status: `NOT_STARTED`
 
 Acceptance criteria:
-- Reproduce each reported PDF preview failure before changing code; trace generation, response headers/body, browser preview component, object URL lifecycle, and error states.
-- Fix only confirmed root causes and add regression tests for successful preview, malformed/failed responses, loading, close/reopen, and cleanup.
-- Audit reported high-impact usability issues on phone and desktop; implement in small, independently reviewable fixes.
-- Verify responsive behavior at representative mobile and desktop widths, keyboard/focus behavior, overflow, and accessible error states.
-- Measure any claimed performance optimization and record the baseline/result; avoid speculative refactors.
+- Reproduce reported preview failures and trace generation, response headers/body, browser preview, object URL lifecycle and error states.
+- Fix confirmed root causes with regression tests for success, malformed/failed responses, loading, close/reopen and cleanup.
+- Audit high-impact phone/desktop usability issues; verify responsive layouts, focus, overflow and accessible errors.
+- Measure claimed performance improvements; avoid speculative refactors.
 
-## Release and implementation rules
+## Deferred work and release rules
 
-- One checkpoint per PR, unless a small inseparable dependency is documented.
-- Never push directly to `main`, merge autonomously, deploy autonomously, or bypass CI/review.
-- Before every implementation PR, re-check `main`, open PRs, dependent merges, CI and the exact diff.
-- Record the commit, PR URL, tests actually executed, results, untested cases and live checks separately.
-- P0.9 backup/restore remains explicitly deferred until the user authorizes it. Supabase RLS remains deferred until the user explicitly authorizes it.
+- P0.9 backup/restore: `BLOCKED` — explicitly deferred by the user.
+- Supabase RLS: `BLOCKED` — explicitly deferred by the user.
+- One checkpoint per PR unless an inseparable dependency is documented.
+- Never push directly to `main`, merge autonomously, deploy autonomously or bypass CI/review.
+- Before each PR, verify `main`, open PRs, dependencies, CI and exact diff.
+- Report commits, PR URL, tests actually executed, observed results, untested cases and live checks separately.
