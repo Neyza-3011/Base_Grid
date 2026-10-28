@@ -3,7 +3,7 @@ import { verifyAccessToken } from "../security";
 import { db } from "../db";
 import { CompanyRecord, PlatformRole, UserRecord, UserRole } from "../types";
 import { asyncHandler } from "../async-handler";
-import { config } from "../config";
+import { config, PLATFORM_CEO_EMAIL } from "../config";
 
 // Extend Express Request interface to include authenticated user and company
 declare global {
@@ -125,6 +125,16 @@ export function requirePlatformRole(platformRole: PlatformRole) {
       res.status(403).json({ detail: "Accesso negato: permessi piattaforma insufficienti." });
       return;
     }
+
+    // CEO authority is bound to the one canonical identity, not merely a mutable DB flag.
+    if (
+      platformRole === "ceo" &&
+      req.user.email.trim().toLowerCase() !== PLATFORM_CEO_EMAIL
+    ) {
+      res.status(403).json({ detail: "Accesso negato: identità CEO non valida." });
+      return;
+    }
+
     next();
   };
 }
