@@ -11,8 +11,21 @@ import {
   ADMIN_OWNER_ROLES,
 } from "../types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors";
-import { generateSecureToken, hashPassword, hashToken, normalizeEmail, validatePasswordPolicy } from "../security";
+import { generateSecureToken, hashPassword, hashToken, isValidEmail, normalizeEmail, validatePasswordPolicy } from "../security";
 import crypto from "crypto";
+
+function validateInputObject(input: unknown, entityName = "I dati"): void {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new ValidationError(`${entityName} inviati non sono validi.`);
+  }
+}
+
+function validateOptionalStringField(value: unknown, fieldName: string, nullable = false): void {
+  if (value === undefined || (nullable && value === null)) return;
+  if (typeof value !== "string") {
+    throw new ValidationError(`${fieldName} deve essere una stringa valida.`);
+  }
+}
 
 export class TeamService {
   constructor(private readonly db: IDatabaseAdapter) { }
@@ -70,13 +83,30 @@ export class TeamService {
   ): Promise<{ member: TeamMemberResponse; inviteToken: string }> {
     if (!companyId) throw new ValidationError("Company ID is required");
 
-    const normalizedEmail = normalizeEmail(input.email);
-    if (!normalizedEmail) {
+    validateInputObject(input, "I dati invito team");
+    validateOptionalStringField(input.fullName, "Nome completo");
+    validateOptionalStringField(input.email, "Email");
+    validateOptionalStringField(input.phoneNumber, "Telefono", true);
+
+    if (!input.fullName || typeof input.fullName !== "string" || input.fullName.trim().length < 2 || input.fullName.trim().length > 100) {
+      throw new ValidationError("Nome completo non valido. Deve essere tra 2 e 100 caratteri.");
+    }
+
+    if (!input.email || typeof input.email !== "string") {
       throw new ValidationError("Email non valida.");
     }
 
-    if (!ASSIGNABLE_ROLES.includes(input.role)) {
+    const normalizedEmail = normalizeEmail(input.email);
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      throw new ValidationError("Formato email non valido.");
+    }
+
+    if (!input.role || typeof input.role !== "string" || !ASSIGNABLE_ROLES.includes(input.role as any)) {
       throw new ForbiddenError("Ruolo non valido o non assegnabile.");
+    }
+
+    if (input.phoneNumber !== undefined && input.phoneNumber !== null && (typeof input.phoneNumber !== "string" || input.phoneNumber.trim().length > 20)) {
+      throw new ValidationError("Numero di telefono non valido (massimo 20 caratteri).");
     }
 
     const existingUser = await this.db.findUserByEmail(normalizedEmail);
@@ -126,6 +156,10 @@ export class TeamService {
   ): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
 
+    validateInputObject(input, "I dati aggiornamento team");
+    validateOptionalStringField(input.fullName, "Nome completo", true);
+    validateOptionalStringField(input.phoneNumber, "Telefono", true);
+
     const user = await this.db.getUserByIdAndCompany(userId, companyId);
     if (!user) {
       throw new NotFoundError("Utente non trovato in questa azienda.");
@@ -133,11 +167,17 @@ export class TeamService {
 
     const updates: Partial<UpdateTeamMemberInput> = {};
 
-    if (input.fullName !== undefined) {
+    if (input.fullName !== undefined && input.fullName !== null) {
+      if (typeof input.fullName !== "string" || input.fullName.trim().length < 2 || input.fullName.trim().length > 100) {
+        throw new ValidationError("Nome completo non valido. Deve essere tra 2 e 100 caratteri.");
+      }
       updates.fullName = input.fullName.trim();
     }
 
-    if (input.phoneNumber !== undefined) {
+    if (input.phoneNumber !== undefined && input.phoneNumber !== null) {
+      if (typeof input.phoneNumber !== "string" || input.phoneNumber.trim().length > 20) {
+        throw new ValidationError("Numero di telefono non valido (massimo 20 caratteri).");
+      }
       updates.phoneNumber = input.phoneNumber.trim();
     }
 

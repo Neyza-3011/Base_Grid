@@ -481,3 +481,146 @@ describe("P0-ROLE — platform authority cannot be granted through tenant flows"
     expect((await db.getUserByIdAndCompany(invited.member.id, inviter.companyId))?.platformRole ?? null).toBeNull();
   });
 });
+
+describe("P1.1-RUNTIME — Input Validation & Fail-Closed Error Handling", () => {
+  it("inviteTeamMember rejects non-string, null, or out-of-bounds input payloads gracefully", async () => {
+    const inviter = (await db.findUserByEmail("admin@rossi.it"))!;
+    const teamService = new TeamService(db);
+
+    // Non-object input
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, null as any),
+    ).rejects.toThrow("I dati invito team inviati non sono validi.");
+
+    // Non-string or short fullName
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: "valid@rossi.it",
+        fullName: 12345 as any,
+        role: "technician",
+      }),
+    ).rejects.toThrow("Nome completo deve essere una stringa valida.");
+
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: "valid@rossi.it",
+        fullName: "A",
+        role: "technician",
+      }),
+    ).rejects.toThrow("Nome completo non valido. Deve essere tra 2 e 100 caratteri.");
+
+    // Non-string or invalid email
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: { address: "invalid" } as any,
+        fullName: "Valid Name",
+        role: "technician",
+      }),
+    ).rejects.toThrow("Email deve essere una stringa valida.");
+
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: "not-an-email",
+        fullName: "Valid Name",
+        role: "technician",
+      }),
+    ).rejects.toThrow("Formato email non valido.");
+
+    // Non-string or overly long phoneNumber
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: `phone-test-${Date.now()}@rossi.it`,
+        fullName: "Valid Name",
+        role: "technician",
+        phoneNumber: 333123456 as any,
+      }),
+    ).rejects.toThrow("Telefono deve essere una stringa valida.");
+
+    await expect(
+      teamService.inviteTeamMember(inviter.companyId, inviter.companyName, inviter.id, {
+        email: `phone-test-${Date.now()}@rossi.it`,
+        fullName: "Valid Name",
+        role: "technician",
+        phoneNumber: "12345678901234567890123", // 23 chars (> 20)
+      }),
+    ).rejects.toThrow("Numero di telefono non valido (massimo 20 caratteri).");
+  });
+
+  it("updateTeamMember rejects non-string or out-of-bounds updates gracefully", async () => {
+    const inviter = (await db.findUserByEmail("admin@rossi.it"))!;
+    const tech = (await db.findUserByEmail("tech@rossi.it"))!;
+    const teamService = new TeamService(db);
+
+    // Non-object input
+    await expect(
+      teamService.updateTeamMember(inviter.companyId, tech.id, inviter.id, null as any),
+    ).rejects.toThrow("I dati aggiornamento team inviati non sono validi.");
+
+    // Non-string fullName
+    await expect(
+      teamService.updateTeamMember(inviter.companyId, tech.id, inviter.id, {
+        fullName: 9999 as any,
+      }),
+    ).rejects.toThrow("Nome completo deve essere una stringa valida.");
+
+    // Out-of-bounds fullName (<2 or >100)
+    await expect(
+      teamService.updateTeamMember(inviter.companyId, tech.id, inviter.id, {
+        fullName: "X",
+      }),
+    ).rejects.toThrow("Nome completo non valido. Deve essere tra 2 e 100 caratteri.");
+
+    // Non-string phoneNumber
+    await expect(
+      teamService.updateTeamMember(inviter.companyId, tech.id, inviter.id, {
+        phoneNumber: { num: "3331234567" } as any,
+      }),
+    ).rejects.toThrow("Telefono deve essere una stringa valida.");
+
+    // Overly long phoneNumber
+    await expect(
+      teamService.updateTeamMember(inviter.companyId, tech.id, inviter.id, {
+        phoneNumber: "12345678901234567890123",
+      }),
+    ).rejects.toThrow("Numero di telefono non valido (massimo 20 caratteri).");
+  });
+
+  it("PUT /api/v1/users/me fails closed when tokenStore is unavailable during email update", async () => {
+    const { config } = await import("./config");
+    config.EMAIL_VERIFICATION_ENABLED = true;
+
+    const user = (await db.findUserByEmail("admin@rossi.it"))!;
+    const { generateTokens, generateCsrfToken } = await import("./security");
+    const { accessToken } = generateTokens(user);
+    const csrfToken = generateCsrfToken();
+    const cookies = {
+      access_token: accessToken,
+      csrf_token: csrfToken,
+    };
+
+    // Disable token store
+    tokenStore.setAvailability(false);
+
+    const res = await apiRequest("/api/v1/users/me", {
+      method: "PUT",
+      cookies,
+      headers: {
+        "x-csrf-token": csrfToken,
+      },
+      body: {
+        email: "new-email-failclosed@rossi.it",
+      },
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.body.detail).toContain("Servizio di sicurezza temporaneamente non disponibile");
+
+    // Verify email was NOT updated in DB
+    const freshUser = await db.findUserById(user.id);
+    expect(freshUser?.email).toBe("admin@rossi.it");
+
+    // Re-enable token store
+    tokenStore.setAvailability(true);
+    config.EMAIL_VERIFICATION_ENABLED = false;
+  });
+});

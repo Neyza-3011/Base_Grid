@@ -123,6 +123,13 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     updates.phoneNumber = phone_number.trim();
   }
 
+  if (emailChanged && config.EMAIL_VERIFICATION_ENABLED) {
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({ detail: "Servizio di sicurezza temporaneamente non disponibile per la revoca delle sessioni." });
+      return;
+    }
+  }
+
   try {
     let updatedUser;
 
