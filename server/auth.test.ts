@@ -2032,6 +2032,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       });
       adminA = resA.user;
       compA = resA.company;
+      await db.updateCompany(compA.id, { address: "Via Test 1, Roma" });
       tokenAdminA = generateTokens(adminA).accessToken;
 
       const resTechA = await db.createUser({
@@ -2052,6 +2053,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       });
       adminB = resB.user;
       compB = resB.company;
+      await db.updateCompany(compB.id, { address: "Via Test 2, Roma" });
       tokenAdminB = generateTokens(adminB).accessToken;
 
       const resTechB = await db.createUser({

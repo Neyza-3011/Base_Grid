@@ -120,6 +120,7 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
     (db as any).companies.set(companyA, {
       id: companyA,
       name: "Tenant A Company",
+      address: "Via Test 1, Roma",
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -128,6 +129,7 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
     (db as any).companies.set(companyB, {
       id: companyB,
       name: "Tenant B Company",
+      address: "Via Test 2, Roma",
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -25,6 +25,7 @@ beforeEach(async () => {
   (db as any).companies.set(companyA, {
     id: companyA,
     name: "Tenant Alpha Company",
+    address: "Via Test 1, Roma",
     isActive: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -33,6 +34,7 @@ beforeEach(async () => {
   (db as any).companies.set(companyB, {
     id: companyB,
     name: "Tenant Beta Company",
+    address: "Via Test 2, Roma",
     isActive: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

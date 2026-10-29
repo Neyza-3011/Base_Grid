@@ -65,6 +65,28 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
 
   req.user = user;
   req.company = company;
+
+  // An incomplete tenant may only access the company-settings endpoint to finish setup.
+  // Keep session introspection available so the frontend can route the owner to onboarding.
+  // The company identity and completion state are derived exclusively from persisted server data.
+  const requestPath = `${req.baseUrl}${req.path}`;
+  const setupComplete = Boolean(company.name?.trim() && company.address?.trim());
+  if (!setupComplete && user.platformRole !== "ceo") {
+    const isSessionEndpoint = requestPath === "/api/v1/auth/session";
+    const isCompanySettingsEndpoint = requestPath === "/api/v1/company/settings";
+    if (isCompanySettingsEndpoint && user.role !== "owner") {
+      res.status(403).json({ detail: "La configurazione iniziale deve essere completata dal titolare dell'azienda." });
+      return;
+    }
+    if (!isSessionEndpoint && !isCompanySettingsEndpoint) {
+      res.status(403).json({
+        code: "COMPANY_SETUP_REQUIRED",
+        detail: "Completa la configurazione iniziale dell'azienda prima di utilizzare questa funzione.",
+      });
+      return;
+    }
+  }
+
   next();
 });
 
