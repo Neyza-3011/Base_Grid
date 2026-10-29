@@ -95,6 +95,7 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     }
     adminCompanyId = resLogin.body.companyId;
     adminUserId = resLogin.body.id;
+    await db.updateCompany(adminCompanyId, { address: "Via Test 1, Roma" });
 
     // 2. Setup a test technician in the same company
     const testTech = {
