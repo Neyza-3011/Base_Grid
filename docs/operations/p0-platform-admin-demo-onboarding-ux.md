@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `b4ebbf66443adccefb4389dd57f80c47e958a534` (2026-10-28, merge of PR #98).
+Baseline: `main` at `4f162aa99bc8a5ef01fc262b89f7d906732db7cb` (2026-10-29, merge of PR #102).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -27,7 +27,11 @@ Baseline: `main` at `b4ebbf66443adccefb4389dd57f80c47e958a534` (2026-10-28, merg
 - PR #96 (`a0a567a22995bd7cd2dc905a508a31e5411b323a`) adds keyboard focus trapping and focus restoration for the PDF preview modal. CI run [40777194209](https://github.com/Neyza-3011/Base_Grid/actions/runs/40777194209) passed lint, backend/frontend type-check, Vitest and build. Browser and screen-reader validation remain unverified.
 - PR #97 (`b0a6398fb287a9d0ae031d3d63f6df6aad9a3b2e`) adds persisted-state assertions proving rejected cross-tenant asset update/archive/reactivate attempts do not mutate the owner's asset. CI run [40777274381](https://github.com/Neyza-3011/Base_Grid/actions/runs/40777274381) passed.
 - PR #98 (`b4ebbf66443adccefb4389dd57f80c47e958a534`) adds persisted-state assertions proving rejected cross-tenant customer update/archive/reactivate attempts do not mutate the owner's customer. PR CI run [40778521447](https://github.com/Neyza-3011/Base_Grid/actions/runs/40778521447) passed lint, backend/frontend type-check, Vitest and build.
-- Current `main` CI run [40780167543](https://github.com/Neyza-3011/Base_Grid/actions/runs/40780167543) passed on `b4ebbf66443adccefb4389dd57f80c47e958a534`. Scheduled Render Smoke Tests run [40781015488](https://github.com/Neyza-3011/Base_Grid/actions/runs/40781015488) also passed on that commit; this is a smoke check, not full production validation.
+- PR #99 (`84595e2f55d739a84dab5e40e44fa9b6824e64c1`) adds HTTP regression coverage that a cross-tenant team-member update returns 404 and leaves persisted user state unchanged. CI run [40785978435](https://github.com/Neyza-3011/Base_Grid/actions/runs/40785978435) passed lint, backend/frontend type-check, Vitest and build.
+- PR #100 (`ed47ed2c9beb06d6424903fe7e6b06fb81311e44`) fixes explicit null/blank optional-field clearing across customer, location, asset and intervention services and adds field-clearing tests. CI run [40827895363](https://github.com/Neyza-3011/Base_Grid/actions/runs/40827895363) passed lint, backend/frontend type-check, Vitest and build.
+- PR #101 (`a24895b929cdfdaa101eba3495501b4aeb9d7323`) hardens runtime validation in `TeamService` and checks token-store availability before changing an email when verification requires session revocation. CI run [40827918008](https://github.com/Neyza-3011/Base_Grid/actions/runs/40827918008) passed lint, backend/frontend type-check, Vitest and build.
+- PR #102 (`4f162aa99bc8a5ef01fc262b89f7d906732db7cb`) terminates the spawned Nitro child process on startup-readiness failure, modernizes Vitest config to `.mts`, reduces CPU-heavy concurrent mock registrations, and removes unreferenced `all_routes.ts`. CI run [40827945196](https://github.com/Neyza-3011/Base_Grid/actions/runs/40827945196) passed lint, backend/frontend type-check, Vitest and build.
+- Current `main` CI run [40827945196](https://github.com/Neyza-3011/Base_Grid/actions/runs/40827945196) passed on `4f162aa99bc8a5ef01fc262b89f7d906732db7cb`; scheduled Render Smoke Tests run [40825371370](https://github.com/Neyza-3011/Base_Grid/actions/runs/40825371370) passed on PR #99 merge commit. Smoke tests are not full production validation.
 
 ## Ordered checkpoints
 
@@ -35,7 +39,7 @@ Baseline: `main` at `b4ebbf66443adccefb4389dd57f80c47e958a534` (2026-10-28, merg
 
 Status: `IN_PROGRESS`
 
-Evidence: PRs #84–#87 and #94 are merged; referenced CI runs passed. Coverage includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member and location isolation, existing asset/intervention/report isolation tests, focused company-settings HTTP tests, and no-side-effect assertions for rejected cross-tenant asset mutations (PR #97) and customer mutations (PR #98). The current CI for `main` passed on `b4ebbf66443adccefb4389dd57f80c47e958a534`. This is still not a complete route-by-route audit.
+Evidence: PRs #84–#87 and #94 are merged; referenced CI runs passed. Coverage includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member and location isolation, existing asset/intervention/report isolation tests, focused company-settings HTTP tests, and no-side-effect assertions for rejected cross-tenant asset mutations (PR #97), customer mutations (PR #98), and team-member profile/role updates (PR #99). PR #101 adds runtime input validation and fail-closed handling for email changes requiring session revocation. `main` at `4f162aa99bc8a5ef01fc262b89f7d906732db7cb` passes CI run `40827945196`. This is still not a complete route-by-route audit; cross-tenant activation/deactivation side effects remain to be covered.
 
 Acceptance criteria:
 - Keep company roles scoped to their own company and platform CEO authority separate from company administration.
