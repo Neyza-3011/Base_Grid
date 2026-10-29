@@ -106,6 +106,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/billing'
     | '/dashboard'
+    | '/onboarding'
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
@@ -116,6 +117,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/billing'
     | '/dashboard'
+    | '/onboarding'
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
@@ -126,6 +128,7 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/billing'
     | '/dashboard'
+    | '/onboarding'
     | '/reset-password'
     | '/verify-email'
     | '/wizard'
@@ -217,6 +220,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   BillingRoute: BillingRoute,
   DashboardRoute: DashboardRoute,
+  OnboardingRoute: OnboardingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   WizardRoute: WizardRoute,
