@@ -216,9 +216,7 @@ export function SuperDashboard() {
               <h3 className="text-2xl font-black mt-1 text-white">
                 {stats ? stats.total_tenants : tenants.length} Tenants
               </h3>
-              <p className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-                <ShieldCheck className="h-3 w-3" /> Isolamento Tenant 100%
-              </p>
+              <p className="text-[10px] text-white/50 mt-1">Conteggio restituito dall'API</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 grid place-items-center text-emerald-400">
               <Users className="h-5 w-5" />
@@ -233,7 +231,7 @@ export function SuperDashboard() {
               <h3 className="text-2xl font-black mt-1 text-white">
                 {stats ? stats.total_users : 0} Utenti
               </h3>
-              <p className="text-[10px] text-emerald-400 mt-1">Ruoli attivi nel sistema</p>
+              <p className="text-[10px] text-white/50 mt-1">Utenti conteggiati dall'API</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-blue-500/10 border border-blue-500/20 grid place-items-center text-blue-400">
               <FileText className="h-5 w-5" />
@@ -243,10 +241,10 @@ export function SuperDashboard() {
           <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-white/60 uppercase tracking-wider">
-                Stato PostgreSQL & DB
+                Stato piattaforma
               </p>
-              <h3 className="text-2xl font-black mt-1 text-emerald-400">Online 100%</h3>
-              <p className="text-[10px] text-white/50 mt-1">Async SQLAlchemy 2.0</p>
+              <h3 className="text-2xl font-black mt-1 text-white">{stats?.system_status || "Non disponibile"}</h3>
+              <p className="text-[10px] text-white/50 mt-1">Valore restituito dall'API</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 grid place-items-center text-emerald-400">
               <Database className="h-5 w-5" />
