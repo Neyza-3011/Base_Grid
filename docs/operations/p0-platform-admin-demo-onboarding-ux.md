@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581` (2026-10-29, merge of PR #103).
+Baseline: `main` at `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c` (2026-10-29, merge of PR #105).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -33,6 +33,8 @@ Baseline: `main` at `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581` (2026-10-29, merg
 - PR #102 (`4f162aa99bc8a5ef01fc262b89f7d906732db7cb`) terminates the spawned Nitro child process on startup-readiness failure, modernizes Vitest config to `.mts`, reduces CPU-heavy concurrent mock registrations, and removes unreferenced `all_routes.ts`. CI run [40827945196](https://github.com/Neyza-3011/Base_Grid/actions/runs/40827945196) passed lint, backend/frontend type-check, Vitest and build.
 - PR #103 (`04ce257099284c0de221184ebb06218f8907d9c4`) adds HTTP regression coverage for cross-tenant team activation/deactivation and asserts persisted user state remains unchanged after both rejected requests. PR CI run [40845008831](https://github.com/Neyza-3011/Base_Grid/actions/runs/40845008831) passed lint, backend/frontend type-check, Vitest and build. Merge commit: `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581`.
 - Current `main` CI run [40845568747](https://github.com/Neyza-3011/Base_Grid/actions/runs/40845568747) passed on `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581`. Scheduled Render Smoke Tests run [40825371370](https://github.com/Neyza-3011/Base_Grid/actions/runs/40825371370) passed on PR #99 merge commit. Smoke tests are not full production validation.
+- PR #105 (`feat/p0-account-setup-gate`) adds a first-run company setup gate based on persisted company name/address, an onboarding route, and integration tests. The branch CI run [40865145679](https://github.com/Neyza-3011/Base_Grid/actions/runs/40865145679) passed; PR #105 was subsequently merged as `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c`, and main CI run [40868378977](https://github.com/Neyza-3011/Base_Grid/actions/runs/40868378977) passed. This is a first implementation slice, not full onboarding; contact details, service categories, service area, locale/time zone, browser E2E and additional failure/retry coverage remain outstanding.
+- The CEO console is still read-only at this baseline. The new branch `feat/p0-ceo-tenant-details` adds a CEO-only tenant-detail API and searchable inspection UI; lifecycle writes, persistent admin audit, status transitions and destructive-operation safeguards are not included in this slice.
 
 ## Ordered checkpoints
 
