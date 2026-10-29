@@ -145,6 +145,50 @@ describe("P0-ROLE — tenant isolation and ordinary technician permissions", () 
     expect(persistedUser?.isActive).toBe(true);
   });
 
+  it("rejects cross-tenant team activation and deactivation without side effects", async () => {
+    const tenantBEmail = `tenant-b-status-${Date.now()}@example.test`;
+    const registration = await apiRequest("/api/v1/auth/register", {
+      method: "POST",
+      body: {
+        email: tenantBEmail,
+        password: "SecurePassword123!",
+        full_name: "Tenant B Owner",
+        company_name: "Tenant B Status Company",
+      },
+    });
+    expect(registration.status).toBe(201);
+
+    const tenantBUser = await db.findUserByEmail(tenantBEmail);
+    expect(tenantBUser).not.toBeNull();
+    if (!tenantBUser) throw new Error("Expected registered Tenant B user");
+
+    const tenantAAccessToken = await accessTokenFor("admin@rossi.it");
+    const csrfToken = "test-csrf-token";
+
+    const deactivate = await apiRequest(`/api/v1/users/team/${tenantBUser.id}/deactivate`, {
+      method: "POST",
+      accessToken: tenantAAccessToken,
+      csrfToken,
+    });
+    expect(deactivate.status).toBe(404);
+
+    const activate = await apiRequest(`/api/v1/users/team/${tenantBUser.id}/activate`, {
+      method: "POST",
+      accessToken: tenantAAccessToken,
+      csrfToken,
+    });
+    expect(activate.status).toBe(404);
+
+    const persistedUser = await db.findUserByEmail(tenantBEmail);
+    expect(persistedUser).not.toBeNull();
+    expect(persistedUser?.id).toBe(tenantBUser.id);
+    expect(persistedUser?.companyId).toBe(registration.body.companyId);
+    expect(persistedUser?.fullName).toBe("Tenant B Owner");
+    expect(persistedUser?.role).toBe("owner");
+    expect(persistedUser?.isActive).toBe(true);
+    expect(persistedUser?.authVersion).toBe(tenantBUser.authVersion);
+  });
+
   it("keeps technicians out of company team-administration routes", async () => {
     const technicianAccessToken = await accessTokenFor("tech@rossi.it");
 
