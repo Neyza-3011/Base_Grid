@@ -253,8 +253,7 @@ function CompanyOnboarding() {
               max="10000"
               step="0.5"
               value={form.default_hourly_rate}
-              onChange={(e) =>
-                updateField("default_hourly_rate", Number(e.target.value))}
+              onChange={(e) => updateField("default_hourly_rate", Number(e.target.value))}
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
@@ -267,8 +266,7 @@ function CompanyOnboarding() {
               maxLength={1000}
               rows={3}
               value={form.report_footer_notes}
-              onChange={(e) =>
-                updateField("report_footer_notes", e.target.value)}
+              onChange={(e) => updateField("report_footer_notes", e.target.value)}
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
