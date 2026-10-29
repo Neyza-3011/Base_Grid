@@ -1005,6 +1005,13 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updatedCustomer: CustomerRecord = {
       ...customer,
       ...data,
+      legalName: data.legalName === null ? undefined : (data.legalName !== undefined ? data.legalName : customer.legalName),
+      vatNumber: data.vatNumber === null ? undefined : (data.vatNumber !== undefined ? data.vatNumber : customer.vatNumber),
+      taxCode: data.taxCode === null ? undefined : (data.taxCode !== undefined ? data.taxCode : customer.taxCode),
+      email: data.email === null ? undefined : (data.email !== undefined ? data.email : customer.email),
+      phoneNumber: data.phoneNumber === null ? undefined : (data.phoneNumber !== undefined ? data.phoneNumber : customer.phoneNumber),
+      pec: data.pec === null ? undefined : (data.pec !== undefined ? data.pec : customer.pec),
+      notes: data.notes === null ? undefined : (data.notes !== undefined ? data.notes : customer.notes),
       updatedAt: new Date().toISOString(),
     };
 
@@ -1105,6 +1112,9 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updatedLocation: LocationRecord = {
       ...location,
       ...data,
+      province: data.province === null ? undefined : (data.province !== undefined ? data.province : location.province),
+      postalCode: data.postalCode === null ? undefined : (data.postalCode !== undefined ? data.postalCode : location.postalCode),
+      notes: data.notes === null ? undefined : (data.notes !== undefined ? data.notes : location.notes),
       updatedAt: new Date().toISOString(),
     };
 
@@ -1263,6 +1273,12 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updatedAsset: AssetRecord = {
       ...asset,
       ...data,
+      manufacturer: data.manufacturer === null ? undefined : (data.manufacturer !== undefined ? data.manufacturer : asset.manufacturer),
+      model: data.model === null ? undefined : (data.model !== undefined ? data.model : asset.model),
+      serialNumber: data.serialNumber === null ? undefined : (data.serialNumber !== undefined ? data.serialNumber : asset.serialNumber),
+      installationDate: data.installationDate === null ? undefined : (data.installationDate !== undefined ? data.installationDate : asset.installationDate),
+      warrantyEndDate: data.warrantyEndDate === null ? undefined : (data.warrantyEndDate !== undefined ? data.warrantyEndDate : asset.warrantyEndDate),
+      notes: data.notes === null ? undefined : (data.notes !== undefined ? data.notes : asset.notes),
       updatedAt: new Date().toISOString(),
     };
 
@@ -1471,6 +1487,14 @@ export class DatabaseStore implements IDatabaseAdapter {
     const updatedRecord: InterventionRecord = {
       ...existing,
       ...data,
+      assetId: data.assetId === null ? undefined : (data.assetId !== undefined ? data.assetId : existing.assetId),
+      technicianId: data.technicianId === null ? undefined : (data.technicianId !== undefined ? data.technicianId : existing.technicianId),
+      problem: data.problem === null ? undefined : (data.problem !== undefined ? data.problem : existing.problem),
+      scheduledStart: data.scheduledStart === null ? undefined : (data.scheduledStart !== undefined ? data.scheduledStart : existing.scheduledStart),
+      scheduledEnd: data.scheduledEnd === null ? undefined : (data.scheduledEnd !== undefined ? data.scheduledEnd : existing.scheduledEnd),
+      estimatedHours: data.estimatedHours === null ? undefined : (data.estimatedHours !== undefined ? data.estimatedHours : existing.estimatedHours),
+      actualHours: data.actualHours === null ? undefined : (data.actualHours !== undefined ? data.actualHours : existing.actualHours),
+      notes: data.notes === null ? undefined : (data.notes !== undefined ? data.notes : existing.notes),
       updatedBy: data.updatedBy,
       updatedAt: new Date().toISOString(),
     };
