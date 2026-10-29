@@ -70,6 +70,13 @@ export class CustomerService {
     const updated = await this.db.updateCustomer(companyId, customerId, {
       ...input,
       displayName: input.displayName ? input.displayName.trim() : undefined,
+      legalName: input.legalName !== undefined ? (input.legalName && typeof input.legalName === "string" && input.legalName.trim().length > 0 ? input.legalName.trim() : (null as any)) : undefined,
+      vatNumber: input.vatNumber !== undefined ? (input.vatNumber && typeof input.vatNumber === "string" && input.vatNumber.trim().length > 0 ? input.vatNumber.trim() : (null as any)) : undefined,
+      taxCode: input.taxCode !== undefined ? (input.taxCode && typeof input.taxCode === "string" && input.taxCode.trim().length > 0 ? input.taxCode.trim() : (null as any)) : undefined,
+      email: input.email !== undefined ? (input.email && typeof input.email === "string" && input.email.trim().length > 0 ? input.email.trim() : (null as any)) : undefined,
+      phoneNumber: input.phoneNumber !== undefined ? (input.phoneNumber && typeof input.phoneNumber === "string" && input.phoneNumber.trim().length > 0 ? input.phoneNumber.trim() : (null as any)) : undefined,
+      pec: input.pec !== undefined ? (input.pec && typeof input.pec === "string" && input.pec.trim().length > 0 ? input.pec.trim() : (null as any)) : undefined,
+      notes: input.notes !== undefined ? (input.notes && typeof input.notes === "string" && input.notes.trim().length > 0 ? input.notes.trim() : (null as any)) : undefined,
     });
 
     if (!updated) {
@@ -140,6 +147,9 @@ export class CustomerService {
       name: input.name ? input.name.trim() : undefined,
       address: input.address ? input.address.trim() : undefined,
       city: input.city ? input.city.trim() : undefined,
+      province: input.province !== undefined ? (input.province && typeof input.province === "string" && input.province.trim().length > 0 ? input.province.trim() : (null as any)) : undefined,
+      postalCode: input.postalCode !== undefined ? (input.postalCode && typeof input.postalCode === "string" && input.postalCode.trim().length > 0 ? input.postalCode.trim() : (null as any)) : undefined,
+      notes: input.notes !== undefined ? (input.notes && typeof input.notes === "string" && input.notes.trim().length > 0 ? input.notes.trim() : (null as any)) : undefined,
     });
 
     if (!updated) {

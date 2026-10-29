@@ -239,14 +239,14 @@ export class AssetService {
       customerId: targetCustomerId !== existing.customerId ? targetCustomerId : undefined,
       locationId: targetLocationId !== existing.locationId ? targetLocationId : undefined,
       assetType: input.assetType,
-      name: input.name !== undefined ? input.name.trim() : undefined,
-      manufacturer: input.manufacturer !== undefined ? input.manufacturer.trim() || undefined : undefined,
-      model: input.model !== undefined ? input.model.trim() || undefined : undefined,
-      serialNumber: input.serialNumber !== undefined ? input.serialNumber.trim() || undefined : undefined,
-      installationDate: input.installationDate !== undefined ? input.installationDate.trim() || undefined : undefined,
-      warrantyEndDate: input.warrantyEndDate !== undefined ? input.warrantyEndDate.trim() || undefined : undefined,
+      name: input.name !== undefined && input.name !== null ? input.name.trim() : undefined,
+      manufacturer: input.manufacturer !== undefined ? (input.manufacturer && typeof input.manufacturer === "string" && input.manufacturer.trim().length > 0 ? input.manufacturer.trim() : (null as any)) : undefined,
+      model: input.model !== undefined ? (input.model && typeof input.model === "string" && input.model.trim().length > 0 ? input.model.trim() : (null as any)) : undefined,
+      serialNumber: input.serialNumber !== undefined ? (input.serialNumber && typeof input.serialNumber === "string" && input.serialNumber.trim().length > 0 ? input.serialNumber.trim() : (null as any)) : undefined,
+      installationDate: input.installationDate !== undefined ? (input.installationDate && typeof input.installationDate === "string" && input.installationDate.trim().length > 0 ? input.installationDate.trim() : (null as any)) : undefined,
+      warrantyEndDate: input.warrantyEndDate !== undefined ? (input.warrantyEndDate && typeof input.warrantyEndDate === "string" && input.warrantyEndDate.trim().length > 0 ? input.warrantyEndDate.trim() : (null as any)) : undefined,
       status: input.status,
-      notes: input.notes !== undefined ? input.notes.trim() || undefined : undefined,
+      notes: input.notes !== undefined ? (input.notes && typeof input.notes === "string" && input.notes.trim().length > 0 ? input.notes.trim() : (null as any)) : undefined,
     });
 
     if (!updated) {

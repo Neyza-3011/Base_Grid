@@ -396,7 +396,9 @@ export class InterventionService {
     }
 
     if (input.problem !== undefined) {
-      updates.problem = input.problem ? input.problem.trim() : undefined;
+      updates.problem = input.problem && typeof input.problem === "string" && input.problem.trim().length > 0
+        ? input.problem.trim()
+        : (null as any);
     }
 
     if (input.priority !== undefined) {
@@ -439,7 +441,7 @@ export class InterventionService {
     // Asset validation
     if (input.assetId !== undefined) {
       if (input.assetId === null || input.assetId.trim().length === 0) {
-        updates.assetId = undefined;
+        updates.assetId = null as any;
       } else {
         const cleanAssetId = input.assetId.trim();
         const asset = await this.db.getAssetByIdAndCompany(cleanAssetId, companyId);
@@ -456,7 +458,7 @@ export class InterventionService {
     // Technician validation
     if (input.technicianId !== undefined) {
       if (input.technicianId === null || input.technicianId.trim().length === 0) {
-        updates.technicianId = undefined;
+        updates.technicianId = null as any;
       } else {
         const cleanTechnicianId = input.technicianId.trim();
         const tech = await this.db.getUserByIdAndCompany(cleanTechnicianId, companyId);
@@ -474,8 +476,8 @@ export class InterventionService {
     }
 
     // Dates validation
-    const targetStart = input.scheduledStart !== undefined ? input.scheduledStart : existing.scheduledStart;
-    const targetEnd = input.scheduledEnd !== undefined ? input.scheduledEnd : existing.scheduledEnd;
+    const targetStart = input.scheduledStart !== undefined ? (input.scheduledStart || undefined) : existing.scheduledStart;
+    const targetEnd = input.scheduledEnd !== undefined ? (input.scheduledEnd || undefined) : existing.scheduledEnd;
 
     if (targetStart && isNaN(new Date(targetStart).getTime())) {
       throw new BadRequestError("Formato data inizio programmata non valido.");
@@ -490,8 +492,16 @@ export class InterventionService {
         throw new BadRequestError("La data di fine intervento programmata deve essere successiva alla data di inizio.");
       }
     }
-    if (input.scheduledStart !== undefined) updates.scheduledStart = input.scheduledStart || undefined;
-    if (input.scheduledEnd !== undefined) updates.scheduledEnd = input.scheduledEnd || undefined;
+    if (input.scheduledStart !== undefined) {
+      updates.scheduledStart = input.scheduledStart && typeof input.scheduledStart === "string" && input.scheduledStart.trim().length > 0
+        ? input.scheduledStart.trim()
+        : (null as any);
+    }
+    if (input.scheduledEnd !== undefined) {
+      updates.scheduledEnd = input.scheduledEnd && typeof input.scheduledEnd === "string" && input.scheduledEnd.trim().length > 0
+        ? input.scheduledEnd.trim()
+        : (null as any);
+    }
 
     if (input.estimatedHours !== undefined) {
       if (input.estimatedHours !== null) {
@@ -500,7 +510,7 @@ export class InterventionService {
         }
         updates.estimatedHours = input.estimatedHours;
       } else {
-        updates.estimatedHours = undefined;
+        updates.estimatedHours = null as any;
       }
     }
 
@@ -511,12 +521,14 @@ export class InterventionService {
         }
         updates.actualHours = input.actualHours;
       } else {
-        updates.actualHours = undefined;
+        updates.actualHours = null as any;
       }
     }
 
     if (input.notes !== undefined) {
-      updates.notes = input.notes ? input.notes.trim() : undefined;
+      updates.notes = input.notes && typeof input.notes === "string" && input.notes.trim().length > 0
+        ? input.notes.trim()
+        : (null as any);
     }
 
     const candidateRecord: InterventionRecord = {
