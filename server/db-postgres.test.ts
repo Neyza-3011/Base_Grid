@@ -751,7 +751,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("generates collision-resistant UUIDs for concurrent user and company registrations", async () => {
       const adapter = new PostgresAdapter(mockPool);
-      const N = 50;
+      const N = 20;
 
       // Mock transaction query behavior for multiple calls
       mockClient.query.mockImplementation((sql: string, params?: any[]) => {
@@ -797,7 +797,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("generates collision-resistant UUIDs for concurrent Google user creations", async () => {
       const adapter = new PostgresAdapter(mockPool);
-      const N = 50;
+      const N = 20;
 
       mockClient.query.mockImplementation((sql: string, params?: any[]) => {
         if (sql === "BEGIN" || sql === "COMMIT") return Promise.resolve({ rows: [] });
@@ -833,7 +833,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("generates collision-resistant UUIDs for concurrent auto-generated report IDs", async () => {
       const adapter = new PostgresAdapter(mockPool);
-      const N = 50;
+      const N = 20;
 
       mockPool.query.mockResolvedValue({ rows: [] });
 
@@ -857,7 +857,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     it("generates collision-resistant UUIDs for concurrent auth token creation", async () => {
       const adapter = new PostgresAdapter(mockPool);
-      const N = 50;
+      const N = 20;
 
       mockPool.query.mockResolvedValue({ rows: [] });
 

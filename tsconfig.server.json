@@ -17,7 +17,6 @@
     "node_modules",
     "frontend",
     "dist",
-    "all_routes.ts",
     "server/**/*.test.ts"
   ]
 }

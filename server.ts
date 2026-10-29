@@ -290,6 +290,13 @@ async function startServer() {
 
     if (!nitroReady) {
       console.error(`CRITICAL STARTUP ERROR: Nitro frontend failed to bind to port ${nitroPort} within 7.5 seconds.`);
+      if (nitroProcess) {
+        try {
+          nitroProcess.kill("SIGTERM");
+        } catch (err) {
+          console.error("Error terminating Nitro process during startup abort:", err);
+        }
+      }
       process.exit(1); // Fail-closed in production
     }
     console.log("Nitro frontend is ready.");
