@@ -103,7 +103,9 @@ export function SuperDashboard() {
       }
       setSelectedTenant(payload as TenantDetails);
     } catch (error) {
-      setDetailError(error instanceof Error ? error.message : "Errore nel caricamento dei dettagli.");
+      setDetailError(
+        error instanceof Error ? error.message : "Errore nel caricamento dei dettagli.",
+      );
     } finally {
       setDetailLoading(false);
     }
@@ -150,6 +152,12 @@ export function SuperDashboard() {
     }
     checkAdminAccess();
   }, [navigate]);
+
+  const filteredTenants = tenants.filter((tenant) =>
+    `${tenant.name} ${tenant.id}`
+      .toLowerCase()
+      .includes(tenantSearch.trim().toLowerCase()),
+  );
 
   const handleRefreshData = async () => {
     toast.loading("Sincronizzazione dati da PostgreSQL e Redis...");
@@ -243,7 +251,9 @@ export function SuperDashboard() {
               <p className="text-xs font-medium text-white/60 uppercase tracking-wider">
                 Stato piattaforma
               </p>
-              <h3 className="text-2xl font-black mt-1 text-white">{stats?.system_status || "Non disponibile"}</h3>
+              <h3 className="text-2xl font-black mt-1 text-white">
+                {stats?.system_status || "Non disponibile"}
+              </h3>
               <p className="text-[10px] text-white/50 mt-1">Valore restituito dall'API</p>
             </div>
             <div className="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 grid place-items-center text-emerald-400">
@@ -275,7 +285,8 @@ export function SuperDashboard() {
                 <Box className="h-5 w-5 text-emerald-400" /> Monitoraggio Aziende & Tenant SaaS
               </h2>
               <p className="text-xs text-white/60 mt-0.5">
-                Profili aziendali e utenti associati. I dettagli vengono letti dalle API protette lato server.
+                Profili aziendali e utenti associati. I dettagli vengono letti dalle
+                API protette lato server.
               </p>
             </div>
 
@@ -318,20 +329,26 @@ export function SuperDashboard() {
                       Caricamento aziende dal database...
                     </td>
                   </tr>
-                ) : tenants.filter((tenant) => `${tenant.name} ${tenant.id}`.toLowerCase().includes(tenantSearch.trim().toLowerCase())).length === 0 ? (
+                ) : filteredTenants.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-6 text-center text-white/40">
                       Nessuna azienda corrisponde alla ricerca.
                     </td>
                   </tr>
                 ) : (
-                  tenants.filter((tenant) => `${tenant.name} ${tenant.id}`.toLowerCase().includes(tenantSearch.trim().toLowerCase())).map((t) => (
+                  filteredTenants.map((t) => (
                     <tr key={t.id} className="hover:bg-white/5 transition">
                       <td className="p-3.5 font-semibold text-white flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${t.setup_complete ? "bg-emerald-400" : "bg-amber-400"}`} />
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            t.setup_complete ? "bg-emerald-400" : "bg-amber-400"
+                          }`}
+                        />
                         {t.name}
                       </td>
-                      <td className="p-3.5 text-white/60 font-mono text-[11px]">{t.id}</td>
+                      <td className="p-3.5 text-white/60 font-mono text-[11px]">
+                        {t.id}
+                      </td>
                       <td className="p-3.5">
                         <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 font-medium">
                           {t.plan || "Piano non disponibile"}
@@ -344,9 +361,7 @@ export function SuperDashboard() {
                       </td>
                       <td className="p-3.5 text-right">
                         <button
-                          onClick={() =>
-                            void inspectTenant(t.id)
-                          }
+                          onClick={() => void inspectTenant(t.id)}
                           className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-medium transition"
                         >
                           Dettagli
@@ -355,24 +370,32 @@ export function SuperDashboard() {
                     </tr>
                   ))
                 )}
-              </tbody>
+              </tbody>      </tbody>
             </table>
           </div>
         </div>
 
         {(detailLoading || detailError || selectedTenant) && (
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4" aria-live="polite">
+          <section
+            className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4"
+            aria-live="polite"
+          >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-white">Dettaglio azienda</h2>
               <button
                 type="button"
-                onClick={() => { setSelectedTenant(null); setDetailError(null); }}
+                onClick={() => {
+                  setSelectedTenant(null);
+                  setDetailError(null);
+                }}
                 className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10"
               >
                 Chiudi
               </button>
             </div>
-            {detailLoading && <p className="text-sm text-white/60">Caricamento dettagli persistenti...</p>}
+            {detailLoading && (
+              <p className="text-sm text-white/60">Caricamento dettagli persistenti...</p>
+            )}
             {detailError && (
               <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">
                 {detailError}
@@ -386,14 +409,48 @@ export function SuperDashboard() {
                     ["ID", selectedTenant.company.id],
                     ["Partita IVA", selectedTenant.company.vat_number || "Non disponibile"],
                     ["Indirizzo", selectedTenant.company.address || "Non impostato"],
-                    ["Stato configurazione", selectedTenant.company.setup_complete ? "Completata" : "Incompleta"],
-                    ["Stato abbonamento", selectedTenant.company.subscription_status || "Non disponibile"],
-                    ["Utenti attivi", `${selectedTenant.active_user_count} / ${selectedTenant.user_count}`],
-                    ["Limite utenti", String(selectedTenant.company.max_users ?? "Non disponibile")],
-                    ["Tariffa oraria predefinita", selectedTenant.company.default_hourly_rate == null ? "Non disponibile" : `€ ${selectedTenant.company.default_hourly_rate}`],
-                    ["Export PDF", selectedTenant.company.feature_pdf_export == null ? "Non disponibile" : selectedTenant.company.feature_pdf_export ? "Abilitato" : "Disabilitato"],
-                    ["Creato il", selectedTenant.company.created_at ? new Date(selectedTenant.company.created_at).toLocaleString("it-IT") : "Non disponibile"],
-                    ["Aggiornato il", selectedTenant.company.updated_at ? new Date(selectedTenant.company.updated_at).toLocaleString("it-IT") : "Non disponibile"],
+                    [
+                      "Stato configurazione",
+                      selectedTenant.company.setup_complete ? "Completata" : "Incompleta",
+                    ],
+                    [
+                      "Stato abbonamento",
+                      selectedTenant.company.subscription_status || "Non disponibile",
+                    ],
+                    [
+                      "Utenti attivi",
+                      `${selectedTenant.active_user_count} / ${selectedTenant.user_count}`,
+                    ],
+                    [
+                      "Limite utenti",
+                      String(selectedTenant.company.max_users ?? "Non disponibile"),
+                    ],
+                    [
+                      "Tariffa oraria predefinita",
+                      selectedTenant.company.default_hourly_rate == null
+                        ? "Non disponibile"
+                        : `€ ${selectedTenant.company.default_hourly_rate}`,
+                    ],
+                    [
+                      "Export PDF",
+                      selectedTenant.company.feature_pdf_export == null
+                        ? "Non disponibile"
+                        : selectedTenant.company.feature_pdf_export
+                          ? "Abilitato"
+                          : "Disabilitato",
+                    ],
+                    [
+                      "Creato il",
+                      selectedTenant.company.created_at
+                        ? new Date(selectedTenant.company.created_at).toLocaleString("it-IT")
+                        : "Non disponibile",
+                    ],
+                    [
+                      "Aggiornato il",
+                      selectedTenant.company.updated_at
+                        ? new Date(selectedTenant.company.updated_at).toLocaleString("it-IT")
+                        : "Non disponibile",
+                    ],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl border border-white/10 bg-[#090D16] p-3">
                       <p className="text-[10px] uppercase tracking-wider text-white/45">{label}</p>
@@ -404,7 +461,9 @@ export function SuperDashboard() {
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-white">Utenti associati</h3>
                   {selectedTenant.users.length === 0 ? (
-                    <p className="text-sm text-white/50">Nessun utente associato a questa azienda.</p>
+                    <p className="text-sm text-white/50">
+                      Nessun utente associato a questa azienda.
+                    </p>
                   ) : (
                     <div className="overflow-x-auto rounded-xl border border-white/10">
                       <table className="w-full text-left text-xs">
