@@ -60,9 +60,9 @@ Acceptance criteria:
 
 ### P0-ACCOUNT-SETUP — Configure the company immediately after account creation
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
 
-Priority: implement this before the remaining general roadmap work, after the current baseline/PR dependencies are clear.
+Priority: implement this before the remaining general roadmap work, after the current baseline/PR dependencies are clear. Initial implementation branch: `feat/p0-account-setup-gate`. This slice uses persisted company name/address as the completion signal and server-side authentication middleware to block tenant workflow endpoints until the owner completes setup. It is not yet the full setup profile: contact details, service area/categories, locale/time zone, browser E2E, and additional failure/retry coverage remain outstanding.
 
 Acceptance criteria:
 - After registration and first authentication, route a new owner through a required, resumable company setup before exposing normal operational workflows. The report/rapportino `/wizard` is not company onboarding.

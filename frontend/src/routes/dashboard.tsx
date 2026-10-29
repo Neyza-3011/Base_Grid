@@ -85,6 +85,23 @@ function Dashboard() {
     async function initSession() {
       const sessionUser = await fetchServerSession();
       if (sessionUser) {
+        if (sessionUser.platformRole !== "ceo") {
+          try {
+            const settingsResponse = await fetch("/api/v1/company/settings", {
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            });
+            if (settingsResponse.ok) {
+              const companySettings = await settingsResponse.json();
+              if (!String(companySettings.address || "").trim()) {
+                navigate({ to: "/onboarding" });
+                return;
+              }
+            }
+          } catch {
+            // The API guard remains authoritative; a transient read failure must not mark setup complete.
+          }
+        }
         setUser(sessionUser);
       } else {
         toast.error("Sessione non valida o scaduta. Effettua l'accesso.");
