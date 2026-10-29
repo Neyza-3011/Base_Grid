@@ -36,6 +36,14 @@ Baseline: `main` at `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581` (2026-10-29, merg
 
 ## Ordered checkpoints
 
+### Priority order for implementation
+
+1. `P0-ACCOUNT-SETUP`: mandatory, persistent setup immediately after account creation.
+2. `P0-CEO-CONSOLE`: finalize the CEO-only control panel and full company/account lifecycle management.
+3. `P0-CEO-DEMO-ACCOUNT`: seed synthetic demo information only into the explicitly verified CEO account/tenant.
+4. Continue the remaining roadmap checkpoints, resolving any security/CI dependency before starting dependent work. This priority order does not waive the route-by-route security audit or release gates.
+
+
 ### P0-ROLE — Separate platform authority from company roles
 
 Status: `IN_PROGRESS`
@@ -103,16 +111,6 @@ Acceptance criteria:
 - Do not rely on hidden UI for authorization; direct API calls must also be rejected.
 - Add tests proving ordinary users cannot clone data or create demo tenants.
 
-### P0-DEMO-DATA — Synthetic data for the authorized demo account only
-
-Status: `NOT_STARTED`
-
-Acceptance criteria:
-- Populate only the explicitly authorized account `jack.cardinali15@gmail.com` with wholly synthetic company/customer/location/asset/intervention/report data.
-- Never copy real customer data, create demo content for other tenants, or grant CEO permissions as a seeding side effect.
-- Use an explicit, idempotent, opt-in seed operation that verifies the intended account/tenant server-side and fails closed on mismatch.
-- Mark generated records as demo data where possible; document cleanup and test idempotency/tenant isolation.
-- Do not run the seeder against production until the target account/tenant and operation are explicitly verified.
 
 ### P0-ONBOARDING — Required first-run setup
 
