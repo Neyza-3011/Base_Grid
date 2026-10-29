@@ -82,9 +82,7 @@ function CompanyOnboarding() {
         }
       } catch (error) {
         if (!cancelled) {
-          toast.error(
-            error instanceof Error ? error.message : "Errore nel caricamento.",
-          );
+          toast.error(error instanceof Error ? error.message : "Errore nel caricamento.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -108,15 +106,11 @@ function CompanyOnboarding() {
     const name = form.name.trim();
     const address = form.address.trim();
     if (name.length < 2 || name.length > 100) {
-      toast.error(
-        "Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.",
-      );
+      toast.error("Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.");
       return;
     }
     if (!address || address.length > 255) {
-      toast.error(
-        "Inserisci l'indirizzo della sede principale (massimo 255 caratteri).",
-      );
+      toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
       return;
     }
     if (
@@ -124,9 +118,7 @@ function CompanyOnboarding() {
       form.default_hourly_rate < 0 ||
       form.default_hourly_rate > 10000
     ) {
-      toast.error(
-        "La tariffa oraria deve essere compresa tra 0 e 10.000.",
-      );
+      toast.error("La tariffa oraria deve essere compresa tra 0 e 10.000.");
       return;
     }
 
@@ -155,9 +147,7 @@ function CompanyOnboarding() {
       navigate({ to: "/dashboard" });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Errore di rete durante il salvataggio.",
+        error instanceof Error ? error.message : "Errore di rete durante il salvataggio.",
       );
     } finally {
       setSaving(false);
@@ -167,10 +157,7 @@ function CompanyOnboarding() {
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center bg-slate-950 text-white">
-        <Loader2
-          className="h-8 w-8 animate-spin"
-          aria-label="Caricamento"
-        />
+        <Loader2 className="h-8 w-8 animate-spin" aria-label="Caricamento" />
       </div>
     );
   }
@@ -180,13 +167,10 @@ function CompanyOnboarding() {
       <main className="min-h-screen grid place-items-center bg-slate-950 px-4 text-white">
         <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8">
           <ShieldCheck className="mb-4 h-8 w-8 text-amber-300" />
-          <h1 className="text-2xl font-semibold">
-            Configurazione aziendale in attesa
-          </h1>
+          <h1 className="text-2xl font-semibold">Configurazione aziendale in attesa</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
-            Il titolare dell'azienda deve completare la configurazione iniziale
-            prima che il team possa utilizzare BaseGrid. Avvisalo di accedere
-            con il proprio account.
+            Il titolare dell'azienda deve completare la configurazione iniziale prima che il team
+            possa utilizzare BaseGrid. Avvisalo di accedere con il proprio account.
           </p>
         </section>
       </main>
@@ -201,28 +185,20 @@ function CompanyOnboarding() {
             <Building2 className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">
-              Primo accesso
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold">
-              Configura la tua azienda
-            </h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Primo accesso</p>
+            <h1 className="mt-1 text-3xl font-semibold">Configura la tua azienda</h1>
           </div>
         </div>
         <p className="mb-8 text-sm leading-6 text-white/70">
-          Queste informazioni vengono salvate nell'azienda associata al tuo
-          account. Puoi tornare a questa pagina finché la configurazione non è
-          completa.
+          Queste informazioni vengono salvate nell'azienda associata al tuo account. Puoi tornare a
+          questa pagina finché la configurazione non è completa.
         </p>
         <form
           onSubmit={submit}
           className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-8"
         >
           <div>
-            <label
-              htmlFor="company-name"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
               Nome azienda / ragione sociale *
             </label>
             <input
@@ -237,10 +213,7 @@ function CompanyOnboarding() {
             />
           </div>
           <div>
-            <label
-              htmlFor="company-address"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label htmlFor="company-address" className="mb-2 block text-sm font-medium">
               Indirizzo della sede principale *
             </label>
             <input
@@ -254,10 +227,7 @@ function CompanyOnboarding() {
             />
           </div>
           <div>
-            <label
-              htmlFor="company-vat"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label htmlFor="company-vat" className="mb-2 block text-sm font-medium">
               Partita IVA (facoltativa)
             </label>
             <input
@@ -273,10 +243,7 @@ function CompanyOnboarding() {
             </p>
           </div>
           <div>
-            <label
-              htmlFor="hourly-rate"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
               Tariffa oraria predefinita (€)
             </label>
             <input
@@ -287,16 +254,12 @@ function CompanyOnboarding() {
               step="0.5"
               value={form.default_hourly_rate}
               onChange={(e) =>
-                updateField("default_hourly_rate", Number(e.target.value))
-              }
+                updateField("default_hourly_rate", Number(e.target.value))}
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
           <div>
-            <label
-              htmlFor="report-footer"
-              className="mb-2 block text-sm font-medium"
-            >
+            <label htmlFor="report-footer" className="mb-2 block text-sm font-medium">
               Note predefinite per i rapportini (facoltative)
             </label>
             <textarea
@@ -305,8 +268,7 @@ function CompanyOnboarding() {
               rows={3}
               value={form.report_footer_notes}
               onChange={(e) =>
-                updateField("report_footer_notes", e.target.value)
-              }
+                updateField("report_footer_notes", e.target.value)}
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
@@ -315,11 +277,7 @@ function CompanyOnboarding() {
             disabled={saving}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "Salvataggio..." : "Salva e apri BaseGrid"}
           </button>
         </form>
