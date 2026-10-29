@@ -93,7 +93,10 @@ function Dashboard() {
             });
             if (settingsResponse.ok) {
               const companySettings = await settingsResponse.json();
-              if (!String(companySettings.address || "").trim()) {
+              if (
+                !String(companySettings.name || "").trim() ||
+                !String(companySettings.address || "").trim()
+              ) {
                 navigate({ to: "/onboarding" });
                 return;
               }
