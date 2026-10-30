@@ -18,6 +18,7 @@ const WHITE = rgb(1, 1, 1);
 
 function safeText(value: unknown): string {
   return String(value ?? "")
+    .normalize("NFC")
     .replace(/\u00A0/g, " ")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
