@@ -60,6 +60,8 @@ export interface CompanyRecord {
   stripeSubscriptionStatus: string;
   maxUsers: number;
   featurePdfExport: boolean;
+  /** Validated PNG/JPEG data URL, stored per tenant and used only for company-branded documents. */
+  logoDataUrl?: string | null;
   /** False when platform administration has suspended the tenant. */
   isActive?: boolean;
   createdAt: string;
@@ -443,6 +445,7 @@ export interface UpdateCompanyInput {
   reportFooterNotes?: string;
   maxUsers?: number;
   featurePdfExport?: boolean;
+  logoDataUrl?: string | null;
 }
 
 export interface CreateUserInput {
