@@ -54,7 +54,7 @@ export class CompanyService {
     if (!companyId) {
       throw new ValidationError("Company ID is required");
     }
-    const company = await this.db.findCompanyById(companyId);
+    const company = await this.db.findCompanyWithLogoById(companyId);
     if (!company) {
       throw new NotFoundError("Company not found");
     }
