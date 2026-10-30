@@ -103,6 +103,47 @@ adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res
   });
 }));
 
+
+/**
+ * PUT /api/v1/admin/tenants/:companyId/platform-settings
+ * CEO-only operational controls; Stripe/billing state is intentionally not editable here.
+ */
+adminRouter.put("/tenants/:companyId/platform-settings", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const companyId = typeof req.params.companyId === "string" ? req.params.companyId.trim() : "";
+  if (!companyId) throw new ValidationError("ID azienda non valido.");
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    throw new ValidationError("I dati inviati non sono validi.");
+  }
+  const allowed = new Set(["max_users", "feature_pdf_export"]);
+  const keys = Object.keys(req.body);
+  if (keys.length === 0 || keys.some((key) => !allowed.has(key))) {
+    throw new ValidationError("Campi non supportati o nessun controllo da aggiornare.");
+  }
+  const input: Record<string, unknown> = {};
+  if (req.body.max_users !== undefined) {
+    if (typeof req.body.max_users !== "number" || !Number.isInteger(req.body.max_users) || req.body.max_users < 1 || req.body.max_users > 5000) {
+      throw new ValidationError("Il limite utenti deve essere un intero tra 1 e 5000.");
+    }
+    input.maxUsers = req.body.max_users;
+  }
+  if (req.body.feature_pdf_export !== undefined) {
+    if (typeof req.body.feature_pdf_export !== "boolean") {
+      throw new ValidationError("feature_pdf_export deve essere un booleano.");
+    }
+    input.featurePdfExport = req.body.feature_pdf_export;
+  }
+  const updated = await companyService.updateCompanySettings(companyId, input as any, "superadmin");
+  res.status(200).json({
+    company: {
+      id: updated.id,
+      name: updated.name,
+      max_users: updated.maxUsers,
+      feature_pdf_export: updated.featurePdfExport,
+      updated_at: updated.updatedAt,
+    },
+  });
+}));
+
 /**
  * GET /api/v1/admin/tenants/:companyId
  * Detailed persisted company profile and safe team-member summaries.
