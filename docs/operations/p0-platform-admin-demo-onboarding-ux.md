@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `4655852a6ce94e826104445d1d10f8208355e7ba` (2026-10-30, merge of PR #110).
+Baseline: `main` at `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38` (2026-10-30, merge of PR #115).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -42,9 +42,15 @@ Baseline: `main` at `4655852a6ce94e826104445d1d10f8208355e7ba` (2026-10-30, merg
 - PR #108 restores `autoDeploy: false` in `render.yaml`; merged on 2026-10-30. This repository setting does not prove the live Render service has synchronized its Blueprint or that live automatic deploy is disabled.
 - PR #109 adds anonymous-request 401 regression tests for platform stats, tenant list and tenant detail; merged on 2026-10-30.
 - PR #110 adds a separate PostgreSQL 16 + Redis 7 backend runtime smoke job. CI run #312 passed lint, backend/frontend type-check, Vitest, build, compiled backend startup, `/health=200`, and `/ready=200` with PostgreSQL and Redis readiness. This validates the disposable CI runtime only, not the live Render deployment or production TLS configuration.
-- PR #111 proposes a CEO-only tenant profile update API with field allowlisting, runtime type validation and authorization/no-side-effect tests. Status: `IN_PROGRESS`; CI run #314 passed lint, backend/frontend type-check, Vitest, build, and the PostgreSQL + Redis backend runtime smoke test. Browser/E2E behavior remains unverified and the PR is still open.
-- PR #113 proposes the CEO console profile-edit form and depends on PR #111. Status: `IN_PROGRESS`; frontend type-check, CI and browser/E2E behavior are not yet verified.
-- PR #114 proposes strict runtime type validation for company settings. Status: `IN_PROGRESS`; CI is not yet verified. These open PRs are not part of the verified `main` baseline.
+- PR #111 adds the CEO-only tenant profile update API; merged as `3a617ed5958807b9388030d97d0b4c21bc221fd9`. Its PR CI run #314 passed lint, backend/frontend type-check, Vitest, build, and the PostgreSQL + Redis backend runtime smoke test.
+- PR #113 adds the CEO console company-profile editor; merged as `65afb0233386c03e1a094d0b4733351190750923`. Browser/E2E behavior remains unverified.
+- PR #114 adds strict runtime type validation for company settings; merged as `0d614d6431798087b9f21a03e18ad1d566b3f015`.
+- PR #115 synchronizes this roadmap; merged as `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38`. The merge's CI run #321 passed.
+- PR #116 adds CEO tenant-user profile/role editing and activate/deactivate endpoints with session revocation and last-admin protection. Status: `IN_PROGRESS`; run #328 had lint and both type-checks pass, runtime smoke pass, and Vitest still running at last check.
+- PR #117 adds tenant user management/search/filter UI and company platform-controls UI. Status: `IN_PROGRESS`; an earlier head failed the runtime smoke build because the frontend route file had a syntax error. That error has been corrected in a newer commit; its rerun is not yet verified.
+- PR #118 adds a CEO API for bounded max-user and PDF-export controls. Status: `IN_PROGRESS`; CI is still running at last check.
+- PR #119 corrects false-success dashboard refresh behavior and adds retry/error states. Status: `IN_PROGRESS`; CI is still running at last check.
+- User/company permanent deletion, company suspension, persistent admin audit events and a browser-tested end-to-end admin lifecycle are not implemented by these PRs. Do not label the CEO console complete until these gaps are addressed and verified.
 
 ## Ordered checkpoints
 
