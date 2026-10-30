@@ -370,7 +370,7 @@ export function SuperDashboard() {
                     </tr>
                   ))
                 )}
-              </tbody>      </tbody>
+              </tbody>
             </table>
           </div>
         </div>
