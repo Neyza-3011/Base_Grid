@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ReportRecord } from "../types";
+import { CompanyRecord, ReportRecord } from "../types";
 import { generateReportPdf } from "./report-pdf";
 
 const hasPoppler = (() => {
@@ -52,6 +52,36 @@ describe("generated PDF independent parser validation", () => {
       expect(extractedText).toContain("RAPPORTINO DI INTERVENTO");
       expect(extractedText).toContain("Cantiere indipendente");
       expect(extractedText).toContain("Tecnico di test");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!hasPoppler)("preserves Italian accents in the company header", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "basegrid-pdf-"));
+    const pdfPath = join(directory, "report.pdf");
+    const company: CompanyRecord = {
+      id: "company-accent-test",
+      name: "Elettricità Città S.r.l.",
+      vatNumber: "12345678901",
+      address: "Via della Città, Roma",
+      defaultHourlyRate: 50,
+      reportFooterNotes: "Verifica elettrica già completata",
+      stripeSubscriptionStatus: "active",
+      maxUsers: 5,
+      featurePdfExport: true,
+      logoDataUrl: null,
+      isActive: true,
+      createdAt: "2026-10-30T00:00:00.000Z",
+      updatedAt: "2026-10-30T00:00:00.000Z",
+    };
+
+    try {
+      writeFileSync(pdfPath, await generateReportPdf(makeReport(), company));
+      const extractedText = execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
+      expect(extractedText).toContain("Elettricità Città S.r.l.");
+      expect(extractedText).toContain("Via della Città, Roma");
+      expect(extractedText).toContain("Verifica elettrica già completata");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
