@@ -62,6 +62,13 @@ export class InterventionService {
     if (effectiveFilters.scheduledStartTo && isNaN(new Date(effectiveFilters.scheduledStartTo).getTime())) {
       throw new BadRequestError("Formato data fine ricerca non valido.");
     }
+    if (effectiveFilters.scheduledStartFrom && effectiveFilters.scheduledStartTo) {
+      const startFromTime = new Date(effectiveFilters.scheduledStartFrom).getTime();
+      const startToTime = new Date(effectiveFilters.scheduledStartTo).getTime();
+      if (startToTime < startFromTime) {
+        throw new BadRequestError("La data di inizio ricerca deve essere antecedente o uguale alla data di fine.");
+      }
+    }
 
     const result = await this.db.getInterventionsByCompany(companyId, effectiveFilters);
 

@@ -47,6 +47,11 @@ companyRouter.put(
       throw new UnauthorizedError("Non autenticato.");
     }
 
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+      res.status(400).json({ detail: "I dati inviati non sono validi." });
+      return;
+    }
+
     const {
       name,
       vat_number,

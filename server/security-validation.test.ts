@@ -1145,4 +1145,40 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       });
     });
   });
+
+  describe("Null / Non-object JSON Body Payload Validation", () => {
+    it("should reject PUT /api/v1/users/me with null or non-object body as 400 Bad Request", async () => {
+      const res = await request(app)
+        .put("/api/v1/users/me")
+        .set("Cookie", adminCookies)
+        .set("x-csrf-token", csrfToken)
+        .set("Content-Type", "application/json")
+        .send(JSON.stringify(null));
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail || res.body.error).toBeDefined();
+    });
+
+    it("should reject PUT /api/v1/company/settings with null or non-object body as 400 Bad Request", async () => {
+      const res = await request(app)
+        .put("/api/v1/company/settings")
+        .set("Cookie", adminCookies)
+        .set("x-csrf-token", csrfToken)
+        .set("Content-Type", "application/json")
+        .send(JSON.stringify(null));
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail || res.body.error).toBeDefined();
+    });
+
+    it("should reject POST /api/v1/auth/login with null body as 400 Bad Request", async () => {
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("Content-Type", "application/json")
+        .send(JSON.stringify(null));
+
+      expect(res.status).toBe(400);
+      expect(res.body.detail || res.body.error).toBeDefined();
+    });
+  });
 });
