@@ -91,6 +91,7 @@ function mapCompanyRow(row: any): CompanyRecord {
     stripeSubscriptionStatus: row.stripeSubscriptionStatus || "",
     maxUsers: Number(row.maxUsers) || 0,
     featurePdfExport: Boolean(row.featurePdfExport),
+    logoDataUrl: typeof row.logoDataUrl === "string" && row.logoDataUrl ? row.logoDataUrl : null,
     isActive: row.isActive === undefined ? true : Boolean(row.isActive),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
@@ -1050,8 +1051,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     await this.pool.query(
       `UPDATE companies 
-       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "updatedAt" = $10
-       WHERE id = $11`,
+       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "logoDataUrl" = $10, "updatedAt" = $11
+       WHERE id = $12`,
       [
         updated.name,
         updated.vatNumber,
@@ -1062,6 +1063,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated.maxUsers,
         updated.featurePdfExport,
         updated.isActive ?? true,
+        updated.logoDataUrl ?? null,
         updated.updatedAt,
         id,
       ],
