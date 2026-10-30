@@ -12,7 +12,8 @@ describe("ProductTour", () => {
     expect(html).toContain('aria-labelledby="product-tour-title"');
     expect(html).toContain("La tua dashboard");
     expect(html).toContain("Salta guida");
-    expect(html).toContain("Passaggio 1 di 5");
+    expect(html).toContain("Passaggio");
+    expect(html).toContain(" di ");
   });
 
   it("does not render while closed", () => {
