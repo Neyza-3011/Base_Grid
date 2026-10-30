@@ -2,7 +2,8 @@ import { Router } from "express";
 import { authenticate, requireSuperAdmin } from "../middleware/auth";
 import { db } from "../db";
 import { asyncHandler } from "../async-handler";
-import { NotFoundError } from "../errors";
+import { NotFoundError, ValidationError } from "../errors";
+import { companyService } from "../services";
 
 export const adminRouter = Router();
 
@@ -35,6 +36,71 @@ adminRouter.get("/tenants", asyncHandler(async (_req: any, res: any): Promise<vo
     setup_complete: Boolean(company.name?.trim() && company.address?.trim()),
   }));
   res.status(200).json(tenants);
+}));
+
+
+/**
+ * PUT /api/v1/admin/tenants/:companyId/profile
+ * Update only editable company profile fields. Platform/billing controls are intentionally excluded.
+ */
+adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const companyId = typeof req.params.companyId === "string" ? req.params.companyId.trim() : "";
+  if (!companyId) {
+    res.status(400).json({ detail: "ID azienda non valido." });
+    return;
+  }
+
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    throw new ValidationError("I dati inviati non sono validi.");
+  }
+
+  const allowedFields = new Set([
+    "name",
+    "vat_number",
+    "address",
+    "default_hourly_rate",
+    "report_footer_notes",
+  ]);
+  const keys = Object.keys(req.body);
+  if (keys.length === 0 || keys.some((key) => !allowedFields.has(key))) {
+    throw new ValidationError("Sono presenti campi non modificabili o nessun campo da aggiornare.");
+  }
+
+  const input: Record<string, unknown> = {};
+  const stringFields: Array<[string, string]> = [
+    ["name", "name"],
+    ["vat_number", "vatNumber"],
+    ["address", "address"],
+    ["report_footer_notes", "reportFooterNotes"],
+  ];
+  for (const [externalKey, internalKey] of stringFields) {
+    if (req.body[externalKey] !== undefined) {
+      if (typeof req.body[externalKey] !== "string") {
+        throw new ValidationError(`Il campo ${externalKey} deve essere una stringa.`);
+      }
+      input[internalKey] = req.body[externalKey];
+    }
+  }
+  if (req.body.default_hourly_rate !== undefined) {
+    if (typeof req.body.default_hourly_rate !== "number" || !Number.isFinite(req.body.default_hourly_rate)) {
+      throw new ValidationError("Il campo default_hourly_rate deve essere un numero valido.");
+    }
+    input.defaultHourlyRate = req.body.default_hourly_rate;
+  }
+
+  const updated = await companyService.updateCompanySettings(companyId, input as any, "superadmin");
+  res.status(200).json({
+    company: {
+      id: updated.id,
+      name: updated.name,
+      vat_number: updated.vatNumber,
+      address: updated.address,
+      default_hourly_rate: updated.defaultHourlyRate,
+      report_footer_notes: updated.reportFooterNotes,
+      created_at: updated.createdAt,
+      updated_at: updated.updatedAt,
+    },
+  });
 }));
 
 /**
