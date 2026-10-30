@@ -30,6 +30,7 @@ companyRouter.get(
       stripe_subscription_status: company.stripeSubscriptionStatus,
       max_users: company.maxUsers,
       feature_pdf_export: company.featurePdfExport,
+      logo_data_url: company.logoDataUrl || null,
     });
   })
 );
@@ -58,6 +59,7 @@ companyRouter.put(
       address,
       default_hourly_rate,
       report_footer_notes,
+      logo_data_url,
       stripe_subscription_status,
     } = req.body;
 
@@ -67,6 +69,7 @@ companyRouter.put(
     if (address !== undefined) input.address = address;
     if (default_hourly_rate !== undefined) input.defaultHourlyRate = default_hourly_rate;
     if (report_footer_notes !== undefined) input.reportFooterNotes = report_footer_notes;
+    if (logo_data_url !== undefined) input.logoDataUrl = logo_data_url;
     if (stripe_subscription_status !== undefined && req.user.role === "superadmin") {
       input.stripeSubscriptionStatus = stripe_subscription_status;
     }
@@ -84,6 +87,7 @@ companyRouter.put(
       address: updated.address,
       default_hourly_rate: updated.defaultHourlyRate,
       report_footer_notes: updated.reportFooterNotes,
+      logo_data_url: updated.logoDataUrl || null,
       stripe_subscription_status: updated.stripeSubscriptionStatus,
     });
   })
