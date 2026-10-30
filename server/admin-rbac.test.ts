@@ -333,6 +333,99 @@ describe("Platform admin endpoint authorization", () => {
     });
   });
 
+
+  it("suspends and reactivates a tenant with atomic audit and session-version invalidation", async () => {
+    const technician = await db.findUserByEmail("tech@rossi.it");
+    expect(technician).toBeTruthy();
+    const originalAuthVersion = technician!.authVersion;
+
+    const suspended = await postWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/suspend",
+      "jack.cardinali15@gmail.com",
+    );
+    expect(suspended.status).toBe(200);
+    expect(suspended.body).toMatchObject({
+      company: { id: "comp-rossi-001", is_active: false },
+      changed: true,
+    });
+    expect((await db.findCompanyById("comp-rossi-001"))?.isActive).toBe(false);
+    expect((await db.findUserById(technician!.id))?.authVersion).toBe(originalAuthVersion + 1);
+
+    const tenantRequest = await getWithUser("/api/v1/company/settings", "admin@rossi.it");
+    expect(tenantRequest.status).toBe(403);
+    expect(tenantRequest.body.code).toBe("COMPANY_SUSPENDED");
+
+    const eventsAfterSuspend = await db.getAdminAuditEvents(10);
+    expect(eventsAfterSuspend).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "tenant.suspended",
+          targetType: "company",
+          targetId: "comp-rossi-001",
+          metadata: expect.objectContaining({ isActive: false }),
+        }),
+      ]),
+    );
+
+    const reactivated = await postWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/reactivate",
+      "jack.cardinali15@gmail.com",
+    );
+    expect(reactivated.status).toBe(200);
+    expect(reactivated.body.company.is_active).toBe(true);
+    expect((await db.findCompanyById("comp-rossi-001"))?.isActive).toBe(true);
+    expect((await db.findUserById(technician!.id))?.authVersion).toBe(originalAuthVersion + 2);
+    expect(await db.getAdminAuditEvents(10)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "tenant.reactivated",
+          targetType: "company",
+          targetId: "comp-rossi-001",
+          metadata: expect.objectContaining({ isActive: true }),
+        }),
+      ]),
+    );
+  });
+
+  it("does not allow suspending the platform company or creating audit side effects for it", async () => {
+    const response = await postWithUser(
+      "/api/v1/admin/tenants/comp-master-001/suspend",
+      "jack.cardinali15@gmail.com",
+    );
+    expect(response.status).toBe(403);
+    expect((await db.findCompanyById("comp-master-001"))?.isActive).not.toBe(false);
+    expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
+  });
+
+
+  it("exposes a bounded safe audit feed only to the CEO", async () => {
+    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    expect(ceo).toBeTruthy();
+    await db.createAdminAuditEvent({
+      actorUserId: ceo!.id,
+      action: "tenant.suspended",
+      targetType: "company",
+      targetId: "comp-rossi-001",
+      metadata: { isActive: false },
+    });
+    const response = await getWithUser("/api/v1/admin/audit-events?limit=1", "jack.cardinali15@gmail.com");
+    expect(response.status).toBe(200);
+    expect(response.body.events).toHaveLength(1);
+    expect(response.body.events[0]).toMatchObject({
+      actor_user_id: ceo!.id,
+      action: "tenant.suspended",
+      target_type: "company",
+      target_id: "comp-rossi-001",
+      metadata: { isActive: false },
+    });
+    expect(JSON.stringify(response.body)).not.toContain("passwordHash");
+
+    const tenantAdmin = await getWithUser("/api/v1/admin/audit-events", "admin@rossi.it");
+    expect(tenantAdmin.status).toBe(403);
+    const invalidLimit = await getWithUser("/api/v1/admin/audit-events?limit=201", "jack.cardinali15@gmail.com");
+    expect(invalidLimit.status).toBe(400);
+  });
+
   it("returns 404 for a nonexistent tenant ID", async () => {
     const response = await getWithUser(
       "/api/v1/admin/tenants/nonexistent-company",

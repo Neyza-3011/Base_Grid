@@ -24,6 +24,31 @@ adminRouter.get("/stats", asyncHandler(async (_req: any, res: any): Promise<void
   res.status(200).json(stats);
 }));
 
+
+/**
+ * GET /api/v1/admin/audit-events
+ * Returns a bounded list of persisted platform administration events.
+ */
+adminRouter.get("/audit-events", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const rawLimit = req.query?.limit;
+  const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
+  }
+  const events = await db.getAdminAuditEvents(limit);
+  res.status(200).json({
+    events: events.map((event) => ({
+      id: event.id,
+      actor_user_id: event.actorUserId,
+      action: event.action,
+      target_type: event.targetType,
+      target_id: event.targetId,
+      metadata: event.metadata,
+      created_at: event.createdAt,
+    })),
+  });
+}));
+
 /**
  * GET /api/v1/admin/tenants
  * Platform-wide company summaries. Only persisted values are returned;
@@ -37,6 +62,7 @@ adminRouter.get("/tenants", asyncHandler(async (_req: any, res: any): Promise<vo
     plan: company.stripeSubscriptionStatus || null,
     created_at: company.createdAt,
     max_users: company.maxUsers,
+    is_active: company.isActive ?? true,
     setup_complete: Boolean(company.name?.trim() && company.address?.trim()),
   }));
   res.status(200).json(tenants);
@@ -234,6 +260,55 @@ for (const isActive of [true, false]) {
   }));
 }
 
+
+/**
+ * POST /api/v1/admin/tenants/:companyId/suspend|reactivate
+ * Company suspension is reversible, invalidates all tenant auth versions and records an audit event atomically.
+ */
+for (const isActive of [false, true]) {
+  const action = isActive ? "reactivate" : "suspend";
+  adminRouter.post(`/tenants/:companyId/${action}`, asyncHandler(async (req: any, res: any): Promise<void> => {
+    const companyId = typeof req.params.companyId === "string" ? req.params.companyId.trim() : "";
+    if (!companyId) throw new ValidationError("ID azienda non valido.");
+
+    const company = await db.findCompanyById(companyId);
+    if (!company) throw new NotFoundError("Azienda non trovata.");
+    if (companyId === req.user.companyId || companyId === "comp-master-001") {
+      throw new ForbiddenError("Non puoi sospendere o riattivare l'azienda della piattaforma.");
+    }
+    const companyUsers = await db.getUsersByCompany(companyId);
+    if (companyUsers.some((member) => member.platformRole === "ceo")) {
+      throw new ForbiddenError("Un'azienda associata all'identità CEO non può essere sospesa da questa operazione.");
+    }
+
+    if ((company.isActive ?? true) === isActive) {
+      res.status(200).json({
+        company: { id: company.id, name: company.name, is_active: company.isActive ?? true },
+        changed: false,
+      });
+      return;
+    }
+
+    const updated = await db.setCompanyActiveWithAudit(companyId, isActive, {
+      actorUserId: req.user.id,
+      action: isActive ? "tenant.reactivated" : "tenant.suspended",
+      targetType: "company",
+      targetId: companyId,
+      metadata: { isActive },
+    });
+    if (!updated) throw new NotFoundError("Azienda non trovata.");
+    res.status(200).json({
+      company: {
+        id: updated.id,
+        name: updated.name,
+        is_active: updated.isActive ?? true,
+        updated_at: updated.updatedAt,
+      },
+      changed: true,
+    });
+  }));
+}
+
 /**
  * GET /api/v1/admin/tenants/:companyId
  * Detailed persisted company profile and safe team-member summaries.
@@ -275,6 +350,7 @@ adminRouter.get("/tenants/:companyId", asyncHandler(async (req: any, res: any): 
       subscription_status: company.stripeSubscriptionStatus || null,
       max_users: company.maxUsers,
       feature_pdf_export: company.featurePdfExport,
+      is_active: company.isActive ?? true,
       created_at: company.createdAt,
       updated_at: company.updatedAt,
       setup_complete: Boolean(company.name?.trim() && company.address?.trim()),
