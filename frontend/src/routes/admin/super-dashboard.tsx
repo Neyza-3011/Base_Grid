@@ -87,7 +87,9 @@ export function SuperDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [userSearch, setUserSearch] = useState("");
+  const [savingPlatformControls, setSavingPlatformControls] = useState(false);
+  const [platformDraft, setPlatformDraft] = useState({ max_users: "5", feature_pdf_export: true });
+  const [userSearch, setUserSearch = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [userDrafts, setUserDrafts] = useState<Record<string, { full_name: string; phone_number: string; role: string }>>({});
   const [userActionBusyId, setUserActionBusyId] = useState<string | null>(null);
@@ -120,6 +122,10 @@ export function SuperDashboard() {
         phone_number: member.phone_number ?? "",
         role: member.role,
       }])));
+      setPlatformDraft({
+        max_users: String(tenantDetails.company.max_users ?? 5),
+        feature_pdf_export: Boolean(tenantDetails.company.feature_pdf_export),
+      });
       setProfileDraft({
         name: tenantDetails.company.name ?? "",
         vat_number: tenantDetails.company.vat_number ?? "",
@@ -188,6 +194,48 @@ export function SuperDashboard() {
       toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+
+
+  const saveTenantPlatformControls = async () => {
+    if (!selectedTenant) return;
+    const maxUsers = Number(platformDraft.max_users);
+    if (!Number.isInteger(maxUsers) || maxUsers < 1 || maxUsers > 5000) {
+      toast.error("Il limite utenti deve essere un intero tra 1 e 5000.");
+      return;
+    }
+    setSavingPlatformControls(true);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/platform-settings`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: appendCsrfHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+          body: JSON.stringify({
+            max_users: maxUsers,
+            feature_pdf_export: platformDraft.feature_pdf_export,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.company) {
+        throw new Error(payload?.detail || "Impossibile salvare i controlli della piattaforma.");
+      }
+      setSelectedTenant((current) => current ? {
+        ...current,
+        company: { ...current.company, max_users: payload.company.max_users, feature_pdf_export: payload.company.feature_pdf_export },
+      } : current);
+      setTenants((current) => current.map((tenant) => tenant.id === payload.company.id
+        ? { ...tenant, max_users: payload.company.max_users }
+        : tenant));
+      toast.success("Controlli aziendali aggiornati.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.");
+    } finally {
+      setSavingPlatformControls(false);
     }
   };
 
@@ -698,6 +746,60 @@ export function SuperDashboard() {
                       className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {savingProfile ? "Salvataggio..." : "Salva modifiche"}
+                    </button>
+                  </div>
+                </form>
+
+
+                <form
+                  className="space-y-4 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveTenantPlatformControls();
+                  }}
+                >
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Controlli della piattaforma</h3>
+                    <p className="mt-1 text-xs text-white/50">
+                      Limiti e funzionalità disponibili per questa azienda. Non modifica l'abbonamento Stripe.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs text-white/70">
+                      <span>Numero massimo di utenti</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5000"
+                        step="1"
+                        required
+                        value={platformDraft.max_users}
+                        onChange={(event) => setPlatformDraft((draft) => ({ ...draft, max_users: event.target.value }))}
+                        disabled={savingPlatformControls}
+                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/80">
+                      <input
+                        type="checkbox"
+                        checked={platformDraft.feature_pdf_export}
+                        onChange={(event) => setPlatformDraft((draft) => ({ ...draft, feature_pdf_export: event.target.checked }))}
+                        disabled={savingPlatformControls}
+                        className="h-4 w-4 accent-emerald-400"
+                      />
+                      <span>
+                        <span className="block font-medium">Esportazione PDF</span>
+                        <span className="block text-xs text-white/45">Consenti a questa azienda di esportare i rapportini PDF.</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={savingPlatformControls}
+                      className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-semibold text-amber-100 disabled:opacity-50"
+                    >
+                      {savingPlatformControls ? "Salvataggio..." : "Salva controlli"}
                     </button>
                   </div>
                 </form>
