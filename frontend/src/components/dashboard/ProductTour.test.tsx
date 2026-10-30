@@ -16,7 +16,9 @@ describe("ProductTour", () => {
   });
 
   it("does not render while closed", () => {
-    const html = renderToString(React.createElement(ProductTour, { open: false, onClose: vi.fn() }));
+    const html = renderToString(
+      React.createElement(ProductTour, { open: false, onClose: vi.fn() }),
+    );
 
     expect(html).toBe("");
   });
