@@ -355,6 +355,44 @@ export class DatabaseStore implements IDatabaseAdapter {
     return updated;
   }
 
+
+  public async setCompanyActiveWithAudit(
+    companyId: string,
+    isActive: boolean,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null> {
+    if (
+      !companyId ||
+      audit.targetType !== "company" ||
+      audit.targetId !== companyId ||
+      !audit.actorUserId ||
+      !audit.action
+    ) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+    const current = this.companies.get(companyId);
+    if (!current) return null;
+    if ((current.isActive ?? true) === isActive) return current;
+
+    await this.createAdminAuditEvent({
+      ...audit,
+      metadata: { ...(audit.metadata ?? {}), isActive },
+    });
+    const now = new Date().toISOString();
+    for (const user of this.users.values()) {
+      if (user.companyId === companyId) {
+        this.users.set(user.id, {
+          ...user,
+          authVersion: (user.authVersion || 0) + 1,
+          updatedAt: now,
+        });
+      }
+    }
+    const updated: CompanyRecord = { ...current, isActive, updatedAt: now };
+    this.companies.set(companyId, updated);
+    return updated;
+  }
+
   public async getAllTenants(): Promise<CompanyRecord[]> {
     return Array.from(this.companies.values());
   }
