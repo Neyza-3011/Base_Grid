@@ -24,6 +24,31 @@ adminRouter.get("/stats", asyncHandler(async (_req: any, res: any): Promise<void
   res.status(200).json(stats);
 }));
 
+
+/**
+ * GET /api/v1/admin/audit-events
+ * Returns a bounded list of persisted platform administration events.
+ */
+adminRouter.get("/audit-events", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const rawLimit = req.query?.limit;
+  const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
+  }
+  const events = await db.getAdminAuditEvents(limit);
+  res.status(200).json({
+    events: events.map((event) => ({
+      id: event.id,
+      actor_user_id: event.actorUserId,
+      action: event.action,
+      target_type: event.targetType,
+      target_id: event.targetId,
+      metadata: event.metadata,
+      created_at: event.createdAt,
+    })),
+  });
+}));
+
 /**
  * GET /api/v1/admin/tenants
  * Platform-wide company summaries. Only persisted values are returned;
