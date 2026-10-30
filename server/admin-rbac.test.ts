@@ -47,6 +47,28 @@ async function getWithUser(path: string, email: string) {
   return { status: response.status, body };
 }
 
+async function putWithUser(path: string, email: string, payload: unknown) {
+  const user = await db.findUserByEmail(email);
+  if (!user) throw new Error(`Missing seeded test user: ${email}`);
+  const { accessToken } = generateTokens(user);
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "PUT",
+    headers: {
+      "content-type": "application/json",
+      cookie: `access_token=${accessToken}; csrf_token=test-csrf-token`,
+      "x-csrf-token": "test-csrf-token",
+    },
+    body: JSON.stringify(payload),
+  });
+  let body: any = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Preserve HTTP status when the response is not JSON.
+  }
+  return { status: response.status, body };
+}
+
 async function getWithoutUser(path: string) {
   const response = await fetch(`${baseUrl}${path}`);
   let body: any = null;
@@ -117,6 +139,72 @@ describe("Platform admin endpoint authorization", () => {
       "admin@rossi.it",
     );
     expect(response.status).toBe(403);
+  });
+
+
+  it("allows the CEO to update only validated tenant profile fields and persists the change", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    expect(before).toBeTruthy();
+
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      {
+        name: "Rossi Impianti Aggiornata",
+        address: "Via Roma 25, Milano",
+        default_hourly_rate: 72.5,
+        report_footer_notes: "Note aggiornate dal pannello CEO",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.company).toMatchObject({
+      id: "comp-rossi-001",
+      name: "Rossi Impianti Aggiornata",
+      address: "Via Roma 25, Milano",
+      default_hourly_rate: 72.5,
+      report_footer_notes: "Note aggiornate dal pannello CEO",
+    });
+    const after = await db.findCompanyById("comp-rossi-001");
+    expect(after?.name).toBe("Rossi Impianti Aggiornata");
+    expect(after?.address).toBe("Via Roma 25, Milano");
+    expect(after?.defaultHourlyRate).toBe(72.5);
+    expect(after?.reportFooterNotes).toBe("Note aggiornate dal pannello CEO");
+    expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
+    expect(after?.maxUsers).toBe(before?.maxUsers);
+    expect(after?.featurePdfExport).toBe(before?.featurePdfExport);
+  });
+
+  it("denies tenant admins from updating another tenant through the platform profile endpoint", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "admin@rossi.it",
+      { name: "Unauthorized update" },
+    );
+
+    expect(response.status).toBe(403);
+    expect((await db.findCompanyById("comp-rossi-001"))?.name).toBe(before?.name);
+  });
+
+  it("rejects unsupported admin profile fields and malformed values without changing persisted data", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const unsupported = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { stripe_subscription_status: "canceled" },
+    );
+    const malformed = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { name: { nested: "not a string" } },
+    );
+
+    expect(unsupported.status).toBe(400);
+    expect(malformed.status).toBe(400);
+    const after = await db.findCompanyById("comp-rossi-001");
+    expect(after?.name).toBe(before?.name);
+    expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
   });
 
   it("returns 404 for a nonexistent tenant ID", async () => {
