@@ -112,7 +112,7 @@ export function DashboardAnalyticsView({
   }));
 
   return (
-    <div className="space-y-6 text-white pb-8">
+    <div className="w-full min-w-0 space-y-6 pb-8 text-white">
       {/* Welcome Banner & Control Toolbar */}
       <div className="p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
