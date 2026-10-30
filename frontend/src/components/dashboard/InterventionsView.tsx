@@ -1104,7 +1104,7 @@ export function InterventionsView({ currentUser, onCreateReport }: Interventions
             aria-modal="true"
             aria-labelledby="detail-intervention-title"
             tabIndex={-1}
-            className="relative bg-[#111622] border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-white shadow-2xl animate-in fade-in duration-200 outline-none"
+            className="relative w-full max-w-2xl max-h-[min(90dvh,900px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#111622] p-4 space-y-6 text-white shadow-2xl animate-in fade-in duration-200 outline-none sm:p-6"
           >
             <div className="flex items-start justify-between border-b border-white/10 pb-4">
               <div className="space-y-1">
