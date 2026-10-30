@@ -401,7 +401,10 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
-    return Array.from(this.companies.values());
+    return Array.from(this.companies.values()).map((company) => ({
+      ...company,
+      logoDataUrl: null,
+    }));
   }
 
   public async getReportsByCompany(companyId: string, limit: number = 100): Promise<ReportRecord[]> {
