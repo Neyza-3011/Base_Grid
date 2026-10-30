@@ -165,6 +165,11 @@ function CompanyOnboarding() {
         throw new Error(result.detail || "Salvataggio non riuscito.");
       }
       toast.success("Configurazione aziendale salvata.");
+      try {
+        sessionStorage.setItem("basegrid:launch-tour", user.id);
+      } catch {
+        // The tour remains available from the dashboard header if storage is disabled.
+      }
       navigate({ to: "/dashboard" });
     } catch (error) {
       toast.error(
