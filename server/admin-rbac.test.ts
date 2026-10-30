@@ -47,7 +47,29 @@ async function getWithUser(path: string, email: string) {
   return { status: response.status, body };
 }
 
+async function getWithoutUser(path: string) {
+  const response = await fetch(`${baseUrl}${path}`);
+  let body: any = null;
+  try {
+    body = await response.json();
+  } catch {
+    // A non-JSON response is still represented by its HTTP status.
+  }
+  return { status: response.status, body };
+}
+
 describe("Platform admin endpoint authorization", () => {
+  it.each([
+    "/api/v1/admin/stats",
+    "/api/v1/admin/tenants",
+    "/api/v1/admin/tenants/comp-rossi-001",
+  ])("rejects unauthenticated access to %s", async (path) => {
+    const response = await getWithoutUser(path);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ detail: "Non autenticato o sessione scaduta." });
+  });
+
   it.each(["/api/v1/admin/stats", "/api/v1/admin/tenants"])(
     "denies a company admin access to %s",
     async (path) => {
