@@ -762,7 +762,7 @@ export function CustomersView() {
                   className="w-full h-10 px-3.5 rounded-xl bg-[#182030] border border-white/10 text-white text-sm focus:border-primary focus:outline-none placeholder:text-white/40 transition"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-white/70">Partita IVA</label>
                   <input
