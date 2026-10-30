@@ -553,7 +553,7 @@ function Dashboard() {
         </main>
       </div>
 
-      <ProductTour open={tourOpen} onClose={handleCloseTour} />
+      <ProductTour open={tourOpen} onClose={handleCloseTour} onNavigate={setActiveView} />
       {previewPdfId && (
         <PdfPreviewModal reportId={previewPdfId} onClose={() => setPreviewPdfId(null)} />
       )}
