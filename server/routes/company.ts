@@ -18,7 +18,8 @@ companyRouter.get(
       throw new UnauthorizedError("Non autenticato.");
     }
 
-    const company = await companyService.getCompanySettings(req.user.companyId);
+    const includeLogo = req.query.include_logo !== "false";
+    const company = await companyService.getCompanySettings(req.user.companyId, includeLogo);
 
     res.status(200).json({
       id: company.id,
