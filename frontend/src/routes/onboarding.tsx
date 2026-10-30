@@ -305,14 +305,15 @@ function CompanyOnboarding() {
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
+          </div>
           {step === 1 && (
             <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-4">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
-                  <p className="mt-1 break-words text-sm text-white/70">{name || form.name.trim()}</p>
-                  <p className="mt-1 break-words text-xs text-white/50">{address || form.address.trim()}</p>
+                  <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
                     Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o riaprire in seguito.
                   </p>
