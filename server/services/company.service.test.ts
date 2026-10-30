@@ -55,6 +55,13 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     await expect(companyService.getCompanySettings("comp-999")).rejects.toThrow(NotFoundError);
   });
 
+  it("uses the lightweight lookup when logo data is not requested", async () => {
+    const result = await companyService.getCompanySettings("comp-001", false);
+    expect(result.logoDataUrl).toBeNull();
+    expect(mockDb.findCompanyById).toHaveBeenCalledWith("comp-001");
+    expect(mockDb.findCompanyWithLogoById).not.toHaveBeenCalled();
+  });
+
   it("updates standard settings for admin role", async () => {
     const updated = await companyService.updateCompanySettings(
       "comp-001",
