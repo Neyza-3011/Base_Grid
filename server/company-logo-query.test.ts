@@ -21,7 +21,7 @@ function companyRow(logoDataUrl?: string) {
 
 describe("company logo query boundaries", () => {
   it("does not load the logo on the normal company lookup path", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [companyRow("data:image/png;base64,large")] });
+    const query = vi.fn().mockResolvedValue({ rows: [companyRow()] });
     const adapter = new PostgresAdapter({ query } as never);
 
     const company = await adapter.findCompanyById("company-logo-query");
