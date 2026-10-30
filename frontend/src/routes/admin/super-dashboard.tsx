@@ -71,6 +71,15 @@ type TenantDetails = {
   owner: { full_name: string; email: string; role: string } | null;
 };
 
+type AdminAuditEvent = {
+  id: string;
+  actor_user_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  created_at: string;
+};
+
 type GlobalStats = {
   total_tenants: number;
   total_users: number;
@@ -84,7 +93,10 @@ export function SuperDashboard() {
   const [tenants, setTenants] = useState<TenantCompany[]>([]);
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tenantSearch, setTenantSearch] = useState("");
+  const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [tenantSearch, setTenantSearch = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -438,6 +450,31 @@ export function SuperDashboard() {
     }
   };
 
+
+  const loadAuditEvents = async () => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const response = await fetch("/api/v1/admin/audit-events?limit=25", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.events)) {
+        throw new Error(payload?.detail || "Impossibile caricare il registro attività.");
+      }
+      setAuditEvents(payload.events);
+    } catch (error) {
+      setAuditError(
+        error instanceof Error
+          ? error.message
+          : "Errore durante il caricamento del registro attività.",
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   const loadAdminData = async () => {
     setLoading(true);
     try {
@@ -454,6 +491,7 @@ export function SuperDashboard() {
         const tenantsData = await tenantsRes.json();
         setTenants(tenantsData);
       }
+      void loadAuditEvents();
     } catch {
       // fallback
     } finally {
@@ -1145,6 +1183,71 @@ export function SuperDashboard() {
             )}
           </section>
         )}
+
+        <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Registro attività amministrative</h2>
+              <p className="mt-1 text-xs text-white/50">
+                Ultimi eventi registrati dal backend. La copertura cresce insieme alle funzioni amministrative.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAuditEvents()}
+              disabled={auditLoading}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50"
+            >
+              {auditLoading ? "Aggiornamento..." : "Aggiorna registro"}
+            </button>
+          </div>
+          {auditError && (
+            <div role="alert" className="rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-xs text-red-200">
+              {auditError}
+            </div>
+          )}
+          {auditLoading && auditEvents.length === 0 ? (
+            <p className="text-sm text-white/50">Caricamento eventi...</p>
+          ) : auditEvents.length === 0 ? (
+            <p className="rounded-xl border border-white/10 p-4 text-sm text-white/50">
+              Nessun evento registrato.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-white/5 text-white/55">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Azione</th>
+                    <th className="p-3">Oggetto</th>
+                    <th className="p-3">Attore</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {auditEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td className="whitespace-nowrap p-3 text-white/60">
+                        {new Date(event.created_at).toLocaleString("it-IT")}
+                      </td>
+                      <td className="p-3 font-medium text-white">
+                        {event.action === "tenant.suspended"
+                          ? "Azienda sospesa"
+                          : event.action === "tenant.reactivated"
+                            ? "Azienda riattivata"
+                            : event.action}
+                      </td>
+                      <td className="p-3 text-white/70">
+                        {event.target_type} · {event.target_id}
+                      </td>
+                      <td className="p-3 text-white/50">{event.actor_user_id}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
       </main>
     </div>
   );
