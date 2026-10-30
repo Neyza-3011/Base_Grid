@@ -26,6 +26,10 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
 
     mockDb = {
       findCompanyById: vi.fn().mockImplementation(async (id: string) => {
+        if (id === sampleCompany.id) return { ...sampleCompany, logoDataUrl: null };
+        return null;
+      }),
+      findCompanyWithLogoById: vi.fn().mockImplementation(async (id: string) => {
         if (id === sampleCompany.id) return { ...sampleCompany };
         return null;
       }),
