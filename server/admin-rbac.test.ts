@@ -207,6 +207,63 @@ describe("Platform admin endpoint authorization", () => {
     expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
   });
 
+
+  it("allows the CEO to update bounded tenant platform controls and persists them", async () => {
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/platform-settings",
+      "jack.cardinali15@gmail.com",
+      { max_users: 25, feature_pdf_export: false },
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.company).toMatchObject({
+      id: "comp-rossi-001",
+      max_users: 25,
+      feature_pdf_export: false,
+    });
+    expect(await db.findCompanyById("comp-rossi-001")).toMatchObject({
+      maxUsers: 25,
+      featurePdfExport: false,
+    });
+  });
+
+  it("rejects invalid platform controls and unsupported billing fields without mutation", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const invalidLimit = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/platform-settings",
+      "jack.cardinali15@gmail.com",
+      { max_users: 0 },
+    );
+    const invalidBoolean = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/platform-settings",
+      "jack.cardinali15@gmail.com",
+      { feature_pdf_export: "false" },
+    );
+    const billing = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/platform-settings",
+      "jack.cardinali15@gmail.com",
+      { stripe_subscription_status: "canceled" },
+    );
+    expect(invalidLimit.status).toBe(400);
+    expect(invalidBoolean.status).toBe(400);
+    expect(billing.status).toBe(400);
+    expect(await db.findCompanyById("comp-rossi-001")).toMatchObject({
+      maxUsers: before!.maxUsers,
+      featurePdfExport: before!.featurePdfExport,
+      stripeSubscriptionStatus: before!.stripeSubscriptionStatus,
+    });
+  });
+
+  it("denies tenant admins from changing global platform controls", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/platform-settings",
+      "admin@rossi.it",
+      { max_users: 99 },
+    );
+    expect(response.status).toBe(403);
+    expect((await db.findCompanyById("comp-rossi-001"))?.maxUsers).toBe(before?.maxUsers);
+  });
+
   it("returns 404 for a nonexistent tenant ID", async () => {
     const response = await getWithUser(
       "/api/v1/admin/tenants/nonexistent-company",
