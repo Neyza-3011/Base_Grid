@@ -936,7 +936,10 @@ export function SuperDashboard() {
                             .toLowerCase()
                             .includes(userSearch.trim().toLowerCase()),
                         )
-                        .filter((member) => userRoleFilter === "all" || member.role === userRoleFilter)
+                        .filter(
+                          (member) =>
+                            userRoleFilter === "all" || member.role === userRoleFilter,
+                        )
                         .map((member) => {
                           const draft = userDrafts[member.id] ?? {
                             full_name: member.full_name,
