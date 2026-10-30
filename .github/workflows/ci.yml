@@ -62,3 +62,94 @@ jobs:
 
       - name: Run build
         run: npm run build
+
+  backend-runtime-smoke:
+    name: Backend Runtime Smoke Test (PostgreSQL + Redis)
+    runs-on: ubuntu-latest
+    container:
+      image: node:22.12.0-bookworm-slim
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: basegrid_backend_smoke
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-postgres-password
+        options: >-
+          --health-cmd "pg_isready -U postgres -d basegrid_backend_smoke"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Disposable CI-only dependencies. Never point this job at production services.
+      BASEGRID_RUNTIME_MODE: ai-studio
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://postgres:ci-only-postgres-password@postgres:5432/basegrid_backend_smoke
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ci-only-runtime-smoke-secret-not-for-production
+      EMAIL_VERIFICATION_ENABLED: "false"
+      GOOGLE_AUTH_ENABLED: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (clean install)
+        run: npm ci
+
+      - name: Build application bundle
+        run: npm run build
+
+      - name: Start compiled backend and verify health/readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start > /tmp/basegrid-backend-smoke.log 2>&1 &
+          SERVER_PID=$!
+          cleanup() {
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          node <<'NODE'
+          const baseUrl = "http://127.0.0.1:3000";
+          const deadline = Date.now() + 90000;
+          let lastError = "server did not respond";
+          async function request(path) {
+            const response = await fetch(baseUrl + path, { signal: AbortSignal.timeout(3000) });
+            const body = await response.text();
+            return { status: response.status, body };
+          }
+          while (Date.now() < deadline) {
+            try {
+              const health = await request("/health");
+              if (health.status !== 200) {
+                throw new Error("/health returned HTTP " + health.status + ": " + health.body);
+              }
+              const ready = await request("/ready");
+              if (ready.status === 200) {
+                const parsed = JSON.parse(ready.body);
+                if (parsed.status !== "ready") {
+                  throw new Error("/ready returned HTTP 200 without status=ready");
+                }
+                console.log("Backend smoke test passed: /health=200 and /ready=200 (PostgreSQL + Redis).");
+                process.exit(0);
+              }
+              lastError = "/ready returned HTTP " + ready.status + ": " + ready.body;
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+          console.error("Backend runtime smoke test failed: " + lastError);
+          process.exit(1);
+          NODE
+          cat /tmp/basegrid-backend-smoke.log
