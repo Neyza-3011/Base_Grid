@@ -60,6 +60,8 @@ export interface CompanyRecord {
   stripeSubscriptionStatus: string;
   maxUsers: number;
   featurePdfExport: boolean;
+  /** False when platform administration has suspended the tenant. */
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
 
