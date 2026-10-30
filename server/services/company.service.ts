@@ -10,7 +10,7 @@ async function validateCompanyLogoDataUrl(value: string): Promise<string> {
   if (value.length > MAX_COMPANY_LOGO_DATA_URL_LENGTH) {
     throw new ValidationError("Il logo deve essere un PNG o JPEG di massimo 256 KB.");
   }
-  const match = value.match(/^data:image\\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/i);
+  const match = value.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/i);
   if (!match) {
     throw new ValidationError("Il logo deve essere un'immagine PNG o JPEG valida.");
   }
