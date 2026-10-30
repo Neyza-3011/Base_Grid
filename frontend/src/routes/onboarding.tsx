@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { Building2, Loader2, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Loader2, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { appendCsrfHeaders, fetchServerSession, type UserSession } from "@/lib/auth";
 
@@ -30,6 +30,7 @@ function CompanyOnboarding() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState(0);
   const [form, setForm] = useState<CompanySettings>({
     name: "",
     vat_number: "",
@@ -105,6 +106,18 @@ function CompanyOnboarding() {
 
     const name = form.name.trim();
     const address = form.address.trim();
+    if (step === 0) {
+      if (name.length < 2 || name.length > 100) {
+        toast.error("Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.");
+        return;
+      }
+      if (!address || address.length > 255) {
+        toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
+        return;
+      }
+      setStep(1);
+      return;
+    }
     if (name.length < 2 || name.length > 100) {
       toast.error("Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.");
       return;
@@ -197,7 +210,27 @@ function CompanyOnboarding() {
           onSubmit={submit}
           className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-8"
         >
-          <div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                  Passaggio {step + 1} di 2
+                </p>
+                <h2 className="mt-1 text-lg font-semibold">
+                  {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
+                </h2>
+              </div>
+              <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-emerald-300 transition-all duration-300"
+                style={{ width: step === 0 ? "50%" : "100%" }}
+              />
+            </div>
+          </div>
+          <div className={step === 0 ? "space-y-5" : "hidden"}>
+            <div>
             <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
               Nome azienda / ragione sociale *
             </label>
@@ -242,6 +275,8 @@ function CompanyOnboarding() {
               Non attiva integrazioni fiscali o contabili.
             </p>
           </div>
+          </div>
+          <div className={step === 1 ? "space-y-5" : "hidden"}>
           <div>
             <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
               Tariffa oraria predefinita (€)
@@ -270,14 +305,42 @@ function CompanyOnboarding() {
               className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
             />
           </div>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Salvataggio..." : "Salva e apri BaseGrid"}
-          </button>
+          {step === 1 && (
+            <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
+                  <p className="mt-1 break-words text-sm text-white/70">{name || form.name.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">{address || form.address.trim()}</p>
+                  <p className="mt-3 text-xs leading-5 text-white/50">
+                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o riaprire in seguito.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+            {step === 1 && (
+              <button
+                type="button"
+                onClick={() => setStep(0)}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 font-medium text-white/80 transition hover:bg-white/5 disabled:opacity-60"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Indietro
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto sm:w-auto"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : step === 0 ? <ArrowRight className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {saving ? "Salvataggio..." : step === 0 ? "Continua" : "Salva e apri BaseGrid"}
+            </button>
+          </div>
         </form>
       </section>
     </main>
