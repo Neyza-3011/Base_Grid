@@ -36,6 +36,7 @@ type TenantCompany = {
   plan?: string | null;
   max_users?: number;
   setup_complete?: boolean;
+  is_active?: boolean;
 };
 
 type TenantDetails = {
@@ -49,6 +50,7 @@ type TenantDetails = {
     subscription_status?: string | null;
     max_users?: number;
     feature_pdf_export?: boolean;
+    is_active?: boolean;
     created_at?: string;
     updated_at?: string;
     setup_complete: boolean;
@@ -87,6 +89,7 @@ export function SuperDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [changingCompanyStatus, setChangingCompanyStatus] = useState(false);
   const [savingPlatformControls, setSavingPlatformControls] = useState(false);
   const [platformDraft, setPlatformDraft] = useState({ max_users: "5", feature_pdf_export: true });
   const [userSearch, setUserSearch] = useState("");
@@ -203,6 +206,56 @@ export function SuperDashboard() {
       toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+
+  const changeTenantStatus = async (activate: boolean) => {
+    if (!selectedTenant) return;
+    const action = activate ? "riattivare" : "sospendere";
+    const message = activate
+      ? "Riattivare questa azienda? Gli utenti dovranno autenticarsi di nuovo."
+      : "Sospendere questa azienda? Tutti gli utenti perderanno l'accesso, ma i dati aziendali saranno conservati.";
+    if (!window.confirm(message)) return;
+
+    setChangingCompanyStatus(true);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/${activate ? "reactivate" : "suspend"}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: appendCsrfHeaders({ Accept: "application/json" }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.company) {
+        throw new Error(payload?.detail || `Impossibile ${action} l'azienda.`);
+      }
+
+      const isActive = Boolean(payload.company.is_active);
+      setSelectedTenant((current) =>
+        current
+          ? { ...current, company: { ...current.company, is_active: isActive } }
+          : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === selectedTenant.company.id
+            ? { ...tenant, is_active: isActive }
+            : tenant,
+        ),
+      );
+      toast.success(isActive ? "Azienda riattivata." : "Azienda sospesa.");
+      await loadAdminData();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Errore durante il tentativo di ${action} l'azienda.`,
+      );
+    } finally {
+      setChangingCompanyStatus(false);
     }
   };
 
@@ -673,10 +726,32 @@ export function SuperDashboard() {
             )}
             {selectedTenant && (
               <>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${selectedTenant.company.is_active === false ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"}`}
+                >
+                  {selectedTenant.company.is_active === false ? "Azienda sospesa" : "Azienda attiva"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void changeTenantStatus(selectedTenant.company.is_active === false)}
+                  disabled={changingCompanyStatus || selectedTenant.company.id === "comp-master-001"}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${selectedTenant.company.is_active === false ? "border-emerald-400/30 text-emerald-200 hover:bg-emerald-400/10" : "border-red-400/30 text-red-200 hover:bg-red-400/10"}`}
+                >
+                  {changingCompanyStatus
+                    ? "Aggiornamento..."
+                    : selectedTenant.company.is_active === false
+                      ? "Riattiva azienda"
+                      : "Sospendi azienda"}
+                </button>
+              </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {[
                     ["Azienda", selectedTenant.company.name || "Non impostata"],
                     ["ID", selectedTenant.company.id],
+                    ["Stato azienda", selectedTenant.company.is_active === false ? "Sospesa" : "Attiva"],
                     ["Partita IVA", selectedTenant.company.vat_number || "Non disponibile"],
                     ["Indirizzo", selectedTenant.company.address || "Non impostato"],
                     [
