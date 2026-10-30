@@ -82,7 +82,8 @@ export function SuperDashboard() {
   const [tenants, setTenants] = useState<TenantCompany[]>([]);
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tenantSearch, setTenantSearch] = useState("");
+  const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
+  const [tenantSearch, setTenantSearch = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -182,24 +183,36 @@ export function SuperDashboard() {
     }
   };
 
-  const loadAdminData = async () => {
+  const loadAdminData = async (): Promise<boolean> => {
     setLoading(true);
+    setAdminLoadError(null);
     try {
       const [statsRes, tenantsRes] = await Promise.all([
-        fetch("/api/v1/admin/stats", { credentials: "include" }),
-        fetch("/api/v1/admin/tenants", { credentials: "include" }),
+        fetch("/api/v1/admin/stats", { credentials: "include", headers: { Accept: "application/json" } }),
+        fetch("/api/v1/admin/tenants", { credentials: "include", headers: { Accept: "application/json" } }),
       ]);
-
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
+      const [statsData, tenantsData] = await Promise.all([
+        statsRes.json().catch(() => null),
+        tenantsRes.json().catch(() => null),
+      ]);
+      if (!statsRes.ok || !tenantsRes.ok) {
+        const detail = (!statsRes.ok ? statsData?.detail : null)
+          || (!tenantsRes.ok ? tenantsData?.detail : null)
+          || "Il server non ha restituito tutti i dati amministrativi.";
+        throw new Error(detail);
       }
-      if (tenantsRes.ok) {
-        const tenantsData = await tenantsRes.json();
-        setTenants(tenantsData);
+      if (!statsData || !Array.isArray(tenantsData)) {
+        throw new Error("La risposta del server non contiene dati amministrativi validi.");
       }
-    } catch {
-      // fallback
+      setStats(statsData);
+      setTenants(tenantsData);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Errore durante il caricamento dei dati amministrativi.";
+      setAdminLoadError(message);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -229,10 +242,14 @@ export function SuperDashboard() {
   );
 
   const handleRefreshData = async () => {
-    toast.loading("Sincronizzazione dati da PostgreSQL e Redis...");
-    await loadAdminData();
-    toast.dismiss();
-    toast.success("Dati di sistema aggiornati dal database.");
+    const toastId = toast.loading("Aggiornamento dei dati amministrativi...");
+    const succeeded = await loadAdminData();
+    toast.dismiss(toastId);
+    if (succeeded) {
+      toast.success("Dati amministrativi aggiornati.");
+    } else {
+      toast.error("Aggiornamento non riuscito. Controlla il messaggio nel pannello.");
+    }
   };
 
   if (!user) return null;
@@ -283,6 +300,27 @@ export function SuperDashboard() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8">
+
+        {adminLoadError && (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="font-semibold">Dati amministrativi non aggiornati</p>
+              <p className="mt-1 text-xs text-red-100/80">{adminLoadError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAdminData()}
+              disabled={loading}
+              className="shrink-0 rounded-lg border border-red-200/20 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+            >
+              {loading ? "Riprovo..." : "Riprova"}
+            </button>
+          </div>
+        )}
+
         {/* System Health Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
