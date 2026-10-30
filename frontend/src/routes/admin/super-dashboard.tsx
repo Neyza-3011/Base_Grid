@@ -127,7 +127,6 @@ export function SuperDashboard() {
     }
   };
 
-
   const saveTenantProfile = async () => {
     if (!selectedTenant) return;
     const hourlyRate = Number(profileDraft.default_hourly_rate);
@@ -165,10 +164,16 @@ export function SuperDashboard() {
         ...payload.company,
         setup_complete: Boolean(payload.company.name?.trim() && payload.company.address?.trim()),
       };
-      setSelectedTenant((current) => current ? { ...current, company: { ...current.company, ...company } } : current);
-      setTenants((current) => current.map((tenant) => tenant.id === company.id
-        ? { ...tenant, name: company.name, setup_complete: company.setup_complete }
-        : tenant));
+      setSelectedTenant((current) =>
+        current ? { ...current, company: { ...current.company, ...company } } : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === company.id
+            ? { ...tenant, name: company.name, setup_complete: company.setup_complete }
+            : tenant,
+        ),
+      );
       toast.success("Profilo aziendale salvato.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio.");
@@ -531,21 +536,26 @@ export function SuperDashboard() {
                   <div>
                     <h3 className="text-sm font-semibold text-white">Modifica profilo aziendale</h3>
                     <p className="mt-1 text-xs text-white/50">
-                      Sono modificabili solo i dati anagrafici e operativi del profilo. Abbonamento e permessi non vengono modificati qui.
+                      Sono modificabili solo i dati anagrafici e operativi del profilo.
+                      Abbonamento e permessi non vengono modificati qui.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {([
-                      ["name", "Nome azienda", "text"],
-                      ["vat_number", "Partita IVA", "text"],
-                      ["address", "Indirizzo", "text"],
-                    ] as const).map(([key, label, type]) => (
+                    {(
+                      [
+                        ["name", "Nome azienda", "text"],
+                        ["vat_number", "Partita IVA", "text"],
+                        ["address", "Indirizzo", "text"],
+                      ] as const
+                    ).map(([key, label, type]) => (
                       <label key={key} className="space-y-1 text-xs text-white/70">
                         <span>{label}</span>
                         <input
                           type={type}
                           value={profileDraft[key]}
-                          onChange={(event) => setProfileDraft((draft) => ({ ...draft, [key]: event.target.value }))}
+                          onChange={(event) =>
+                            setProfileDraft((draft) => ({ ...draft, [key]: event.target.value }))
+                          }
                           maxLength={key === "name" ? 100 : key === "address" ? 255 : 50}
                           required={key === "name"}
                           disabled={savingProfile}
@@ -562,7 +572,12 @@ export function SuperDashboard() {
                         step="0.01"
                         required
                         value={profileDraft.default_hourly_rate}
-                        onChange={(event) => setProfileDraft((draft) => ({ ...draft, default_hourly_rate: event.target.value }))}
+                        onChange={(event) =>
+                          setProfileDraft((draft) => ({
+                            ...draft,
+                            default_hourly_rate: event.target.value,
+                          }))
+                        }
                         disabled={savingProfile}
                         className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
                       />
@@ -572,7 +587,12 @@ export function SuperDashboard() {
                     <span>Note a piè di pagina dei rapportini</span>
                     <textarea
                       value={profileDraft.report_footer_notes}
-                      onChange={(event) => setProfileDraft((draft) => ({ ...draft, report_footer_notes: event.target.value }))}
+                      onChange={(event) =>
+                        setProfileDraft((draft) => ({
+                          ...draft,
+                          report_footer_notes: event.target.value,
+                        }))
+                      }
                       maxLength={1000}
                       rows={3}
                       disabled={savingProfile}
