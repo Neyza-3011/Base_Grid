@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { ReportRecord } from "../types";
+import { CompanyRecord, ReportRecord } from "../types";
 import { generateReportPdf } from "./report-pdf";
 
 function sampleReport(overrides: Partial<ReportRecord> = {}): ReportRecord {
@@ -87,7 +87,8 @@ describe("generateReportPdf", () => {
 
     expect(pdf.toString("ascii", 0, 8)).toBe("%PDF-1.7");
     expect(await parsed.getPageCount()).toBe(1);
-    expect(text).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
+    expect(text).toContain("RAPPORTINO DI INTERVENTO");
+    expect(text).toContain("BaseGrid");
     expect(text).toContain("Elettro Rossi (S.r.l.)");
     expect(text).toContain("Mario Rossi");
     expect(text).toContain("Sede/cantiere: Sede Principale");
@@ -96,12 +97,40 @@ describe("generateReportPdf", () => {
     expect(text).toContain("Firma cliente: non presente");
   });
 
-  it("uses explicit black text operators for monochrome PDF output", async () => {
+  it("uses the professional navy and green PDF brand palette", async () => {
     const pdf = await generateReportPdf(sampleReport());
     const streams = (await extractPageStreams(pdf)).join("\n");
 
-    expect(streams).toContain("0 0 0 rg");
-    expect(streams).not.toMatch(/(?:0\.\d+|[1-9]\d*)\s+(?:0\.\d+|[1-9]\d*)\s+(?:0\.\d+|[1-9]\d*)\s+rg/);
+    expect(streams).toContain("0.035 0.08 0.16 rg");
+    expect(streams).toContain("0.08 0.72 0.58 rg");
+    expect(streams).not.toContain("0 0 0 rg");
+  });
+
+  it("embeds the saved tenant logo and prints company details when configured", async () => {
+    const logoDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
+    const company: CompanyRecord = {
+      id: "company-1",
+      name: "Elettro Rossi Srl",
+      vatNumber: "IT12345678901",
+      address: "Via Roma 10, Roma",
+      defaultHourlyRate: 50,
+      reportFooterNotes: "Garanzia 24 mesi",
+      stripeSubscriptionStatus: "active",
+      maxUsers: 5,
+      featurePdfExport: true,
+      logoDataUrl,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const pdf = await generateReportPdf(sampleReport(), company);
+    const parsed = await PDFDocument.load(pdf);
+    const text = await extractText(pdf);
+
+    expect(await parsed.getPageCount()).toBe(1);
+    expect(pdf.toString("latin1")).toContain("/Subtype /Image");
+    expect(text).toContain("Elettro Rossi Srl");
+    expect(text).toContain("IT12345678901");
+    expect(text).toContain("Garanzia 24 mesi");
   });
 
   it("embeds a valid PNG signature as a PDF image", async () => {
