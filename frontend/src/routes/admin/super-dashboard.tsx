@@ -36,6 +36,7 @@ type TenantCompany = {
   plan?: string | null;
   max_users?: number;
   setup_complete?: boolean;
+  is_active?: boolean;
 };
 
 type TenantDetails = {
@@ -49,6 +50,7 @@ type TenantDetails = {
     subscription_status?: string | null;
     max_users?: number;
     feature_pdf_export?: boolean;
+    is_active?: boolean;
     created_at?: string;
     updated_at?: string;
     setup_complete: boolean;
@@ -69,6 +71,15 @@ type TenantDetails = {
   owner: { full_name: string; email: string; role: string } | null;
 };
 
+type AdminAuditEvent = {
+  id: string;
+  actor_user_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  created_at: string;
+};
+
 type GlobalStats = {
   total_tenants: number;
   total_users: number;
@@ -82,11 +93,15 @@ export function SuperDashboard() {
   const [tenants, setTenants] = useState<TenantCompany[]>([]);
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [tenantSearch, setTenantSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [changingCompanyStatus, setChangingCompanyStatus] = useState(false);
   const [savingPlatformControls, setSavingPlatformControls] = useState(false);
   const [platformDraft, setPlatformDraft] = useState({ max_users: "5", feature_pdf_export: true });
   const [userSearch, setUserSearch] = useState("");
@@ -203,6 +218,56 @@ export function SuperDashboard() {
       toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+
+  const changeTenantStatus = async (activate: boolean) => {
+    if (!selectedTenant) return;
+    const action = activate ? "riattivare" : "sospendere";
+    const message = activate
+      ? "Riattivare questa azienda? Gli utenti dovranno autenticarsi di nuovo."
+      : "Sospendere questa azienda? Tutti gli utenti perderanno l'accesso, ma i dati aziendali saranno conservati.";
+    if (!window.confirm(message)) return;
+
+    setChangingCompanyStatus(true);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/${activate ? "reactivate" : "suspend"}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: appendCsrfHeaders({ Accept: "application/json" }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.company) {
+        throw new Error(payload?.detail || `Impossibile ${action} l'azienda.`);
+      }
+
+      const isActive = Boolean(payload.company.is_active);
+      setSelectedTenant((current) =>
+        current
+          ? { ...current, company: { ...current.company, is_active: isActive } }
+          : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === selectedTenant.company.id
+            ? { ...tenant, is_active: isActive }
+            : tenant,
+        ),
+      );
+      toast.success(isActive ? "Azienda riattivata." : "Azienda sospesa.");
+      await loadAdminData();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Errore durante il tentativo di ${action} l'azienda.`,
+      );
+    } finally {
+      setChangingCompanyStatus(false);
     }
   };
 
@@ -379,6 +444,31 @@ export function SuperDashboard() {
     }
   };
 
+
+  const loadAuditEvents = async () => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const response = await fetch("/api/v1/admin/audit-events?limit=25", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.events)) {
+        throw new Error(payload?.detail || "Impossibile caricare il registro attività.");
+      }
+      setAuditEvents(payload.events);
+    } catch (error) {
+      setAuditError(
+        error instanceof Error
+          ? error.message
+          : "Errore durante il caricamento del registro attività.",
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   const loadAdminData = async () => {
     setLoading(true);
     try {
@@ -395,6 +485,7 @@ export function SuperDashboard() {
         const tenantsData = await tenantsRes.json();
         setTenants(tenantsData);
       }
+      void loadAuditEvents();
     } catch {
       // fallback
     } finally {
@@ -667,10 +758,32 @@ export function SuperDashboard() {
             )}
             {selectedTenant && (
               <>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${selectedTenant.company.is_active === false ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"}`}
+                >
+                  {selectedTenant.company.is_active === false ? "Azienda sospesa" : "Azienda attiva"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void changeTenantStatus(selectedTenant.company.is_active === false)}
+                  disabled={changingCompanyStatus || selectedTenant.company.id === "comp-master-001"}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${selectedTenant.company.is_active === false ? "border-emerald-400/30 text-emerald-200 hover:bg-emerald-400/10" : "border-red-400/30 text-red-200 hover:bg-red-400/10"}`}
+                >
+                  {changingCompanyStatus
+                    ? "Aggiornamento..."
+                    : selectedTenant.company.is_active === false
+                      ? "Riattiva azienda"
+                      : "Sospendi azienda"}
+                </button>
+              </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {[
                     ["Azienda", selectedTenant.company.name || "Non impostata"],
                     ["ID", selectedTenant.company.id],
+                    ["Stato azienda", selectedTenant.company.is_active === false ? "Sospesa" : "Attiva"],
                     ["Partita IVA", selectedTenant.company.vat_number || "Non disponibile"],
                     ["Indirizzo", selectedTenant.company.address || "Non impostato"],
                     [
@@ -1067,6 +1180,71 @@ export function SuperDashboard() {
             )}
           </section>
         )}
+
+        <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Registro attività amministrative</h2>
+              <p className="mt-1 text-xs text-white/50">
+                Ultimi eventi registrati dal backend. La copertura cresce insieme alle funzioni amministrative.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAuditEvents()}
+              disabled={auditLoading}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50"
+            >
+              {auditLoading ? "Aggiornamento..." : "Aggiorna registro"}
+            </button>
+          </div>
+          {auditError && (
+            <div role="alert" className="rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-xs text-red-200">
+              {auditError}
+            </div>
+          )}
+          {auditLoading && auditEvents.length === 0 ? (
+            <p className="text-sm text-white/50">Caricamento eventi...</p>
+          ) : auditEvents.length === 0 ? (
+            <p className="rounded-xl border border-white/10 p-4 text-sm text-white/50">
+              Nessun evento registrato.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-white/5 text-white/55">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Azione</th>
+                    <th className="p-3">Oggetto</th>
+                    <th className="p-3">Attore</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {auditEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td className="whitespace-nowrap p-3 text-white/60">
+                        {new Date(event.created_at).toLocaleString("it-IT")}
+                      </td>
+                      <td className="p-3 font-medium text-white">
+                        {event.action === "tenant.suspended"
+                          ? "Azienda sospesa"
+                          : event.action === "tenant.reactivated"
+                            ? "Azienda riattivata"
+                            : event.action}
+                      </td>
+                      <td className="p-3 text-white/70">
+                        {event.target_type} · {event.target_id}
+                      </td>
+                      <td className="p-3 text-white/50">{event.actor_user_id}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
       </main>
     </div>
   );
