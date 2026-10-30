@@ -12,7 +12,7 @@ describe("ProductTour", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-labelledby="product-tour-title"');
-    expect(html).toContain("La tua dashboard");
+    expect(html).toContain("Organizza la giornata");
     expect(html).toContain("Salta guida");
     expect(html).toContain("Apri dashboard");
     expect(html).toContain("Controlla gli interventi da gestire");
