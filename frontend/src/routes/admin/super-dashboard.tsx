@@ -13,7 +13,7 @@ import {
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
-import { fetchServerSession, UserSession } from "@/lib/auth";
+import { appendCsrfHeaders, fetchServerSession, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/super-dashboard")({
@@ -86,6 +86,14 @@ export function SuperDashboard() {
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    name: "",
+    vat_number: "",
+    address: "",
+    default_hourly_rate: "0",
+    report_footer_notes: "",
+  });
   const navigate = useNavigate();
 
   const inspectTenant = async (companyId: string) => {
@@ -101,13 +109,76 @@ export function SuperDashboard() {
       if (!response.ok) {
         throw new Error(payload?.detail || "Impossibile caricare i dettagli dell'azienda.");
       }
-      setSelectedTenant(payload as TenantDetails);
+      const tenantDetails = payload as TenantDetails;
+      setSelectedTenant(tenantDetails);
+      setProfileDraft({
+        name: tenantDetails.company.name ?? "",
+        vat_number: tenantDetails.company.vat_number ?? "",
+        address: tenantDetails.company.address ?? "",
+        default_hourly_rate: String(tenantDetails.company.default_hourly_rate ?? 0),
+        report_footer_notes: tenantDetails.company.report_footer_notes ?? "",
+      });
     } catch (error) {
       setDetailError(
         error instanceof Error ? error.message : "Errore nel caricamento dei dettagli.",
       );
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const saveTenantProfile = async () => {
+    if (!selectedTenant) return;
+    const hourlyRate = Number(profileDraft.default_hourly_rate);
+    if (!Number.isFinite(hourlyRate) || hourlyRate < 0 || hourlyRate > 10000) {
+      toast.error("La tariffa oraria deve essere compresa tra 0 e 10.000.");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/profile`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: appendCsrfHeaders({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          }),
+          body: JSON.stringify({
+            name: profileDraft.name,
+            vat_number: profileDraft.vat_number,
+            address: profileDraft.address,
+            default_hourly_rate: hourlyRate,
+            report_footer_notes: profileDraft.report_footer_notes,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.company) {
+        throw new Error(payload?.detail || "Impossibile salvare il profilo aziendale.");
+      }
+
+      const company = {
+        ...payload.company,
+        setup_complete: Boolean(payload.company.name?.trim() && payload.company.address?.trim()),
+      };
+      setSelectedTenant((current) =>
+        current ? { ...current, company: { ...current.company, ...company } } : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === company.id
+            ? { ...tenant, name: company.name, setup_complete: company.setup_complete }
+            : tenant,
+        ),
+      );
+      toast.success("Profilo aziendale salvato.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio.");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -454,6 +525,91 @@ export function SuperDashboard() {
                     </div>
                   ))}
                 </div>
+
+                <form
+                  className="space-y-4 rounded-xl border border-white/10 bg-[#090D16] p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveTenantProfile();
+                  }}
+                >
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Modifica profilo aziendale</h3>
+                    <p className="mt-1 text-xs text-white/50">
+                      Sono modificabili solo i dati anagrafici e operativi del profilo. Abbonamento
+                      e permessi non vengono modificati qui.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(
+                      [
+                        ["name", "Nome azienda", "text"],
+                        ["vat_number", "Partita IVA", "text"],
+                        ["address", "Indirizzo", "text"],
+                      ] as const
+                    ).map(([key, label, type]) => (
+                      <label key={key} className="space-y-1 text-xs text-white/70">
+                        <span>{label}</span>
+                        <input
+                          type={type}
+                          value={profileDraft[key]}
+                          onChange={(event) =>
+                            setProfileDraft((draft) => ({ ...draft, [key]: event.target.value }))
+                          }
+                          maxLength={key === "name" ? 100 : key === "address" ? 255 : 50}
+                          required={key === "name"}
+                          disabled={savingProfile}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                    ))}
+                    <label className="space-y-1 text-xs text-white/70">
+                      <span>Tariffa oraria predefinita (€)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10000"
+                        step="0.01"
+                        required
+                        value={profileDraft.default_hourly_rate}
+                        onChange={(event) =>
+                          setProfileDraft((draft) => ({
+                            ...draft,
+                            default_hourly_rate: event.target.value,
+                          }))
+                        }
+                        disabled={savingProfile}
+                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                  <label className="block space-y-1 text-xs text-white/70">
+                    <span>Note a piè di pagina dei rapportini</span>
+                    <textarea
+                      value={profileDraft.report_footer_notes}
+                      onChange={(event) =>
+                        setProfileDraft((draft) => ({
+                          ...draft,
+                          report_footer_notes: event.target.value,
+                        }))
+                      }
+                      maxLength={1000}
+                      rows={3}
+                      disabled={savingProfile}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={savingProfile}
+                      className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingProfile ? "Salvataggio..." : "Salva modifiche"}
+                    </button>
+                  </div>
+                </form>
+
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-white">Utenti associati</h3>
                   {selectedTenant.users.length === 0 ? (
