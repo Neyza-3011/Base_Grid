@@ -103,6 +103,7 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
         companyId: "comp-rossi-001",
         name: "Tenant B Updated",
         stripe_subscription_status: "canceled",
+        logo_data_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC",
       },
     });
 
@@ -112,6 +113,8 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(companyAAfter?.name).toBe(companyABefore?.name);
     expect(companyBAfter?.name).toBe("Tenant B Updated");
     expect(companyBAfter?.stripeSubscriptionStatus).toBe(companyBBefore?.stripeSubscriptionStatus);
+    expect(companyAAfter?.logoDataUrl).toBeNull();
+    expect(companyBAfter?.logoDataUrl).toContain("data:image/png;base64,");
   });
 
   it("rejects malformed runtime field types without mutating the company", async () => {
