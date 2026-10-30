@@ -61,7 +61,7 @@ function CompanyOnboarding() {
         return;
       }
       if (!cancelled) setUser(session);
-      if (session.role !== "owner") {
+      if (session.role !== "owner" && session.role !== "admin") {
         if (!cancelled) setLoading(false);
         return;
       }
@@ -110,7 +110,7 @@ function CompanyOnboarding() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (user?.role !== "owner") return;
+    if (user?.role !== "owner" && user?.role !== "admin") return;
 
     const name = form.name.trim();
     const address = form.address.trim();
@@ -188,14 +188,14 @@ function CompanyOnboarding() {
     );
   }
 
-  if (user && user.role !== "owner") {
+  if (user && user.role !== "owner" && user.role !== "admin") {
     return (
       <main className="min-h-screen grid place-items-center bg-slate-950 px-4 text-white">
         <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8">
           <ShieldCheck className="mb-4 h-8 w-8 text-amber-300" />
           <h1 className="text-2xl font-semibold">Configurazione aziendale in attesa</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
-            Il titolare dell'azienda deve completare la configurazione iniziale prima che il team
+            Il titolare o un amministratore autorizzato deve completare la configurazione iniziale prima che il team
             possa utilizzare BaseGrid. Avvisalo di accedere con il proprio account.
           </p>
         </section>
