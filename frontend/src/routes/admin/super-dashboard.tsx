@@ -188,17 +188,24 @@ export function SuperDashboard() {
     setAdminLoadError(null);
     try {
       const [statsRes, tenantsRes] = await Promise.all([
-        fetch("/api/v1/admin/stats", { credentials: "include", headers: { Accept: "application/json" } }),
-        fetch("/api/v1/admin/tenants", { credentials: "include", headers: { Accept: "application/json" } }),
+        fetch("/api/v1/admin/stats", {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }),
+        fetch("/api/v1/admin/tenants", {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }),
       ]);
       const [statsData, tenantsData] = await Promise.all([
         statsRes.json().catch(() => null),
         tenantsRes.json().catch(() => null),
       ]);
       if (!statsRes.ok || !tenantsRes.ok) {
-        const detail = (!statsRes.ok ? statsData?.detail : null)
-          || (!tenantsRes.ok ? tenantsData?.detail : null)
-          || "Il server non ha restituito tutti i dati amministrativi.";
+        const detail =
+          (!statsRes.ok ? statsData?.detail : null) ||
+          (!tenantsRes.ok ? tenantsData?.detail : null) ||
+          "Il server non ha restituito tutti i dati amministrativi.";
         throw new Error(detail);
       }
       if (!statsData || !Array.isArray(tenantsData)) {
@@ -208,9 +215,10 @@ export function SuperDashboard() {
       setTenants(tenantsData);
       return true;
     } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : "Errore durante il caricamento dei dati amministrativi.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Errore durante il caricamento dei dati amministrativi.";
       setAdminLoadError(message);
       return false;
     } finally {
