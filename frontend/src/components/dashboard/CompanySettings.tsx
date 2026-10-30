@@ -233,7 +233,9 @@ export function CompanySettings() {
                   Logo aziendale nei rapportini PDF
                 </h3>
                 <p className="mt-1 text-xs leading-5 text-white/55">
-                  {"Facoltativo. Il logo viene salvato nell’azienda e inserito nei PDF solo se presente. PNG o JPEG, massimo 256 KB e 2048 × 2048 pixel."}
+                  {
+                    "Facoltativo. Il logo viene salvato nell’azienda e inserito nei PDF solo se presente. PNG o JPEG, massimo 256 KB e 2048 × 2048 pixel."
+                  }
                 </p>
               </div>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
