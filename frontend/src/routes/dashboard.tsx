@@ -124,9 +124,13 @@ function Dashboard() {
     if (!currentUserId) return;
     const storageKey = `basegrid:product-tour:${currentUserId}`;
     try {
-      if (localStorage.getItem(storageKey) !== "completed") setTourOpen(true);
+      const launchRequested = sessionStorage.getItem("basegrid:launch-tour") === currentUserId;
+      if (launchRequested) sessionStorage.removeItem("basegrid:launch-tour");
+      if (launchRequested && localStorage.getItem(storageKey) !== "completed") {
+        setTourOpen(true);
+      }
     } catch {
-      setTourOpen(true);
+      // The tour remains available from the header if browser storage is disabled.
     }
   }, [currentUserId]);
 
