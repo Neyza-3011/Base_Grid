@@ -60,6 +60,51 @@ describe("Platform admin endpoint authorization", () => {
     },
   );
 
+  it("allows the CEO to read a tenant profile and safe user summaries without credential material", async () => {
+    const response = await getWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001",
+      "jack.cardinali15@gmail.com",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.company).toMatchObject({
+      id: "comp-rossi-001",
+      name: "Rossi Impianti Srl",
+      setup_complete: true,
+    });
+    expect(response.body.user_count).toBe(2);
+    expect(response.body.users).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          email: "admin@rossi.it",
+          role: "admin",
+          is_active: true,
+        }),
+      ]),
+    );
+    const serialized = JSON.stringify(response.body);
+    expect(serialized).not.toContain("passwordHash");
+    expect(serialized).not.toContain("salt");
+    expect(serialized).not.toContain("authVersion");
+    expect(serialized).not.toContain("tokenHash");
+  });
+
+  it("denies company admins access to tenant detail even with a known company ID", async () => {
+    const response = await getWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001",
+      "admin@rossi.it",
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("returns 404 for a nonexistent tenant ID", async () => {
+    const response = await getWithUser(
+      "/api/v1/admin/tenants/nonexistent-company",
+      "jack.cardinali15@gmail.com",
+    );
+    expect(response.status).toBe(404);
+  });
+
   it("allows the canonical platform CEO to read global stats and tenant summaries", async () => {
     const stats = await getWithUser("/api/v1/admin/stats", "jack.cardinali15@gmail.com");
     const tenants = await getWithUser("/api/v1/admin/tenants", "jack.cardinali15@gmail.com");
