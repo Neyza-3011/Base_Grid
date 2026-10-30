@@ -257,7 +257,11 @@ export function SuperDashboard() {
       );
       toast.success("Controlli aziendali aggiornati.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante il salvataggio dei controlli.",
+      );
     } finally {
       setSavingPlatformControls(false);
     }
@@ -321,7 +325,11 @@ export function SuperDashboard() {
       toast.success("Utente aggiornato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'aggiornamento dell'utente.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
@@ -367,7 +375,11 @@ export function SuperDashboard() {
       toast.success(activate ? "Accesso utente riattivato." : "Accesso utente disattivato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante la modifica dell'accesso.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
@@ -874,7 +886,8 @@ export function SuperDashboard() {
                     <div>
                       <h3 className="text-sm font-semibold text-white">Gestione utenti</h3>
                       <p className="mt-1 text-xs text-white/50">
-                        Modifica nome, telefono e ruolo; disattiva o riattiva l'accesso e revoca le sessioni.
+                        Modifica nome, telefono e ruolo; disattiva o riattiva l'accesso
+                        e revoca le sessioni.
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -951,12 +964,11 @@ export function SuperDashboard() {
                                       {member.full_name}
                                     </p>
                                     <span
-                                      className={`
-                                        rounded-full border px-2 py-0.5 text-[10px]
-                                        ${member.is_active
+                                      className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                        member.is_active
                                           ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                                          : "border-amber-400/30 bg-amber-400/10 text-amber-300"}
-                                      `}
+                                          : "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                                      }`}
                                     >
                                       {member.is_active ? "Accesso attivo" : "Accesso disattivato"}
                                     </span>
@@ -964,10 +976,7 @@ export function SuperDashboard() {
                                   <p className="mt-1 break-all text-xs text-white/50">
                                     {member.email}
                                   </p>
-                                  <p className="mt-1 text-[10px] text-white/35">
-                                    ID: {member.id} · Email verificata:{" "}
-                                    {member.email_confirmed ? "Sì" : "No"}
-                                  </p>
+                                  <p className="mt-1 text-[10px] text-white/35">ID: {member.id} · Email verificata: {member.email_confirmed ? "Sì" : "No"}</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <button
@@ -984,12 +993,11 @@ export function SuperDashboard() {
                                       void changeTenantUserStatus(member.id, !member.is_active)
                                     }
                                     disabled={busy || isPlatformIdentity}
-                                    className={`
-                                      rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-40
-                                      ${member.is_active
+                                    className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-40 ${
+                                      member.is_active
                                         ? "border-red-400/30 text-red-300 hover:bg-red-400/10"
-                                        : "border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10"}
-                                    `}
+                                        : "border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10"
+                                    }`}
                                   >
                                     {member.is_active ? "Disattiva accesso" : "Riattiva accesso"}
                                   </button>
@@ -1041,7 +1049,9 @@ export function SuperDashboard() {
                                   >
                                     <option value="owner">Owner</option>
                                     <option value="admin">Admin</option>
-                                    <option value="responsabile_tecnico">Responsabile tecnico</option>
+                                    <option value="responsabile_tecnico">
+                                      Responsabile tecnico
+                                    </option>
                                     <option value="dispatcher">Dispatcher</option>
                                     <option value="technician">Tecnico</option>
                                     <option value="amministrazione">Amministrazione</option>
