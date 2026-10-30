@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c` (2026-10-29, merge of PR #105).
+Baseline: `main` at `4655852a6ce94e826104445d1d10f8208355e7ba` (2026-10-30, merge of PR #110).
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -35,6 +35,16 @@ Baseline: `main` at `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c` (2026-10-29, merg
 - Current `main` CI run [40845568747](https://github.com/Neyza-3011/Base_Grid/actions/runs/40845568747) passed on `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581`. Scheduled Render Smoke Tests run [40825371370](https://github.com/Neyza-3011/Base_Grid/actions/runs/40825371370) passed on PR #99 merge commit. Smoke tests are not full production validation.
 - PR #105 (`feat/p0-account-setup-gate`) adds a first-run company setup gate based on persisted company name/address, an onboarding route, and integration tests. The branch CI run [40865145679](https://github.com/Neyza-3011/Base_Grid/actions/runs/40865145679) passed; PR #105 was subsequently merged as `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c`, and main CI run [40868378977](https://github.com/Neyza-3011/Base_Grid/actions/runs/40868378977) passed. This is a first implementation slice, not full onboarding; contact details, service categories, service area, locale/time zone, browser E2E and additional failure/retry coverage remain outstanding.
 - The CEO console is still read-only at this baseline. The new branch `feat/p0-ceo-tenant-details` adds a CEO-only tenant-detail API and searchable inspection UI; lifecycle writes, persistent admin audit, status transitions and destructive-operation safeguards are not included in this slice.
+
+
+- PR #106 adds CEO-only tenant detail inspection and safe user summaries; merged on 2026-10-30. This is read-only and does not implement tenant lifecycle mutations.
+- PR #107 validates intervention query date ranges and hardens null request-body handling; merged on 2026-10-30.
+- PR #108 restores `autoDeploy: false` in `render.yaml`; merged on 2026-10-30. This repository setting does not prove the live Render service has synchronized its Blueprint or that live automatic deploy is disabled.
+- PR #109 adds anonymous-request 401 regression tests for platform stats, tenant list and tenant detail; merged on 2026-10-30.
+- PR #110 adds a separate PostgreSQL 16 + Redis 7 backend runtime smoke job. CI run #312 passed lint, backend/frontend type-check, Vitest, build, compiled backend startup, `/health=200`, and `/ready=200` with PostgreSQL and Redis readiness. This validates the disposable CI runtime only, not the live Render deployment or production TLS configuration.
+- PR #111 proposes a CEO-only tenant profile update API with field allowlisting, runtime type validation and authorization/no-side-effect tests. Status: `IN_PROGRESS`; CI run #314 passed lint, backend/frontend type-check, Vitest, build, and the PostgreSQL + Redis backend runtime smoke test. Browser/E2E behavior remains unverified and the PR is still open.
+- PR #113 proposes the CEO console profile-edit form and depends on PR #111. Status: `IN_PROGRESS`; frontend type-check, CI and browser/E2E behavior are not yet verified.
+- PR #114 proposes strict runtime type validation for company settings. Status: `IN_PROGRESS`; CI is not yet verified. These open PRs are not part of the verified `main` baseline.
 
 ## Ordered checkpoints
 
