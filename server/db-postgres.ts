@@ -20,6 +20,8 @@ import {
   InterventionRecord,
   InterventionPriority,
   InterventionStatus,
+  AdminAuditEventRecord,
+  CreateAdminAuditEventInput,
 } from "./types";
 import { tokenStore } from "./token-store";
 import { hashPassword } from "./security";
@@ -319,6 +321,8 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   getReportByInterventionId(companyId: string, interventionId: string): Promise<ReportRecord | null>;
   getReportsByInterventionIdsAndCompany(interventionIds: string[], companyId: string): Promise<ReportRecord[]>;
   getGlobalStats(): Promise<any>;
+  createAdminAuditEvent(input: CreateAdminAuditEventInput): Promise<AdminAuditEventRecord>;
+  getAdminAuditEvents(limit?: number): Promise<AdminAuditEventRecord[]>;
   withTransaction<T>(callback: (client: TransactionClient) => Promise<T>): Promise<T>;
   createAuthToken(params: {
     userId: string;
@@ -1324,6 +1328,49 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     return { status: "deleted", regressedToInterventionId };
+  }
+
+
+  public async createAdminAuditEvent(input: CreateAdminAuditEventInput): Promise<AdminAuditEventRecord> {
+    const id = `audit-${randomUUID()}`;
+    const metadata = input.metadata ?? {};
+    const result = await this.pool.query(
+      `INSERT INTO admin_audit_events (id, "actorUserId", action, "targetType", "targetId", metadata)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       RETURNING id, "actorUserId", action, "targetType", "targetId", metadata, "createdAt"`,
+      [id, input.actorUserId, input.action, input.targetType, input.targetId, JSON.stringify(metadata)],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("ADMIN_AUDIT_INSERT_FAILED");
+    return {
+      id: row.id,
+      actorUserId: row.actorUserId,
+      action: row.action,
+      targetType: row.targetType,
+      targetId: row.targetId,
+      metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    };
+  }
+
+  public async getAdminAuditEvents(limit = 100): Promise<AdminAuditEventRecord[]> {
+    const boundedLimit = Number.isInteger(limit) ? Math.min(200, Math.max(1, limit)) : 100;
+    const result = await this.pool.query(
+      `SELECT id, "actorUserId", action, "targetType", "targetId", metadata, "createdAt"
+       FROM admin_audit_events
+       ORDER BY "createdAt" DESC, id DESC
+       LIMIT $1`,
+      [boundedLimit],
+    );
+    return (result.rows || []).map((row: any) => ({
+      id: row.id,
+      actorUserId: row.actorUserId,
+      action: row.action,
+      targetType: row.targetType,
+      targetId: row.targetId,
+      metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    }));
   }
 
   public async getGlobalStats(): Promise<any> {
