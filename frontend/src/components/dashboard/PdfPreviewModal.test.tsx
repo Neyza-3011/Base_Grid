@@ -26,8 +26,10 @@ describe("PdfPreviewModal Component", () => {
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("Anteprima Rapportino Ufficiale");
     expect(html).toContain("Generazione documento PDF in corso...");
-    expect(html).toContain("min-h-[280px]");
-    expect(html).toContain("sm:min-h-[500px]");
+    expect(html).toContain("h-[100dvh]");
+    expect(html).toContain("sm:h-[90dvh]");
+    expect(html).toContain("min-h-0");
+    expect(html).toContain("flex-1");
     expect(html).toContain('aria-label="Apri PDF in nuova scheda"');
     expect(html).toContain('aria-label="Stampa rapportino"');
     expect(html).toContain('aria-label="Scarica PDF rapportino"');
