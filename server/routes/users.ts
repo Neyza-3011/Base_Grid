@@ -34,6 +34,11 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     return;
   }
 
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    res.status(400).json({ detail: "I dati inviati non sono validi." });
+    return;
+  }
+
   const { full_name, email, password, current_password, phone_number } = req.body;
   const updates: any = {};
 

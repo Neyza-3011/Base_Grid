@@ -1521,6 +1521,15 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resTo.status).toBe(400);
       expect(resTo.data.detail || resTo.data.error).toMatch(/data/i);
     });
+
+    it("rejects inverted scheduledStartFrom and scheduledStartTo date range in GET list query filters (returns 400)", async () => {
+      const resInverted = await apiRequest("/api/v1/interventions?scheduledStartFrom=2026-10-05T00:00:00.000Z&scheduledStartTo=2026-10-01T00:00:00.000Z", {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+      expect(resInverted.status).toBe(400);
+      expect(resInverted.data.detail || resInverted.data.error).toMatch(/antecedente/i);
+    });
   });
 });
 

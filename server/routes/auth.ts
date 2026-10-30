@@ -49,7 +49,7 @@ const cookieSettings = getCookieSettings(isProduction);
  */
 authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { email, password, full_name, company_name, phone_number } = req.body;
+    const { email, password, full_name, company_name, phone_number } = req.body || {};
 
     if (!email || typeof email !== "string" || !password || typeof password !== "string" || !full_name || typeof full_name !== "string" || full_name.trim().length < 2 || full_name.trim().length > 100 || !company_name || typeof company_name !== "string" || company_name.trim().length < 2 || company_name.trim().length > 100) {
       res.status(400).json({
@@ -166,7 +166,7 @@ authRouter.post("/register", registerLimiter, asyncHandler(async (req: any, res:
  */
 authRouter.post("/verify-email", verifyEmailLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { token } = req.body;
+    const { token } = req.body || {};
 
     if (!token || typeof token !== "string") {
       res.status(400).json({ detail: "Token di verifica mancante o non valido." });
@@ -206,7 +206,7 @@ authRouter.post("/verify-email", verifyEmailLimiter, asyncHandler(async (req: an
  */
 authRouter.post("/resend-verification", [resendVerificationLimiter, resendVerificationAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { email } = req.body;
+    const { email } = req.body || {};
     if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
       const normalized = normalizeEmail(email);
       const user = await db.findUserByEmail(normalized);
@@ -261,7 +261,7 @@ authRouter.post("/resend-verification", [resendVerificationLimiter, resendVerifi
  */
 authRouter.post("/forgot-password", [forgotPasswordLimiter, forgotPasswordAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { email } = req.body;
+    const { email } = req.body || {};
     if (!email || typeof email !== "string") {
       res.status(400).json({ detail: "L'indirizzo email è obbligatorio." });
       return;
@@ -326,8 +326,8 @@ authRouter.post("/forgot-password", [forgotPasswordLimiter, forgotPasswordAccoun
  */
 authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { token } = req.body;
-    const newPassword = req.body.new_password || req.body.newPassword;
+    const { token } = req.body || {};
+    const newPassword = req.body?.new_password || req.body?.newPassword;
 
     if (!token || typeof token !== "string" || !newPassword || typeof newPassword !== "string") {
       res.status(400).json({ detail: "Token e nuova password sono obbligatori." });
@@ -418,7 +418,7 @@ authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req
  */
 authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (!email || typeof email !== "string" || !password || typeof password !== "string") {
       res.status(400).json({ detail: "Email e password sono obbligatorie." });
