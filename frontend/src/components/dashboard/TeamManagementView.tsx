@@ -181,7 +181,7 @@ export function TeamManagementView({
   });
 
   return (
-    <div className="space-y-6 text-white pb-8">
+    <div className="w-full min-w-0 space-y-6 pb-8 text-white">
       {/* Header */}
       <div className="p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -203,14 +203,14 @@ export function TeamManagementView({
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 flex items-center justify-between gap-3">
+        <div className="flex flex-col items-stretch justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2.5">
             <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
-            <span className="text-sm">{error}</span>
+            <span className="min-w-0 break-words text-sm">{error}</span>
           </div>
           <button
             onClick={loadTeam}
-            className="h-8 px-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs font-semibold text-red-200 flex items-center gap-1.5 transition active:scale-95"
+            className="flex h-9 items-center justify-center gap-1.5 self-start rounded-lg bg-red-500/20 px-3 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95 sm:self-auto"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Riprova
           </button>
