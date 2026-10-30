@@ -65,6 +65,27 @@ export interface CompanyRecord {
 
 }
 
+
+export type AdminAuditTargetType = "company" | "user" | "platform";
+
+export interface AdminAuditEventRecord {
+  id: string;
+  actorUserId: string;
+  action: string;
+  targetType: AdminAuditTargetType;
+  targetId: string;
+  metadata: Record<string, string | number | boolean | null>;
+  createdAt: string;
+}
+
+export interface CreateAdminAuditEventInput {
+  actorUserId: string;
+  action: string;
+  targetType: AdminAuditTargetType;
+  targetId: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 export interface CustomerRecord {
   id: string;
   companyId: string;
