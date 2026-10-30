@@ -91,7 +91,9 @@ export function SuperDashboard() {
   const [platformDraft, setPlatformDraft] = useState({ max_users: "5", feature_pdf_export: true });
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
-  const [userDrafts, setUserDrafts] = useState<Record<string, { full_name: string; phone_number: string; role: string }>>({});
+  const [userDrafts, setUserDrafts] = useState<
+    Record<string, { full_name: string; phone_number: string; role: string }>
+  >({});
   const [userActionBusyId, setUserActionBusyId] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     name: "",
@@ -117,11 +119,18 @@ export function SuperDashboard() {
       }
       const tenantDetails = payload as TenantDetails;
       setSelectedTenant(tenantDetails);
-      setUserDrafts(Object.fromEntries(tenantDetails.users.map((member) => [member.id, {
-        full_name: member.full_name ?? "",
-        phone_number: member.phone_number ?? "",
-        role: member.role,
-      }])));
+      setUserDrafts(
+        Object.fromEntries(
+          tenantDetails.users.map((member) => [
+            member.id,
+            {
+              full_name: member.full_name ?? "",
+              phone_number: member.phone_number ?? "",
+              role: member.role,
+            },
+          ]),
+        ),
+      );
       setPlatformDraft({
         max_users: String(tenantDetails.company.max_users ?? 5),
         feature_pdf_export: Boolean(tenantDetails.company.feature_pdf_export),
@@ -206,6 +215,7 @@ export function SuperDashboard() {
       toast.error("Il limite utenti deve essere un intero tra 1 e 5000.");
       return;
     }
+
     setSavingPlatformControls(true);
     try {
       const response = await fetch(
@@ -213,7 +223,10 @@ export function SuperDashboard() {
         {
           method: "PUT",
           credentials: "include",
-          headers: appendCsrfHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+          headers: appendCsrfHeaders({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          }),
           body: JSON.stringify({
             max_users: maxUsers,
             feature_pdf_export: platformDraft.feature_pdf_export,
@@ -222,28 +235,47 @@ export function SuperDashboard() {
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.company) {
-        throw new Error(payload?.detail || "Impossibile salvare i controlli della piattaforma.");
+        throw new Error(
+          payload?.detail || "Impossibile salvare i controlli della piattaforma.",
+        );
       }
-      setSelectedTenant((current) => current ? {
-        ...current,
-        company: { ...current.company, max_users: payload.company.max_users, feature_pdf_export: payload.company.feature_pdf_export },
-      } : current);
-      setTenants((current) => current.map((tenant) => tenant.id === payload.company.id
-        ? { ...tenant, max_users: payload.company.max_users }
-        : tenant));
+
+      setSelectedTenant((current) =>
+        current
+          ? {
+              ...current,
+              company: {
+                ...current.company,
+                max_users: payload.company.max_users,
+                feature_pdf_export: payload.company.feature_pdf_export,
+              },
+            }
+          : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === payload.company.id
+            ? { ...tenant, max_users: payload.company.max_users }
+            : tenant,
+        ),
+      );
       toast.success("Controlli aziendali aggiornati.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante il salvataggio dei controlli.",
+      );
     } finally {
       setSavingPlatformControls(false);
     }
   };
 
-
   const saveTenantUser = async (userId: string) => {
     if (!selectedTenant) return;
     const draft = userDrafts[userId];
     if (!draft) return;
+
     setUserActionBusyId(userId);
     try {
       const response = await fetch(
@@ -251,7 +283,10 @@ export function SuperDashboard() {
         {
           method: "PUT",
           credentials: "include",
-          headers: appendCsrfHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+          headers: appendCsrfHeaders({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          }),
           body: JSON.stringify({
             full_name: draft.full_name,
             phone_number: draft.phone_number,
@@ -263,23 +298,42 @@ export function SuperDashboard() {
       if (!response.ok || !payload?.user) {
         throw new Error(payload?.detail || "Impossibile aggiornare l'utente.");
       }
+
       const member = payload.user;
-      setSelectedTenant((current) => current ? {
+      setSelectedTenant((current) =>
+        current
+          ? {
+              ...current,
+              users: current.users.map((item) =>
+                item.id === userId ? { ...item, ...member } : item,
+              ),
+              owner:
+                current.owner?.email === member.email
+                  ? {
+                      full_name: member.full_name,
+                      email: member.email,
+                      role: member.role,
+                    }
+                  : current.owner,
+            }
+          : current,
+      );
+      setUserDrafts((current) => ({
         ...current,
-        users: current.users.map((item) => item.id === userId ? { ...item, ...member } : item),
-        owner: current.owner?.email === member.email
-          ? { full_name: member.full_name, email: member.email, role: member.role }
-          : current.owner,
-      } : current);
-      setUserDrafts((current) => ({ ...current, [userId]: {
-        full_name: member.full_name,
-        phone_number: member.phone_number ?? "",
-        role: member.role,
-      } }));
+        [userId]: {
+          full_name: member.full_name,
+          phone_number: member.phone_number ?? "",
+          role: member.role,
+        },
+      }));
       toast.success("Utente aggiornato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'aggiornamento dell'utente.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
@@ -289,10 +343,11 @@ export function SuperDashboard() {
     if (!selectedTenant) return;
     const member = selectedTenant.users.find((item) => item.id === userId);
     if (!member) return;
+
     const actionLabel = activate ? "riattivare" : "disattivare";
-    if (!window.confirm(`Confermi di ${actionLabel} l'accesso di ${member.full_name} (${member.email})? ${activate ? "" : "Le sessioni di accesso verranno revocate."}`)) {
-      return;
-    }
+    const confirmationMessage = `Confermi di ${actionLabel} l'accesso di ${member.full_name} (${member.email})? ${activate ? "" : "Le sessioni di accesso verranno revocate."}`;
+    if (!window.confirm(confirmationMessage)) return;
+
     setUserActionBusyId(userId);
     try {
       const response = await fetch(
@@ -307,20 +362,36 @@ export function SuperDashboard() {
       if (!response.ok || !payload?.user) {
         throw new Error(payload?.detail || `Impossibile ${actionLabel} l'utente.`);
       }
-      setSelectedTenant((current) => current ? {
-        ...current,
-        users: current.users.map((item) => item.id === userId ? { ...item, ...payload.user } : item),
-        active_user_count: current.users.filter((item) => item.id === userId ? payload.user.is_active : item.is_active).length,
-      } : current);
-      toast.success(activate ? "Accesso utente riattivato." : "Accesso utente disattivato.");
+
+      setSelectedTenant((current) =>
+        current
+          ? {
+              ...current,
+              users: current.users.map((item) =>
+                item.id === userId ? { ...item, ...payload.user } : item,
+              ),
+              active_user_count: current.users.filter((item) =>
+                item.id === userId
+                  ? payload.user.is_active
+                  : item.is_active,
+              ).length,
+            }
+          : current,
+      );
+      toast.success(
+        activate ? "Accesso utente riattivato." : "Accesso utente disattivato.",
+      );
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante la modifica dell'accesso.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
   };
-
 
   const loadAdminData = async () => {
     setLoading(true);
