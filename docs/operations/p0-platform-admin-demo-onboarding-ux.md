@@ -42,7 +42,7 @@ Baseline: `main` at `4655852a6ce94e826104445d1d10f8208355e7ba` (2026-10-30, merg
 - PR #108 restores `autoDeploy: false` in `render.yaml`; merged on 2026-10-30. This repository setting does not prove the live Render service has synchronized its Blueprint or that live automatic deploy is disabled.
 - PR #109 adds anonymous-request 401 regression tests for platform stats, tenant list and tenant detail; merged on 2026-10-30.
 - PR #110 adds a separate PostgreSQL 16 + Redis 7 backend runtime smoke job. CI run #312 passed lint, backend/frontend type-check, Vitest, build, compiled backend startup, `/health=200`, and `/ready=200` with PostgreSQL and Redis readiness. This validates the disposable CI runtime only, not the live Render deployment or production TLS configuration.
-- PR #111 proposes a CEO-only tenant profile update API with field allowlisting, runtime type validation and authorization/no-side-effect tests. Status: `IN_PROGRESS`; its full CI run is still pending at the time of this roadmap update.
+- PR #111 proposes a CEO-only tenant profile update API with field allowlisting, runtime type validation and authorization/no-side-effect tests. Status: `IN_PROGRESS`; CI run #314 passed lint, backend/frontend type-check, Vitest, build, and the PostgreSQL + Redis backend runtime smoke test. Browser/E2E behavior remains unverified and the PR is still open.
 - PR #113 proposes the CEO console profile-edit form and depends on PR #111. Status: `IN_PROGRESS`; frontend type-check, CI and browser/E2E behavior are not yet verified.
 - PR #114 proposes strict runtime type validation for company settings. Status: `IN_PROGRESS`; CI is not yet verified. These open PRs are not part of the verified `main` baseline.
 
