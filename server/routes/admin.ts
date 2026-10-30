@@ -234,6 +234,55 @@ for (const isActive of [true, false]) {
   }));
 }
 
+
+/**
+ * POST /api/v1/admin/tenants/:companyId/suspend|reactivate
+ * Company suspension is reversible, invalidates all tenant auth versions and records an audit event atomically.
+ */
+for (const isActive of [false, true]) {
+  const action = isActive ? "reactivate" : "suspend";
+  adminRouter.post(`/tenants/:companyId/${action}`, asyncHandler(async (req: any, res: any): Promise<void> => {
+    const companyId = typeof req.params.companyId === "string" ? req.params.companyId.trim() : "";
+    if (!companyId) throw new ValidationError("ID azienda non valido.");
+
+    const company = await db.findCompanyById(companyId);
+    if (!company) throw new NotFoundError("Azienda non trovata.");
+    if (companyId === req.user.companyId || companyId === "comp-master-001") {
+      throw new ForbiddenError("Non puoi sospendere o riattivare l'azienda della piattaforma.");
+    }
+    const companyUsers = await db.getUsersByCompany(companyId);
+    if (companyUsers.some((member) => member.platformRole === "ceo")) {
+      throw new ForbiddenError("Un'azienda associata all'identità CEO non può essere sospesa da questa operazione.");
+    }
+
+    if ((company.isActive ?? true) === isActive) {
+      res.status(200).json({
+        company: { id: company.id, name: company.name, is_active: company.isActive ?? true },
+        changed: false,
+      });
+      return;
+    }
+
+    const updated = await db.setCompanyActiveWithAudit(companyId, isActive, {
+      actorUserId: req.user.id,
+      action: isActive ? "tenant.reactivated" : "tenant.suspended",
+      targetType: "company",
+      targetId: companyId,
+      metadata: { isActive },
+    });
+    if (!updated) throw new NotFoundError("Azienda non trovata.");
+    res.status(200).json({
+      company: {
+        id: updated.id,
+        name: updated.name,
+        is_active: updated.isActive ?? true,
+        updated_at: updated.updatedAt,
+      },
+      changed: true,
+    });
+  }));
+}
+
 /**
  * GET /api/v1/admin/tenants/:companyId
  * Detailed persisted company profile and safe team-member summaries.
