@@ -37,6 +37,7 @@ adminRouter.get("/tenants", asyncHandler(async (_req: any, res: any): Promise<vo
     plan: company.stripeSubscriptionStatus || null,
     created_at: company.createdAt,
     max_users: company.maxUsers,
+    is_active: company.isActive ?? true,
     setup_complete: Boolean(company.name?.trim() && company.address?.trim()),
   }));
   res.status(200).json(tenants);
@@ -324,6 +325,7 @@ adminRouter.get("/tenants/:companyId", asyncHandler(async (req: any, res: any): 
       subscription_status: company.stripeSubscriptionStatus || null,
       max_users: company.maxUsers,
       feature_pdf_export: company.featurePdfExport,
+      is_active: company.isActive ?? true,
       created_at: company.createdAt,
       updated_at: company.updatedAt,
       setup_complete: Boolean(company.name?.trim() && company.address?.trim()),
