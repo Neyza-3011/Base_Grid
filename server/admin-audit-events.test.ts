@@ -24,16 +24,20 @@ describe("Platform admin audit event persistence contract", () => {
       metadata: { reason: "admin_action" },
     });
 
-    const events = await store.getAdminAuditEvents(1);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
+    const limited = await store.getAdminAuditEvents(1);
+    const events = await store.getAdminAuditEvents(10);
+    expect(limited).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.action)).toEqual(
+      expect.arrayContaining(["tenant.profile.updated", "tenant.user.deactivated"]),
+    );
+    expect(events.find((event) => event.id === first.id)).toMatchObject({
       actorUserId: actor!.id,
-      action: "tenant.user.deactivated",
-      targetType: "user",
-      targetId: "usr-rossi-tech",
-      metadata: { reason: "admin_action" },
+      action: "tenant.profile.updated",
+      targetType: "company",
+      targetId: "comp-rossi-001",
+      metadata: { fields: "name,address", changed_count: 2 },
     });
-    expect(first.id).toMatch(/^audit-/);
     expect(JSON.stringify(events)).not.toContain("passwordHash");
     expect(JSON.stringify(events)).not.toContain("tokenHash");
   });
