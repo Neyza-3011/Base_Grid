@@ -1099,7 +1099,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     return this.withTransaction(async (client) => {
       const currentResult = await client.query(
-        'SELECT * FROM companies WHERE id = $1 FOR UPDATE',
+        'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies WHERE id = $1 FOR UPDATE',
         [companyId],
       );
       if (!currentResult.rows[0]) return null;
@@ -1108,7 +1108,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       const now = new Date().toISOString();
       const updatedResult = await client.query(
-        'UPDATE companies SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING *',
+        'UPDATE companies SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt"',
         [isActive, now, companyId],
       );
       await client.query(
