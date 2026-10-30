@@ -311,6 +311,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
+  findCompanyWithLogoById(id: string): Promise<CompanyRecord | null>;
   updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null>;
   setCompanyActiveWithAudit(
     companyId: string,
@@ -1036,6 +1037,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   // --- Company Operations ---
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
+    const res = await this.pool.query(
+      'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies WHERE id = $1 LIMIT 1',
+      [id],
+    );
+    return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
+  }
+
+  public async findCompanyWithLogoById(id: string): Promise<CompanyRecord | null> {
     const res = await this.pool.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [id]);
     return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
   }
@@ -1044,7 +1053,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     id: string,
     updates: Partial<CompanyRecord>,
   ): Promise<CompanyRecord | null> {
-    const existing = await this.findCompanyById(id);
+    const existing = await this.findCompanyWithLogoById(id);
     if (!existing) return null;
 
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
@@ -1125,7 +1134,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
-    const res = await this.pool.query('SELECT * FROM companies ORDER BY "createdAt" DESC');
+    const res = await this.pool.query(
+      'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies ORDER BY "createdAt" DESC',
+    );
     return res.rows.map(mapCompanyRow);
   }
 
