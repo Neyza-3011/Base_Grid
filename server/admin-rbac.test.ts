@@ -397,6 +397,35 @@ describe("Platform admin endpoint authorization", () => {
     expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
   });
 
+
+  it("exposes a bounded safe audit feed only to the CEO", async () => {
+    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    expect(ceo).toBeTruthy();
+    await db.createAdminAuditEvent({
+      actorUserId: ceo!.id,
+      action: "tenant.suspended",
+      targetType: "company",
+      targetId: "comp-rossi-001",
+      metadata: { isActive: false },
+    });
+    const response = await getWithUser("/api/v1/admin/audit-events?limit=1", "jack.cardinali15@gmail.com");
+    expect(response.status).toBe(200);
+    expect(response.body.events).toHaveLength(1);
+    expect(response.body.events[0]).toMatchObject({
+      actor_user_id: ceo!.id,
+      action: "tenant.suspended",
+      target_type: "company",
+      target_id: "comp-rossi-001",
+      metadata: { isActive: false },
+    });
+    expect(JSON.stringify(response.body)).not.toContain("passwordHash");
+
+    const tenantAdmin = await getWithUser("/api/v1/admin/audit-events", "admin@rossi.it");
+    expect(tenantAdmin.status).toBe(403);
+    const invalidLimit = await getWithUser("/api/v1/admin/audit-events?limit=201", "jack.cardinali15@gmail.com");
+    expect(invalidLimit.status).toBe(400);
+  });
+
   it("returns 404 for a nonexistent tenant ID", async () => {
     const response = await getWithUser(
       "/api/v1/admin/tenants/nonexistent-company",
