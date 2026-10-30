@@ -2,10 +2,13 @@ import { Router } from "express";
 import { authenticate, requireSuperAdmin } from "../middleware/auth";
 import { db } from "../db";
 import { asyncHandler } from "../async-handler";
-import { NotFoundError, ValidationError } from "../errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { companyService } from "../services";
+import { TeamService } from "../services/team.service";
+import { tokenStore } from "../token-store";
 
 export const adminRouter = Router();
+const teamService = new TeamService(db);
 
 // Every platform administration endpoint requires trusted CEO platform authority.
 adminRouter.use(authenticate);
@@ -102,6 +105,95 @@ adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res
     },
   });
 }));
+
+
+/**
+ * PUT /api/v1/admin/tenants/:companyId/users/:userId
+ * CEO-only profile/tenant-role update. Platform authority is never editable here.
+ */
+adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: any, res: any): Promise<void> => {
+  const { companyId, userId } = req.params;
+  if (typeof companyId !== "string" || !companyId.trim() || typeof userId !== "string" || !userId.trim()) {
+    throw new ValidationError("Identificativi azienda/utente non validi.");
+  }
+  const target = await db.getUserByIdAndCompany(userId, companyId);
+  if (!target) throw new NotFoundError("Utente non trovato in questa azienda.");
+  if (target.platformRole === "ceo" || target.role === "superadmin") {
+    throw new ForbiddenError("L'account CEO/piattaforma non è modificabile da questa operazione.");
+  }
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    throw new ValidationError("I dati inviati non sono validi.");
+  }
+  const allowed = new Set(["full_name", "phone_number", "role"]);
+  const keys = Object.keys(req.body);
+  if (keys.length === 0 || keys.some((key) => !allowed.has(key))) {
+    throw new ValidationError("Campi non supportati o nessun campo da aggiornare.");
+  }
+  const input: Record<string, unknown> = {};
+  if (req.body.full_name !== undefined) {
+    if (typeof req.body.full_name !== "string") throw new ValidationError("Il nome deve essere una stringa.");
+    input.fullName = req.body.full_name;
+  }
+  if (req.body.phone_number !== undefined) {
+    if (typeof req.body.phone_number !== "string") throw new ValidationError("Il telefono deve essere una stringa.");
+    input.phoneNumber = req.body.phone_number;
+  }
+  if (req.body.role !== undefined) {
+    if (typeof req.body.role !== "string") throw new ValidationError("Il ruolo deve essere una stringa.");
+    input.role = req.body.role;
+  }
+  if (input.role !== undefined && input.role !== target.role) {
+    if (!tokenStore.isAvailable()) {
+      res.status(503).json({ detail: "Servizio sessioni non disponibile: modifica del ruolo annullata." });
+      return;
+    }
+    try {
+      await tokenStore.revokeAllUserTokens(userId);
+    } catch {
+      res.status(503).json({ detail: "Impossibile revocare le sessioni: modifica del ruolo annullata." });
+      return;
+    }
+  }
+  const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any);
+  res.status(200).json({ user: member });
+}));
+
+/**
+ * POST /api/v1/admin/tenants/:companyId/users/:userId/activate|deactivate
+ * Deactivation revokes refresh sessions before changing persisted access state.
+ */
+for (const isActive of [true, false]) {
+  const action = isActive ? "activate" : "deactivate";
+  adminRouter.post(`/tenants/:companyId/users/:userId/${action}`, asyncHandler(async (req: any, res: any): Promise<void> => {
+    const { companyId, userId } = req.params;
+    if (typeof companyId !== "string" || !companyId.trim() || typeof userId !== "string" || !userId.trim()) {
+      throw new ValidationError("Identificativi azienda/utente non validi.");
+    }
+    const target = await db.getUserByIdAndCompany(userId, companyId);
+    if (!target) throw new NotFoundError("Utente non trovato in questa azienda.");
+    if (target.platformRole === "ceo" || target.role === "superadmin") {
+      throw new ForbiddenError("L'account CEO/piattaforma non può essere disattivato da questa operazione.");
+    }
+    if (!isActive && !target.isActive) {
+      res.status(200).json({ user: await teamService.changeMemberStatus(companyId, userId, req.user.id, false) });
+      return;
+    }
+    if (!isActive) {
+      if (!tokenStore.isAvailable()) {
+        res.status(503).json({ detail: "Servizio sessioni non disponibile: disattivazione annullata." });
+        return;
+      }
+      try {
+        await tokenStore.revokeAllUserTokens(userId);
+      } catch {
+        res.status(503).json({ detail: "Impossibile revocare le sessioni: disattivazione annullata." });
+        return;
+      }
+    }
+    const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, isActive);
+    res.status(200).json({ user: member });
+  }));
+}
 
 /**
  * GET /api/v1/admin/tenants/:companyId
