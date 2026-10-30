@@ -67,7 +67,7 @@ function CompanyOnboarding() {
       }
 
       try {
-        const response = await fetch("/api/v1/company/settings", {
+        const response = await fetch("/api/v1/company/settings?include_logo=false", {
           credentials: "include",
           headers: { Accept: "application/json" },
         });
