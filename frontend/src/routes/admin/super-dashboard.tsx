@@ -89,7 +89,7 @@ export function SuperDashboard() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPlatformControls, setSavingPlatformControls] = useState(false);
   const [platformDraft, setPlatformDraft] = useState({ max_users: "5", feature_pdf_export: true });
-  const [userSearch, setUserSearch = useState("");
+  const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [userDrafts, setUserDrafts] = useState<Record<string, { full_name: string; phone_number: string; role: string }>>({});
   const [userActionBusyId, setUserActionBusyId] = useState<string | null>(null);
