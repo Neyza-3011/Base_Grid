@@ -257,11 +257,7 @@ export function SuperDashboard() {
       );
       toast.success("Controlli aziendali aggiornati.");
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Errore durante il salvataggio dei controlli.",
-      );
+      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.");
     } finally {
       setSavingPlatformControls(false);
     }
@@ -325,11 +321,7 @@ export function SuperDashboard() {
       toast.success("Utente aggiornato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Errore durante l'aggiornamento dell'utente.",
-      );
+      toast.error(error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.");
     } finally {
       setUserActionBusyId(null);
     }
@@ -375,11 +367,7 @@ export function SuperDashboard() {
       toast.success(activate ? "Accesso utente riattivato." : "Accesso utente disattivato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Errore durante la modifica dell'accesso.",
-      );
+      toast.error(error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.");
     } finally {
       setUserActionBusyId(null);
     }
@@ -886,8 +874,8 @@ export function SuperDashboard() {
                     <div>
                       <h3 className="text-sm font-semibold text-white">Gestione utenti</h3>
                       <p className="mt-1 text-xs text-white/50">
-                        Modifica nome, telefono e ruolo; disattiva o riattiva l'accesso
-                        e revoca le sessioni.
+                        Modifica nome, telefono e ruolo; disattiva o riattiva l'accesso e revoca le
+                        sessioni.
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -976,7 +964,10 @@ export function SuperDashboard() {
                                   <p className="mt-1 break-all text-xs text-white/50">
                                     {member.email}
                                   </p>
-                                  <p className="mt-1 text-[10px] text-white/35">ID: {member.id} · Email verificata: {member.email_confirmed ? "Sì" : "No"}</p>
+                                  <p className="mt-1 text-[10px] text-white/35">
+                                    ID: {member.id} · Email verificata:{" "}
+                                    {member.email_confirmed ? "Sì" : "No"}
+                                  </p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <button
@@ -1049,9 +1040,7 @@ export function SuperDashboard() {
                                   >
                                     <option value="owner">Owner</option>
                                     <option value="admin">Admin</option>
-                                    <option value="responsabile_tecnico">
-                                      Responsabile tecnico
-                                    </option>
+                                    <option value="responsabile_tecnico">Responsabile tecnico</option>
                                     <option value="dispatcher">Dispatcher</option>
                                     <option value="technician">Tecnico</option>
                                     <option value="amministrazione">Amministrazione</option>
