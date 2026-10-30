@@ -118,20 +118,22 @@ function Dashboard() {
     initSession();
   }, [navigate]);
 
+  const currentUserId = currentUser?.id;
+
   useEffect(() => {
-    if (!currentUser) return;
-    const storageKey = `basegrid:product-tour:${currentUser.id}`;
+    if (!currentUserId) return;
+    const storageKey = `basegrid:product-tour:${currentUserId}`;
     try {
       if (localStorage.getItem(storageKey) !== "completed") setTourOpen(true);
     } catch {
       setTourOpen(true);
     }
-  }, [currentUser?.id]);
+  }, [currentUserId]);
 
   const handleCloseTour = () => {
-    if (currentUser) {
+    if (currentUserId) {
       try {
-        localStorage.setItem(`basegrid:product-tour:${currentUser.id}`, "completed");
+        localStorage.setItem(`basegrid:product-tour:${currentUserId}`, "completed");
       } catch {
         // The guide can still be dismissed when browser storage is unavailable.
       }
