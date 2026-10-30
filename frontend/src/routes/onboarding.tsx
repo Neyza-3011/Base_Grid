@@ -1,6 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Loader2, Save, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { appendCsrfHeaders, fetchServerSession, type UserSession } from "@/lib/auth";
 
@@ -220,9 +228,7 @@ function CompanyOnboarding() {
                   {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
                 </h2>
               </div>
-              <span className="shrink-0 text-xs text-white/50">
-                {step === 0 ? "1/2" : "2/2"}
-              </span>
+              <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
@@ -320,8 +326,8 @@ function CompanyOnboarding() {
                   <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
                   <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
-                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare
-                    o riaprire in seguito.
+                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o
+                    riaprire in seguito.
                   </p>
                 </div>
               </div>
