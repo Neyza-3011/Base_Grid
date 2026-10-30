@@ -155,7 +155,18 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
     }
   }
   const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any);
-  res.status(200).json({ user: member });
+  res.status(200).json({
+    user: {
+      id: member.id,
+      email: member.email,
+      full_name: member.fullName,
+      role: member.role,
+      phone_number: member.phoneNumber,
+      is_active: member.isActive,
+      email_confirmed: member.emailConfirmed,
+      created_at: member.createdAt,
+    },
+  });
 }));
 
 /**
@@ -175,7 +186,12 @@ for (const isActive of [true, false]) {
       throw new ForbiddenError("L'account CEO/piattaforma non può essere disattivato da questa operazione.");
     }
     if (!isActive && !target.isActive) {
-      res.status(200).json({ user: await teamService.changeMemberStatus(companyId, userId, req.user.id, false) });
+      const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, false);
+      res.status(200).json({ user: {
+        id: member.id, email: member.email, full_name: member.fullName, role: member.role,
+        phone_number: member.phoneNumber, is_active: member.isActive,
+        email_confirmed: member.emailConfirmed, created_at: member.createdAt,
+      } });
       return;
     }
     if (!isActive) {
@@ -191,7 +207,11 @@ for (const isActive of [true, false]) {
       }
     }
     const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, isActive);
-    res.status(200).json({ user: member });
+    res.status(200).json({ user: {
+      id: member.id, email: member.email, full_name: member.fullName, role: member.role,
+      phone_number: member.phoneNumber, is_active: member.isActive,
+      email_confirmed: member.emailConfirmed, created_at: member.createdAt,
+    } });
   }));
 }
 
