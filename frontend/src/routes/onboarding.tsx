@@ -196,7 +196,8 @@ function CompanyOnboarding() {
           <h1 className="text-2xl font-semibold">Configurazione aziendale in attesa</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
             Il titolare o un amministratore autorizzato deve completare la configurazione iniziale
-            prima che il team possa utilizzare BaseGrid. Avvisalo di accedere con il proprio account.
+            prima che il team possa utilizzare BaseGrid. Avvisalo di accedere con il proprio
+            account.
           </p>
         </section>
       </main>
