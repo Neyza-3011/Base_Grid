@@ -18,12 +18,11 @@ const WHITE = rgb(1, 1, 1);
 
 function safeText(value: unknown): string {
   return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u00A0/g, " ")
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .replace(/[–—]/g, "-")
-    .replace(/[^\x20-\x7E]/g, "?");
+    .replace(/[^\x20-\x7E\u00A0-\u00FF€]/g, "?");
 }
 
 function wrapLine(value: string, maxChars = MAX_CHARS): string[] {
