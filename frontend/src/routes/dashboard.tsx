@@ -90,7 +90,7 @@ function Dashboard() {
       if (sessionUser) {
         if (sessionUser.platformRole !== "ceo") {
           try {
-            const settingsResponse = await fetch("/api/v1/company/settings", {
+            const settingsResponse = await fetch("/api/v1/company/settings?include_logo=false", {
               credentials: "include",
               headers: { Accept: "application/json" },
             });
