@@ -6,6 +6,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { companyService } from "../services";
 import { TeamService } from "../services/team.service";
 import { tokenStore } from "../token-store";
+import { ADMIN_OWNER_ROLES, ASSIGNABLE_ROLES } from "../types";
 
 export const adminRouter = Router();
 const teamService = new TeamService(db);
@@ -143,6 +144,18 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
     input.role = req.body.role;
   }
   if (input.role !== undefined && input.role !== target.role) {
+    if (!ASSIGNABLE_ROLES.includes(input.role as any)) {
+      throw new ForbiddenError("Ruolo non valido o non assegnabile.");
+    }
+    if (userId === req.user.id) {
+      throw new ForbiddenError("Non puoi modificare il tuo stesso ruolo.");
+    }
+    if (ADMIN_OWNER_ROLES.includes(target.role) && !ADMIN_OWNER_ROLES.includes(input.role as any)) {
+      const adminCount = await db.countAdminOwnersByCompany(companyId, userId);
+      if (adminCount === 0) {
+        throw new ForbiddenError("Impossibile rimuovere l'ultimo amministratore attivo dell'azienda.");
+      }
+    }
     if (!tokenStore.isAvailable()) {
       res.status(503).json({ detail: "Servizio sessioni non disponibile: modifica del ruolo annullata." });
       return;
@@ -195,6 +208,12 @@ for (const isActive of [true, false]) {
       return;
     }
     if (!isActive) {
+      if (target.isActive && ADMIN_OWNER_ROLES.includes(target.role)) {
+        const adminCount = await db.countAdminOwnersByCompany(companyId, userId);
+        if (adminCount === 0) {
+          throw new ForbiddenError("Impossibile disattivare l'ultimo amministratore attivo dell'azienda.");
+        }
+      }
       if (!tokenStore.isAvailable()) {
         res.status(503).json({ detail: "Servizio sessioni non disponibile: disattivazione annullata." });
         return;
