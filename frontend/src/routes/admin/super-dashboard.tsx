@@ -536,8 +536,8 @@ export function SuperDashboard() {
                   <div>
                     <h3 className="text-sm font-semibold text-white">Modifica profilo aziendale</h3>
                     <p className="mt-1 text-xs text-white/50">
-                      Sono modificabili solo i dati anagrafici e operativi del profilo.
-                      Abbonamento e permessi non vengono modificati qui.
+                      Sono modificabili solo i dati anagrafici e operativi del profilo. Abbonamento
+                      e permessi non vengono modificati qui.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
