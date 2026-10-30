@@ -112,6 +112,7 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(companyAAfter?.name).toBe(companyABefore?.name);
     expect(companyBAfter?.name).toBe("Tenant B Updated");
     expect(companyBAfter?.stripeSubscriptionStatus).toBe(companyBBefore?.stripeSubscriptionStatus);
+  });
 
   it("rejects malformed runtime field types without mutating the company", async () => {
     const before = await db.findCompanyById("comp-rossi-001");
@@ -140,6 +141,5 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(after?.name).toBe(before?.name);
     expect(after?.address).toBe(before?.address);
     expect(after?.defaultHourlyRate).toBe(before?.defaultHourlyRate);
-  });
   });
 });
