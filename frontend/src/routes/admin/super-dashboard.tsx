@@ -87,6 +87,10 @@ export function SuperDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [userDrafts, setUserDrafts] = useState<Record<string, { full_name: string; phone_number: string; role: string }>>({});
+  const [userActionBusyId, setUserActionBusyId] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     name: "",
     vat_number: "",
@@ -111,6 +115,11 @@ export function SuperDashboard() {
       }
       const tenantDetails = payload as TenantDetails;
       setSelectedTenant(tenantDetails);
+      setUserDrafts(Object.fromEntries(tenantDetails.users.map((member) => [member.id, {
+        full_name: member.full_name ?? "",
+        phone_number: member.phone_number ?? "",
+        role: member.role,
+      }])));
       setProfileDraft({
         name: tenantDetails.company.name ?? "",
         vat_number: tenantDetails.company.vat_number ?? "",
@@ -181,6 +190,89 @@ export function SuperDashboard() {
       setSavingProfile(false);
     }
   };
+
+
+  const saveTenantUser = async (userId: string) => {
+    if (!selectedTenant) return;
+    const draft = userDrafts[userId];
+    if (!draft) return;
+    setUserActionBusyId(userId);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/users/${encodeURIComponent(userId)}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: appendCsrfHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+          body: JSON.stringify({
+            full_name: draft.full_name,
+            phone_number: draft.phone_number,
+            role: draft.role,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.detail || "Impossibile aggiornare l'utente.");
+      }
+      const member = payload.user;
+      setSelectedTenant((current) => current ? {
+        ...current,
+        users: current.users.map((item) => item.id === userId ? { ...item, ...member } : item),
+        owner: current.owner?.email === member.email
+          ? { full_name: member.full_name, email: member.email, role: member.role }
+          : current.owner,
+      } : current);
+      setUserDrafts((current) => ({ ...current, [userId]: {
+        full_name: member.full_name,
+        phone_number: member.phone_number ?? "",
+        role: member.role,
+      } }));
+      toast.success("Utente aggiornato.");
+      await loadAdminData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.");
+    } finally {
+      setUserActionBusyId(null);
+    }
+  };
+
+  const changeTenantUserStatus = async (userId: string, activate: boolean) => {
+    if (!selectedTenant) return;
+    const member = selectedTenant.users.find((item) => item.id === userId);
+    if (!member) return;
+    const actionLabel = activate ? "riattivare" : "disattivare";
+    if (!window.confirm(`Confermi di ${actionLabel} l'accesso di ${member.full_name} (${member.email})? ${activate ? "" : "Le sessioni di accesso verranno revocate."}`)) {
+      return;
+    }
+    setUserActionBusyId(userId);
+    try {
+      const response = await fetch(
+        `/api/v1/admin/tenants/${encodeURIComponent(selectedTenant.company.id)}/users/${encodeURIComponent(userId)}/${activate ? "activate" : "deactivate"}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: appendCsrfHeaders({ Accept: "application/json" }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.detail || `Impossibile ${actionLabel} l'utente.`);
+      }
+      setSelectedTenant((current) => current ? {
+        ...current,
+        users: current.users.map((item) => item.id === userId ? { ...item, ...payload.user } : item),
+        active_user_count: current.users.filter((item) => item.id === userId ? payload.user.is_active : item.is_active).length,
+      } : current);
+      toast.success(activate ? "Accesso utente riattivato." : "Accesso utente disattivato.");
+      await loadAdminData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.");
+    } finally {
+      setUserActionBusyId(null);
+    }
+  };
+
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -610,37 +702,144 @@ export function SuperDashboard() {
                   </div>
                 </form>
 
-                <div>
-                  <h3 className="mb-3 text-sm font-semibold text-white">Utenti associati</h3>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Gestione utenti</h3>
+                      <p className="mt-1 text-xs text-white/50">
+                        Modifica nome, telefono e ruolo; disattiva o riattiva l'accesso e revoca le sessioni.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        type="search"
+                        value={userSearch}
+                        onChange={(event) => setUserSearch(event.target.value)}
+                        placeholder="Cerca nome o email..."
+                        aria-label="Cerca utenti dell'azienda"
+                        className="rounded-lg border border-white/10 bg-[#090D16] px-3 py-2 text-xs text-white"
+                      />
+                      <select
+                        value={userRoleFilter}
+                        onChange={(event) => setUserRoleFilter(event.target.value)}
+                        aria-label="Filtra utenti per ruolo"
+                        className="rounded-lg border border-white/10 bg-[#090D16] px-3 py-2 text-xs text-white"
+                      >
+                        <option value="all">Tutti i ruoli</option>
+                        <option value="owner">Owner</option>
+                        <option value="admin">Admin</option>
+                        <option value="responsabile_tecnico">Responsabile tecnico</option>
+                        <option value="dispatcher">Dispatcher</option>
+                        <option value="technician">Tecnico</option>
+                        <option value="amministrazione">Amministrazione</option>
+                        <option value="commerciale">Commerciale</option>
+                        <option value="cliente">Cliente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+                      {selectedTenant.user_count} utenti totali
+                    </span>
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-300">
+                      {selectedTenant.active_user_count} attivi
+                    </span>
+                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-amber-300">
+                      {selectedTenant.user_count - selectedTenant.active_user_count} disattivati
+                    </span>
+                  </div>
                   {selectedTenant.users.length === 0 ? (
-                    <p className="text-sm text-white/50">
+                    <p className="rounded-xl border border-white/10 p-5 text-sm text-white/50">
                       Nessun utente associato a questa azienda.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto rounded-xl border border-white/10">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-white/5 text-white/55">
-                          <tr>
-                            <th className="p-3">Utente</th>
-                            <th className="p-3">Ruolo aziendale</th>
-                            <th className="p-3">Account</th>
-                            <th className="p-3">Email verificata</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {selectedTenant.users.map((member) => (
-                            <tr key={member.id}>
-                              <td className="p-3">
-                                <div className="font-medium text-white">{member.full_name}</div>
-                                <div className="text-white/50">{member.email}</div>
-                              </td>
-                              <td className="p-3 text-white/70">{member.role}</td>
-                              <td className="p-3">{member.is_active ? "Attivo" : "Disattivato"}</td>
-                              <td className="p-3">{member.email_confirmed ? "Sì" : "No"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="space-y-3">
+                      {selectedTenant.users
+                        .filter((member) => `${member.full_name} ${member.email}`.toLowerCase().includes(userSearch.trim().toLowerCase()))
+                        .filter((member) => userRoleFilter === "all" || member.role === userRoleFilter)
+                        .map((member) => {
+                          const draft = userDrafts[member.id] ?? {
+                            full_name: member.full_name,
+                            phone_number: member.phone_number ?? "",
+                            role: member.role,
+                          };
+                          const busy = userActionBusyId === member.id;
+                          const isPlatformIdentity = member.role === "superadmin";
+                          return (
+                            <article key={member.id} className="rounded-xl border border-white/10 bg-[#090D16] p-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="break-all text-sm font-semibold text-white">{member.full_name}</p>
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${member.is_active ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-400/30 bg-amber-400/10 text-amber-300"}`}>
+                                      {member.is_active ? "Accesso attivo" : "Accesso disattivato"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 break-all text-xs text-white/50">{member.email}</p>
+                                  <p className="mt-1 text-[10px] text-white/35">ID: {member.id} · Email verificata: {member.email_confirmed ? "Sì" : "No"}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void saveTenantUser(member.id)}
+                                    disabled={busy || isPlatformIdentity}
+                                    className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+                                  >
+                                    {busy ? "Attendi..." : "Salva utente"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void changeTenantUserStatus(member.id, !member.is_active)}
+                                    disabled={busy || isPlatformIdentity}
+                                    className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-40 ${member.is_active ? "border-red-400/30 text-red-300 hover:bg-red-400/10" : "border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10"}`}
+                                  >
+                                    {member.is_active ? "Disattiva accesso" : "Riattiva accesso"}
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <label className="space-y-1 text-xs text-white/60">
+                                  <span>Nome completo</span>
+                                  <input
+                                    value={draft.full_name}
+                                    maxLength={100}
+                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, full_name: event.target.value } }))}
+                                    disabled={busy || isPlatformIdentity}
+                                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs text-white/60">
+                                  <span>Telefono</span>
+                                  <input
+                                    value={draft.phone_number}
+                                    maxLength={20}
+                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, phone_number: event.target.value } }))}
+                                    disabled={busy || isPlatformIdentity}
+                                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs text-white/60">
+                                  <span>Ruolo aziendale</span>
+                                  <select
+                                    value={draft.role}
+                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, role: event.target.value } }))}
+                                    disabled={busy || isPlatformIdentity}
+                                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
+                                  >
+                                    <option value="owner">Owner</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="responsabile_tecnico">Responsabile tecnico</option>
+                                    <option value="dispatcher">Dispatcher</option>
+                                    <option value="technician">Tecnico</option>
+                                    <option value="amministrazione">Amministrazione</option>
+                                    <option value="commerciale">Commerciale</option>
+                                    <option value="cliente">Cliente</option>
+                                  </select>
+                                </label>
+                              </div>
+                            </article>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
