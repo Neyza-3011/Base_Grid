@@ -118,6 +118,8 @@ jobs:
           cleanup() {
             kill "$SERVER_PID" 2>/dev/null || true
             wait "$SERVER_PID" 2>/dev/null || true
+            echo "----- Backend startup log -----"
+            cat /tmp/basegrid-backend-smoke.log || true
           }
           trap cleanup EXIT
 
@@ -154,4 +156,3 @@ jobs:
           console.error("Backend runtime smoke test failed: " + lastError);
           process.exit(1);
           NODE
-          cat /tmp/basegrid-backend-smoke.log
