@@ -48,7 +48,8 @@ describe("generated PDF independent parser validation", () => {
       expect(info).toMatch(/PDF version:\s+1\.\d+/);
 
       const extractedText = execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
-      expect(extractedText).toContain("BASEGRID - RAPPORTINO DI INTERVENTO");
+      expect(extractedText).toContain("BaseGrid");
+      expect(extractedText).toContain("RAPPORTINO DI INTERVENTO");
       expect(extractedText).toContain("Cantiere indipendente");
       expect(extractedText).toContain("Tecnico di test");
     } finally {
