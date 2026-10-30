@@ -83,7 +83,7 @@ export function SuperDashboard() {
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
-  const [tenantSearch, setTenantSearch = useState("");
+  const [tenantSearch, setTenantSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
