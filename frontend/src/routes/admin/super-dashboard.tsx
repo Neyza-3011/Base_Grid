@@ -154,9 +154,7 @@ export function SuperDashboard() {
   }, [navigate]);
 
   const filteredTenants = tenants.filter((tenant) =>
-    `${tenant.name} ${tenant.id}`
-      .toLowerCase()
-      .includes(tenantSearch.trim().toLowerCase()),
+    `${tenant.name} ${tenant.id}`.toLowerCase().includes(tenantSearch.trim().toLowerCase()),
   );
 
   const handleRefreshData = async () => {
@@ -285,8 +283,8 @@ export function SuperDashboard() {
                 <Box className="h-5 w-5 text-emerald-400" /> Monitoraggio Aziende & Tenant SaaS
               </h2>
               <p className="text-xs text-white/60 mt-0.5">
-                Profili aziendali e utenti associati. I dettagli vengono letti dalle
-                API protette lato server.
+                Profili aziendali e utenti associati. I dettagli vengono letti dalle API protette
+                lato server.
               </p>
             </div>
 
@@ -346,9 +344,7 @@ export function SuperDashboard() {
                         />
                         {t.name}
                       </td>
-                      <td className="p-3.5 text-white/60 font-mono text-[11px]">
-                        {t.id}
-                      </td>
+                      <td className="p-3.5 text-white/60 font-mono text-[11px]">{t.id}</td>
                       <td className="p-3.5">
                         <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 font-medium">
                           {t.plan || "Piano non disponibile"}
