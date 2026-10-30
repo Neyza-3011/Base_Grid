@@ -321,7 +321,9 @@ function Dashboard() {
           <span>Materiali</span>
         </button>
 
-        {(currentUser.role === "admin" || currentUser.role === "superadmin") && (
+        {(currentUser.role === "admin" ||
+          currentUser.role === "superadmin" ||
+          currentUser.role === "owner") && (
           <button
             onClick={() => {
               setActiveView("company_settings");
