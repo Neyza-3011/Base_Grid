@@ -108,8 +108,8 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     });
 
     expect(update.status).toBe(200);
-    const companyAAfter = await db.findCompanyById("comp-rossi-001");
-    const companyBAfter = await db.findCompanyById(tenantBCompanyId);
+    const companyAAfter = await db.findCompanyWithLogoById("comp-rossi-001");
+    const companyBAfter = await db.findCompanyWithLogoById(tenantBCompanyId);
     expect(companyAAfter?.name).toBe(companyABefore?.name);
     expect(companyBAfter?.name).toBe("Tenant B Updated");
     expect(companyBAfter?.stripeSubscriptionStatus).toBe(companyBBefore?.stripeSubscriptionStatus);
