@@ -5,7 +5,9 @@ import { ProductTour } from "./ProductTour";
 
 describe("ProductTour", () => {
   it("renders the first step with accessible dialog semantics and a skip action", () => {
-    const html = renderToString(React.createElement(ProductTour, { open: true, onClose: vi.fn(), onNavigate: vi.fn() }));
+    const html = renderToString(
+      React.createElement(ProductTour, { open: true, onClose: vi.fn(), onNavigate: vi.fn() }),
+    );
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
