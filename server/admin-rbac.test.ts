@@ -293,6 +293,18 @@ describe("Platform admin endpoint authorization", () => {
     expect((await db.findUserById(target!.id))?.isActive).toBe(true);
   });
 
+
+  it("does not deactivate the last tenant administrator", async () => {
+    const target = await db.findUserByEmail("admin@rossi.it");
+    expect(target).toBeTruthy();
+    const response = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/deactivate`,
+      "jack.cardinali15@gmail.com",
+    );
+    expect(response.status).toBe(403);
+    expect((await db.findUserById(target!.id))?.isActive).toBe(true);
+  });
+
   it("rejects attempts to modify or deactivate the CEO platform identity", async () => {
     const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
     expect(ceo).toBeTruthy();
