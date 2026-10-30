@@ -821,7 +821,6 @@ export function SuperDashboard() {
                   </div>
                 </form>
 
-
                 <form
                   className="space-y-4 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-4"
                   onSubmit={(event) => {
@@ -830,9 +829,12 @@ export function SuperDashboard() {
                   }}
                 >
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Controlli della piattaforma</h3>
+                    <h3 className="text-sm font-semibold text-white">
+                      Controlli della piattaforma
+                    </h3>
                     <p className="mt-1 text-xs text-white/50">
-                      Limiti e funzionalità disponibili per questa azienda. Non modifica l'abbonamento Stripe.
+                      Limiti e funzionalità disponibili per questa azienda. Non modifica
+                      l'abbonamento Stripe.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -845,7 +847,12 @@ export function SuperDashboard() {
                         step="1"
                         required
                         value={platformDraft.max_users}
-                        onChange={(event) => setPlatformDraft((draft) => ({ ...draft, max_users: event.target.value }))}
+                        onChange={(event) =>
+                          setPlatformDraft((draft) => ({
+                            ...draft,
+                            max_users: event.target.value,
+                          }))
+                        }
                         disabled={savingPlatformControls}
                         className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
                       />
@@ -854,13 +861,20 @@ export function SuperDashboard() {
                       <input
                         type="checkbox"
                         checked={platformDraft.feature_pdf_export}
-                        onChange={(event) => setPlatformDraft((draft) => ({ ...draft, feature_pdf_export: event.target.checked }))}
+                        onChange={(event) =>
+                          setPlatformDraft((draft) => ({
+                            ...draft,
+                            feature_pdf_export: event.target.checked,
+                          }))
+                        }
                         disabled={savingPlatformControls}
                         className="h-4 w-4 accent-emerald-400"
                       />
                       <span>
                         <span className="block font-medium">Esportazione PDF</span>
-                        <span className="block text-xs text-white/45">Consenti a questa azienda di esportare i rapportini PDF.</span>
+                        <span className="block text-xs text-white/45">
+                          Consenti a questa azienda di esportare i rapportini PDF.
+                        </span>
                       </span>
                     </label>
                   </div>
@@ -928,8 +942,15 @@ export function SuperDashboard() {
                   ) : (
                     <div className="space-y-3">
                       {selectedTenant.users
-                        .filter((member) => `${member.full_name} ${member.email}`.toLowerCase().includes(userSearch.trim().toLowerCase()))
-                        .filter((member) => userRoleFilter === "all" || member.role === userRoleFilter)
+                        .filter((member) =>
+                          `${member.full_name} ${member.email}`
+                            .toLowerCase()
+                            .includes(userSearch.trim().toLowerCase()),
+                        )
+                        .filter(
+                          (member) =>
+                            userRoleFilter === "all" || member.role === userRoleFilter,
+                        )
                         .map((member) => {
                           const draft = userDrafts[member.id] ?? {
                             full_name: member.full_name,
@@ -939,17 +960,29 @@ export function SuperDashboard() {
                           const busy = userActionBusyId === member.id;
                           const isPlatformIdentity = member.role === "superadmin";
                           return (
-                            <article key={member.id} className="rounded-xl border border-white/10 bg-[#090D16] p-4">
+                            <article
+                              key={member.id}
+                              className="rounded-xl border border-white/10 bg-[#090D16] p-4"
+                            >
                               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <p className="break-all text-sm font-semibold text-white">{member.full_name}</p>
-                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${member.is_active ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-400/30 bg-amber-400/10 text-amber-300"}`}>
+                                    <p className="break-all text-sm font-semibold text-white">
+                                      {member.full_name}
+                                    </p>
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[10px] ${member.is_active ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-amber-400/30 bg-amber-400/10 text-amber-300"}`}
+                                    >
                                       {member.is_active ? "Accesso attivo" : "Accesso disattivato"}
                                     </span>
                                   </div>
-                                  <p className="mt-1 break-all text-xs text-white/50">{member.email}</p>
-                                  <p className="mt-1 text-[10px] text-white/35">ID: {member.id} · Email verificata: {member.email_confirmed ? "Sì" : "No"}</p>
+                                  <p className="mt-1 break-all text-xs text-white/50">
+                                    {member.email}
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-white/35">
+                                    ID: {member.id} · Email verificata:{" "}
+                                    {member.email_confirmed ? "Sì" : "No"}
+                                  </p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <button
@@ -962,7 +995,9 @@ export function SuperDashboard() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => void changeTenantUserStatus(member.id, !member.is_active)}
+                                    onClick={() =>
+                                      void changeTenantUserStatus(member.id, !member.is_active)
+                                    }
                                     disabled={busy || isPlatformIdentity}
                                     className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-40 ${member.is_active ? "border-red-400/30 text-red-300 hover:bg-red-400/10" : "border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10"}`}
                                   >
@@ -976,7 +1011,12 @@ export function SuperDashboard() {
                                   <input
                                     value={draft.full_name}
                                     maxLength={100}
-                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, full_name: event.target.value } }))}
+                                    onChange={(event) =>
+                                      setUserDrafts((current) => ({
+                                        ...current,
+                                        [member.id]: { ...draft, full_name: event.target.value },
+                                      }))
+                                    }
                                     disabled={busy || isPlatformIdentity}
                                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
                                   />
@@ -986,7 +1026,12 @@ export function SuperDashboard() {
                                   <input
                                     value={draft.phone_number}
                                     maxLength={20}
-                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, phone_number: event.target.value } }))}
+                                    onChange={(event) =>
+                                      setUserDrafts((current) => ({
+                                        ...current,
+                                        [member.id]: { ...draft, phone_number: event.target.value },
+                                      }))
+                                    }
                                     disabled={busy || isPlatformIdentity}
                                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
                                   />
@@ -995,13 +1040,20 @@ export function SuperDashboard() {
                                   <span>Ruolo aziendale</span>
                                   <select
                                     value={draft.role}
-                                    onChange={(event) => setUserDrafts((current) => ({ ...current, [member.id]: { ...draft, role: event.target.value } }))}
+                                    onChange={(event) =>
+                                      setUserDrafts((current) => ({
+                                        ...current,
+                                        [member.id]: { ...draft, role: event.target.value },
+                                      }))
+                                    }
                                     disabled={busy || isPlatformIdentity}
                                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white disabled:opacity-50"
                                   >
                                     <option value="owner">Owner</option>
                                     <option value="admin">Admin</option>
-                                    <option value="responsabile_tecnico">Responsabile tecnico</option>
+                                    <option value="responsabile_tecnico">
+                                      Responsabile tecnico
+                                    </option>
                                     <option value="dispatcher">Dispatcher</option>
                                     <option value="technician">Tecnico</option>
                                     <option value="amministrazione">Amministrazione</option>
