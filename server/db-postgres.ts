@@ -91,6 +91,7 @@ function mapCompanyRow(row: any): CompanyRecord {
     stripeSubscriptionStatus: row.stripeSubscriptionStatus || "",
     maxUsers: Number(row.maxUsers) || 0,
     featurePdfExport: Boolean(row.featurePdfExport),
+    isActive: row.isActive === undefined ? true : Boolean(row.isActive),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
   };
@@ -310,6 +311,11 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
   updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null>;
+  setCompanyActiveWithAudit(
+    companyId: string,
+    isActive: boolean,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null>;
   getAllTenants(): Promise<CompanyRecord[]>;
   getReportsByCompany(companyId: string, limit?: number): Promise<ReportRecord[]>;
   createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord>;
@@ -1044,8 +1050,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     await this.pool.query(
       `UPDATE companies 
-       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "updatedAt" = $9 
-       WHERE id = $10`,
+       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "updatedAt" = $10
+       WHERE id = $11`,
       [
         updated.name,
         updated.vatNumber,
@@ -1055,12 +1061,65 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated.stripeSubscriptionStatus,
         updated.maxUsers,
         updated.featurePdfExport,
+        updated.isActive ?? true,
         updated.updatedAt,
         id,
       ],
     );
 
     return updated;
+  }
+
+
+  public async setCompanyActiveWithAudit(
+    companyId: string,
+    isActive: boolean,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null> {
+    if (
+      !companyId ||
+      audit.targetType !== "company" ||
+      audit.targetId !== companyId ||
+      !audit.actorUserId ||
+      !audit.action
+    ) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+
+    return this.withTransaction(async (client) => {
+      const currentResult = await client.query(
+        'SELECT * FROM companies WHERE id = $1 FOR UPDATE',
+        [companyId],
+      );
+      if (!currentResult.rows[0]) return null;
+      const current = mapCompanyRow(currentResult.rows[0]);
+      if (current.isActive === isActive) return current;
+
+      const now = new Date().toISOString();
+      const updatedResult = await client.query(
+        'UPDATE companies SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING *',
+        [isActive, now, companyId],
+      );
+      await client.query(
+        'UPDATE users SET "authVersion" = "authVersion" + 1, "updatedAt" = $1 WHERE "companyId" = $2',
+        [now, companyId],
+      );
+
+      const auditId = `audit-${randomUUID()}`;
+      await client.query(
+        `INSERT INTO admin_audit_events (id, "actorUserId", action, "targetType", "targetId", metadata)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [
+          auditId,
+          audit.actorUserId,
+          audit.action,
+          audit.targetType,
+          audit.targetId,
+          JSON.stringify({ ...(audit.metadata ?? {}), isActive }),
+        ],
+      );
+      return mapCompanyRow(updatedResult.rows[0]);
+    });
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
