@@ -50,11 +50,13 @@ async function validateCompanyLogoDataUrl(value: string): Promise<string> {
 export class CompanyService {
   constructor(private readonly db: IDatabaseAdapter) {}
 
-  async getCompanySettings(companyId: string): Promise<CompanyRecord> {
+  async getCompanySettings(companyId: string, includeLogo = true): Promise<CompanyRecord> {
     if (!companyId) {
       throw new ValidationError("Company ID is required");
     }
-    const company = await this.db.findCompanyWithLogoById(companyId);
+    const company = includeLogo
+      ? await this.db.findCompanyWithLogoById(companyId)
+      : await this.db.findCompanyById(companyId);
     if (!company) {
       throw new NotFoundError("Company not found");
     }
