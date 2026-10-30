@@ -69,6 +69,25 @@ async function putWithUser(path: string, email: string, payload: unknown) {
   return { status: response.status, body };
 }
 
+
+async function postWithUser(path: string, email: string, payload?: unknown) {
+  const user = await db.findUserByEmail(email);
+  if (!user) throw new Error(`Missing seeded test user: ${email}`);
+  const { accessToken } = generateTokens(user);
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      ...(payload === undefined ? {} : { "content-type": "application/json" }),
+      cookie: `access_token=${accessToken}; csrf_token=test-csrf-token`,
+      "x-csrf-token": "test-csrf-token",
+    },
+    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+  });
+  let body: any = null;
+  try { body = await response.json(); } catch { /* Keep status for non-JSON responses. */ }
+  return { status: response.status, body };
+}
+
 async function getWithoutUser(path: string) {
   const response = await fetch(`${baseUrl}${path}`);
   let body: any = null;
@@ -205,6 +224,101 @@ describe("Platform admin endpoint authorization", () => {
     const after = await db.findCompanyById("comp-rossi-001");
     expect(after?.name).toBe(before?.name);
     expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
+  });
+
+
+  it("allows the CEO to update a tenant user's profile and role with persisted changes", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    const response = await putWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}`,
+      "jack.cardinali15@gmail.com",
+      { full_name: "Luca Tecnico Aggiornato", phone_number: "+39 333 0000000", role: "dispatcher" },
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({
+      id: target!.id,
+      fullName: "Luca Tecnico Aggiornato",
+      phoneNumber: "+39 333 0000000",
+      role: "dispatcher",
+    });
+    const persisted = await db.findUserById(target!.id);
+    expect(persisted).toMatchObject({
+      fullName: "Luca Tecnico Aggiornato",
+      phoneNumber: "+39 333 0000000",
+      role: "dispatcher",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("passwordHash");
+    expect(JSON.stringify(response.body)).not.toContain("authVersion");
+  });
+
+  it("denies tenant admins from using CEO user-management endpoints without changing data", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    const before = await db.findUserById(target!.id);
+    const update = await putWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}`,
+      "admin@rossi.it",
+      { full_name: "Unauthorized" },
+    );
+    const deactivate = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/deactivate`,
+      "admin@rossi.it",
+    );
+    expect(update.status).toBe(403);
+    expect(deactivate.status).toBe(403);
+    expect(await db.findUserById(target!.id)).toMatchObject({
+      fullName: before!.fullName,
+      isActive: before!.isActive,
+    });
+  });
+
+  it("lets the CEO deactivate and reactivate a tenant user with persisted status changes", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    const deactivated = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/deactivate`,
+      "jack.cardinali15@gmail.com",
+    );
+    expect(deactivated.status).toBe(200);
+    expect(deactivated.body.user.isActive).toBe(false);
+    expect((await db.findUserById(target!.id))?.isActive).toBe(false);
+
+    const activated = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/activate`,
+      "jack.cardinali15@gmail.com",
+    );
+    expect(activated.status).toBe(200);
+    expect(activated.body.user.isActive).toBe(true);
+    expect((await db.findUserById(target!.id))?.isActive).toBe(true);
+  });
+
+  it("rejects attempts to modify or deactivate the CEO platform identity", async () => {
+    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    expect(ceo).toBeTruthy();
+    const update = await putWithUser(
+      `/api/v1/admin/tenants/${ceo!.companyId}/users/${ceo!.id}`,
+      "jack.cardinali15@gmail.com",
+      { full_name: "Renamed CEO" },
+    );
+    expect(update.status).toBe(403);
+    expect((await db.findUserById(ceo!.id))?.fullName).toBe(ceo!.fullName);
+  });
+
+  it("rejects malformed CEO user updates without mutating persisted state", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    const before = await db.findUserById(target!.id);
+    const response = await putWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}`,
+      "jack.cardinali15@gmail.com",
+      { full_name: { invalid: true } },
+    );
+    expect(response.status).toBe(400);
+    expect(await db.findUserById(target!.id)).toMatchObject({
+      fullName: before!.fullName,
+      role: before!.role,
+    });
   });
 
   it("returns 404 for a nonexistent tenant ID", async () => {
