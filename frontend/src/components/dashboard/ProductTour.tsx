@@ -13,43 +13,98 @@ import {
 
 const TOUR_STEPS = [
   {
-    title: "La tua dashboard",
+    title: "Organizza la giornata",
     description:
-      "La dashboard raccoglie una panoramica operativa. Usa il menu laterale per passare alle aree di lavoro senza perdere il contesto.",
+      "La dashboard è il punto di partenza per controllare l'attività. Usa il menu laterale per aprire ogni area e torna qui per avere una panoramica.",
+    actions: [
+      "Controlla gli interventi da gestire e gli aggiornamenti recenti.",
+      "Apri il menu laterale per passare a clienti, impianti, interventi e rapportini.",
+    ],
+    view: "dashboard",
+    viewLabel: "dashboard",
     icon: BookOpen,
   },
   {
-    title: "Clienti e sedi",
+    title: "Crea clienti e sedi",
     description:
-      "Registra i clienti e le loro sedi operative. Collega gli interventi alla sede corretta per mantenere ordinati i dati del lavoro.",
+      "Registra prima il cliente, poi le sedi in cui la tua impresa lavora. Collega ogni intervento al cliente e alla sede corretti per mantenere lo storico ordinato.",
+    actions: [
+      "Apri Clienti e cantieri e aggiungi il cliente con i suoi recapiti.",
+      "Registra una sede con indirizzo e città prima di creare interventi collegati.",
+    ],
+    view: "customers",
+    viewLabel: "clienti e sedi",
     icon: Building2,
   },
   {
-    title: "Interventi",
+    title: "Registra gli impianti",
     description:
-      "Consulta e gestisci gli interventi dal relativo spazio di lavoro. Verifica cliente, sede, assegnazione e stato prima di aggiornare un'attività.",
+      "Usa Impianti e asset per conservare le informazioni delle apparecchiature installate presso una sede.",
+    actions: [
+      "Seleziona il cliente e la sede a cui appartiene l'impianto.",
+      "Inserisci nome, tipo e identificativi disponibili; aggiorna lo stato quando cambia.",
+    ],
+    view: "assets",
+    viewLabel: "impianti",
     icon: Wrench,
   },
   {
-    title: "Rapportini e PDF",
+    title: "Pianifica gli interventi",
     description:
-      "Crea un rapportino con le informazioni del lavoro svolto. Controlla i dati prima di scaricare o stampare il documento PDF.",
+      "Gli interventi rappresentano il lavoro da eseguire. Mantieni aggiornati assegnazione, programmazione e stato, senza segnare completato un lavoro non concluso.",
+    actions: [
+      "Collega l'intervento al cliente e alla sede corretti.",
+      "Assegna il tecnico e aggiorna lo stato durante l'avanzamento.",
+    ],
+    view: "interventions",
+    viewLabel: "interventi",
+    icon: Wrench,
+  },
+  {
+    title: "Compila i rapportini",
+    description:
+      "Registra il lavoro effettivamente svolto e verifica i dati prima di condividere il documento.",
+    actions: [
+      "Controlla data, tecnico, ore, materiali e note.",
+      "Rileggi il rapportino prima di aprire l'anteprima, scaricare o stampare il PDF.",
+    ],
+    view: "reports",
+    viewLabel: "rapportini",
     icon: FileText,
   },
   {
-    title: "Team e impostazioni",
+    title: "Gestisci il team",
     description:
-      "Invita i collaboratori autorizzati e completa le impostazioni aziendali. Le funzioni disponibili dipendono dal tuo ruolo.",
+      "La sezione Collaboratori e team permette di gestire gli utenti aziendali secondo i permessi assegnati al tuo ruolo.",
+    actions: [
+      "Invita soltanto persone autorizzate a lavorare con i dati aziendali.",
+      "Assegna il ruolo minimo necessario per le attività di ciascun collaboratore.",
+    ],
+    view: "team",
+    viewLabel: "team",
     icon: Users,
+  },
+  {
+    title: "Completa il profilo aziendale",
+    description:
+      "Le impostazioni aziendali contengono i dati usati nel profilo e nei rapportini. Il logo è facoltativo e compare nei PDF soltanto se lo carichi e lo salvi.",
+    actions: [
+      "Verifica ragione sociale, indirizzo, partita IVA e tariffa predefinita.",
+      "Aggiungi il logo aziendale e le note dei rapportini, quindi salva le modifiche.",
+    ],
+    view: "company_settings",
+    viewLabel: "impostazioni aziendali",
+    icon: Building2,
   },
 ] as const;
 
 type ProductTourProps = {
   open: boolean;
   onClose: () => void;
+  onNavigate: (view: string) => void;
 };
 
-export function ProductTour({ open, onClose }: ProductTourProps) {
+export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -137,6 +192,11 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
           >
             {activeStep.description}
           </p>
+          <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm leading-6 text-white/75 marker:text-emerald-300">
+            {activeStep.actions.map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ol>
           <p className="mt-6 text-xs leading-5 text-white/45">
             Puoi saltare la guida in qualsiasi momento e riaprirla dal pulsante “Guida” nella barra
             superiore.
@@ -144,13 +204,25 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
         </div>
 
         <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 rounded-xl px-4 text-sm font-medium text-white/60 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-          >
-            Salta guida
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-11 rounded-xl px-4 text-sm font-medium text-white/60 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+            >
+              Salta guida
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate(activeStep.view);
+                onClose();
+              }}
+              className="min-h-11 rounded-xl border border-emerald-300/30 px-4 text-sm font-medium text-emerald-200 transition hover:bg-emerald-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+            >
+              Apri {activeStep.viewLabel}
+            </button>
+          </div>
           <div className="flex items-center justify-end gap-2">
             <button
               type="button"
