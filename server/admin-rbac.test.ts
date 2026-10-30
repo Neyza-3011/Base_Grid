@@ -238,8 +238,8 @@ describe("Platform admin endpoint authorization", () => {
     expect(response.status).toBe(200);
     expect(response.body.user).toMatchObject({
       id: target!.id,
-      fullName: "Luca Tecnico Aggiornato",
-      phoneNumber: "+39 333 0000000",
+      full_name: "Luca Tecnico Aggiornato",
+      phone_number: "+39 333 0000000",
       role: "dispatcher",
     });
     const persisted = await db.findUserById(target!.id);
@@ -281,7 +281,7 @@ describe("Platform admin endpoint authorization", () => {
       "jack.cardinali15@gmail.com",
     );
     expect(deactivated.status).toBe(200);
-    expect(deactivated.body.user.isActive).toBe(false);
+    expect(deactivated.body.user.is_active).toBe(false);
     expect((await db.findUserById(target!.id))?.isActive).toBe(false);
 
     const activated = await postWithUser(
@@ -289,7 +289,7 @@ describe("Platform admin endpoint authorization", () => {
       "jack.cardinali15@gmail.com",
     );
     expect(activated.status).toBe(200);
-    expect(activated.body.user.isActive).toBe(true);
+    expect(activated.body.user.is_active).toBe(true);
     expect((await db.findUserById(target!.id))?.isActive).toBe(true);
   });
 
