@@ -62,6 +62,10 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
     res.status(401).json({ detail: "Azienda associata non trovata." });
     return;
   }
+  if (company.isActive === false && user.platformRole !== "ceo") {
+    res.status(403).json({ code: "COMPANY_SUSPENDED", detail: "L'accesso all'azienda è stato sospeso dalla piattaforma." });
+    return;
+  }
 
   req.user = user;
   req.company = company;
@@ -106,9 +110,9 @@ export const optionalAuthenticate = asyncHandler(async (req: Request, res: Respo
     if (user && user.isActive && (!config.EMAIL_VERIFICATION_ENABLED || user.emailConfirmed)) {
       const tokenAuthVersion = payload.authVersion ?? 0;
       if (tokenAuthVersion === user.authVersion) {
-        req.user = user;
         const company = await db.findCompanyById(user.companyId);
-        if (company) {
+        if (company && company.isActive !== false) {
+          req.user = user;
           req.company = company;
         }
       }
