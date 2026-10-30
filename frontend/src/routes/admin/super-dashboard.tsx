@@ -96,7 +96,7 @@ export function SuperDashboard() {
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
-  const [tenantSearch, setTenantSearch = useState("");
+  const [tenantSearch, setTenantSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
