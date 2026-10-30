@@ -123,7 +123,7 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
@@ -136,9 +136,9 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
         aria-labelledby="pdf-modal-title"
         tabIndex={-1}
         onKeyDown={handleDialogKeyDown}
-        className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-[#090D16] shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-hidden outline-none"
+        className="relative flex h-[100dvh] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-none border-0 bg-[#090D16] shadow-2xl outline-none animate-in fade-in slide-in-from-bottom-4 duration-300 sm:h-[90dvh] sm:max-h-[90dvh] sm:rounded-2xl sm:border sm:border-white/10"
       >
-        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 gap-2.5 sm:gap-4 border-b border-white/10 bg-slate-900/60 backdrop-blur rounded-t-2xl">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 border-b border-white/10 bg-slate-900/60 px-3.5 py-3 backdrop-blur sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-4 sm:rounded-t-2xl">
           <div className="flex items-center gap-2.5 min-w-0 max-w-full flex-1">
             <div className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-lg bg-primary/10 text-primary shrink-0">
               <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -197,17 +197,17 @@ export function PdfPreviewModal({ reportId, onClose }: { reportId: string; onClo
             </button>
           </div>
         </div>
-        <div className="flex-1 p-0 overflow-hidden bg-slate-100 rounded-b-2xl relative min-h-[280px] sm:min-h-[500px]">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100 sm:rounded-b-2xl">
           {loading ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-4 p-4 text-center">
               <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
               <p className="font-medium text-sm">Generazione documento PDF in corso...</p>
             </div>
           ) : pdfUrl ? (
-            <div className="w-full h-full flex flex-col">
+            <div className="flex min-h-0 w-full flex-1 flex-col">
               <iframe
                 src={`${pdfUrl}#toolbar=0`}
-                className="w-full flex-1 border-none"
+                className="h-full min-h-0 w-full flex-1 border-none"
                 title="Anteprima PDF del rapportino"
               />
               <div className="sm:hidden bg-slate-900 border-t border-white/10 px-3 py-2 flex items-center justify-between text-xs text-white/70 shrink-0">
