@@ -6,7 +6,7 @@ import { DatabaseStore } from "./db";
 describe("Platform admin audit event persistence contract", () => {
   it("persists safe event metadata and returns events newest-first with a bounded limit", async () => {
     const store = new DatabaseStore();
-    const actor = await store.findUserByEmail("jack.cardinali15@gmail.com");
+    const actor = await store.findUserById("usr-superadmin-001");
     expect(actor).toBeTruthy();
 
     const first = await store.createAdminAuditEvent({
