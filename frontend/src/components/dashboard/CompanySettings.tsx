@@ -229,15 +229,22 @@ export function CompanySettings() {
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/30 p-4 sm:p-5">
               <div>
-                <h3 className="text-sm font-semibold text-white">Logo aziendale nei rapportini PDF</h3>
+                <h3 className="text-sm font-semibold text-white">
+                  Logo aziendale nei rapportini PDF
+                </h3>
                 <p className="mt-1 text-xs leading-5 text-white/55">
-                  Facoltativo. Il logo viene salvato nell’azienda e inserito nei PDF solo se presente. PNG o JPEG, massimo 256 KB e 2048 × 2048 pixel.
+                  Facoltativo. Il logo viene salvato nell’azienda e inserito nei PDF solo se presente.
+                  PNG o JPEG, massimo 256 KB e 2048 × 2048 pixel.
                 </p>
               </div>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="grid h-20 w-28 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-white p-2">
                   {formData.logo_data_url ? (
-                    <img src={formData.logo_data_url} alt="Anteprima logo aziendale" className="max-h-full max-w-full object-contain" />
+                    <img
+                      src={formData.logo_data_url}
+                      alt="Anteprima logo aziendale"
+                      className="max-h-full max-w-full object-contain"
+                    />
                   ) : (
                     <Building2 className="h-8 w-8 text-slate-400" aria-hidden="true" />
                   )}
@@ -246,10 +253,21 @@ export function CompanySettings() {
                   <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary/90">
                     <ImagePlus className="h-4 w-4" aria-hidden="true" />
                     Carica logo
-                    <input type="file" accept="image/png,image/jpeg" onChange={handleLogoFileChange} className="sr-only" />
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      onChange={handleLogoFileChange}
+                      className="sr-only"
+                    />
                   </label>
                   {formData.logo_data_url && (
-                    <button type="button" onClick={() => setFormData((current) => ({ ...current, logo_data_url: null }))} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:bg-white/5 hover:text-white">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((current) => ({ ...current, logo_data_url: null }))
+                      }
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:bg-white/5 hover:text-white"
+                    >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                       Rimuovi logo
                     </button>
