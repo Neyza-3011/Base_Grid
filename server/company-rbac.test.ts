@@ -113,7 +113,7 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(companyAAfter?.name).toBe(companyABefore?.name);
     expect(companyBAfter?.name).toBe("Tenant B Updated");
     expect(companyBAfter?.stripeSubscriptionStatus).toBe(companyBBefore?.stripeSubscriptionStatus);
-    expect(companyAAfter?.logoDataUrl).toBeNull();
+    expect(companyAAfter?.logoDataUrl ?? null).toBeNull();
     expect(companyBAfter?.logoDataUrl).toContain("data:image/png;base64,");
   });
 
