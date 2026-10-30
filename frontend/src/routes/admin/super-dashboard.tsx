@@ -257,7 +257,9 @@ export function SuperDashboard() {
       );
       toast.success("Controlli aziendali aggiornati.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.");
+      toast.error(
+        error instanceof Error ? error.message : "Errore durante il salvataggio dei controlli.",
+      );
     } finally {
       setSavingPlatformControls(false);
     }
@@ -321,7 +323,9 @@ export function SuperDashboard() {
       toast.success("Utente aggiornato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.");
+      toast.error(
+        error instanceof Error ? error.message : "Errore durante l'aggiornamento dell'utente.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
@@ -367,7 +371,9 @@ export function SuperDashboard() {
       toast.success(activate ? "Accesso utente riattivato." : "Accesso utente disattivato.");
       await loadAdminData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.");
+      toast.error(
+        error instanceof Error ? error.message : "Errore durante la modifica dell'accesso.",
+      );
     } finally {
       setUserActionBusyId(null);
     }
@@ -896,7 +902,9 @@ export function SuperDashboard() {
                         <option value="all">Tutti i ruoli</option>
                         <option value="owner">Owner</option>
                         <option value="admin">Admin</option>
-                        <option value="responsabile_tecnico">Responsabile tecnico</option>
+                        <option value="responsabile_tecnico">
+                                      Responsabile tecnico
+                                    </option>
                         <option value="dispatcher">Dispatcher</option>
                         <option value="technician">Tecnico</option>
                         <option value="amministrazione">Amministrazione</option>
@@ -928,10 +936,7 @@ export function SuperDashboard() {
                             .toLowerCase()
                             .includes(userSearch.trim().toLowerCase()),
                         )
-                        .filter(
-                          (member) =>
-                            userRoleFilter === "all" || member.role === userRoleFilter,
-                        )
+                        .filter((member) => userRoleFilter === "all" || member.role === userRoleFilter)
                         .map((member) => {
                           const draft = userDrafts[member.id] ?? {
                             full_name: member.full_name,
