@@ -16,6 +16,8 @@ import {
   InterventionRecord,
   InterventionPriority,
   InterventionStatus,
+  AdminAuditEventRecord,
+  CreateAdminAuditEventInput,
 } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
@@ -34,6 +36,7 @@ export class DatabaseStore implements IDatabaseAdapter {
   private locations: Map<string, LocationRecord> = new Map();
   private assets: Map<string, AssetRecord> = new Map();
   private interventions: Map<string, InterventionRecord> = new Map();
+  private adminAuditEvents: Map<string, AdminAuditEventRecord> = new Map();
   public tokenStore = tokenStore;
 
   constructor() {
@@ -54,6 +57,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     this.locations.clear();
     this.assets.clear();
     this.interventions.clear();
+    this.adminAuditEvents.clear();
     this.tokenStore.reset();
 
     const now = new Date().toISOString();
@@ -529,6 +533,33 @@ export class DatabaseStore implements IDatabaseAdapter {
     }
 
     return { status: "deleted", regressedToInterventionId };
+  }
+
+
+  public async createAdminAuditEvent(input: CreateAdminAuditEventInput): Promise<AdminAuditEventRecord> {
+    if (!input.actorUserId || !input.action || !input.targetType || !input.targetId) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+    const actor = await this.findUserById(input.actorUserId);
+    if (!actor) throw new Error("ADMIN_AUDIT_ACTOR_NOT_FOUND");
+    const record: AdminAuditEventRecord = {
+      id: `audit-${randomUUID()}`,
+      actorUserId: input.actorUserId,
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      metadata: input.metadata ?? {},
+      createdAt: new Date().toISOString(),
+    };
+    this.adminAuditEvents.set(record.id, record);
+    return record;
+  }
+
+  public async getAdminAuditEvents(limit = 100): Promise<AdminAuditEventRecord[]> {
+    const boundedLimit = Number.isInteger(limit) ? Math.min(200, Math.max(1, limit)) : 100;
+    return Array.from(this.adminAuditEvents.values())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .slice(0, boundedLimit);
   }
 
   public async getGlobalStats(): Promise<any> {
