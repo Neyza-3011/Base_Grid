@@ -220,7 +220,9 @@ function CompanyOnboarding() {
                   {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
                 </h2>
               </div>
-              <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
+              <span className="shrink-0 text-xs text-white/50">
+                {step === 0 ? "1/2" : "2/2"}
+              </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
@@ -229,83 +231,86 @@ function CompanyOnboarding() {
               />
             </div>
           </div>
+
           <div className={step === 0 ? "space-y-5" : "hidden"}>
             <div>
-            <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
-              Nome azienda / ragione sociale *
-            </label>
-            <input
-              id="company-name"
-              required
-              minLength={2}
-              maxLength={100}
-              value={form.name}
-              onChange={(e) => updateField("name", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="organization"
-            />
+              <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
+                Nome azienda / ragione sociale *
+              </label>
+              <input
+                id="company-name"
+                required
+                minLength={2}
+                maxLength={100}
+                value={form.name}
+                onChange={(e) => updateField("name", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="organization"
+              />
+            </div>
+            <div>
+              <label htmlFor="company-address" className="mb-2 block text-sm font-medium">
+                Indirizzo della sede principale *
+              </label>
+              <input
+                id="company-address"
+                required
+                maxLength={255}
+                value={form.address}
+                onChange={(e) => updateField("address", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="street-address"
+              />
+            </div>
+            <div>
+              <label htmlFor="company-vat" className="mb-2 block text-sm font-medium">
+                Partita IVA (facoltativa)
+              </label>
+              <input
+                id="company-vat"
+                maxLength={50}
+                value={form.vat_number}
+                onChange={(e) => updateField("vat_number", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="off"
+              />
+              <p className="mt-1 text-xs text-white/50">
+                Non attiva integrazioni fiscali o contabili.
+              </p>
+            </div>
           </div>
-          <div>
-            <label htmlFor="company-address" className="mb-2 block text-sm font-medium">
-              Indirizzo della sede principale *
-            </label>
-            <input
-              id="company-address"
-              required
-              maxLength={255}
-              value={form.address}
-              onChange={(e) => updateField("address", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="street-address"
-            />
-          </div>
-          <div>
-            <label htmlFor="company-vat" className="mb-2 block text-sm font-medium">
-              Partita IVA (facoltativa)
-            </label>
-            <input
-              id="company-vat"
-              maxLength={50}
-              value={form.vat_number}
-              onChange={(e) => updateField("vat_number", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="off"
-            />
-            <p className="mt-1 text-xs text-white/50">
-              Non attiva integrazioni fiscali o contabili.
-            </p>
-          </div>
-          </div>
+
           <div className={step === 1 ? "space-y-5" : "hidden"}>
-          <div>
-            <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
-              Tariffa oraria predefinita (€)
-            </label>
-            <input
-              id="hourly-rate"
-              type="number"
-              min="0"
-              max="10000"
-              step="0.5"
-              value={form.default_hourly_rate}
-              onChange={(e) => updateField("default_hourly_rate", Number(e.target.value))}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-            />
+            <div>
+              <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
+                Tariffa oraria predefinita (€)
+              </label>
+              <input
+                id="hourly-rate"
+                type="number"
+                min="0"
+                max="10000"
+                step="0.5"
+                value={form.default_hourly_rate}
+                onChange={(e) => updateField("default_hourly_rate", Number(e.target.value))}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="report-footer" className="mb-2 block text-sm font-medium">
+                Note predefinite per i rapportini (facoltative)
+              </label>
+              <textarea
+                id="report-footer"
+                maxLength={1000}
+                rows={3}
+                value={form.report_footer_notes}
+                onChange={(e) => updateField("report_footer_notes", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="report-footer" className="mb-2 block text-sm font-medium">
-              Note predefinite per i rapportini (facoltative)
-            </label>
-            <textarea
-              id="report-footer"
-              maxLength={1000}
-              rows={3}
-              value={form.report_footer_notes}
-              onChange={(e) => updateField("report_footer_notes", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-            />
-          </div>
-          </div>
+
           {step === 1 && (
             <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-4">
               <div className="flex items-start gap-3">
@@ -315,12 +320,14 @@ function CompanyOnboarding() {
                   <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
                   <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
-                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o riaprire in seguito.
+                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare
+                    o riaprire in seguito.
                   </p>
                 </div>
               </div>
             </div>
           )}
+
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
             {step === 1 && (
               <button
@@ -338,7 +345,13 @@ function CompanyOnboarding() {
               disabled={saving}
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto sm:w-auto"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : step === 0 ? <ArrowRight className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : step === 0 ? (
+                <ArrowRight className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               {saving ? "Salvataggio..." : step === 0 ? "Continua" : "Salva e apri BaseGrid"}
             </button>
           </div>
