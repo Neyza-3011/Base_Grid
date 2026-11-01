@@ -242,7 +242,7 @@ export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
               }}
               className="min-h-11 rounded-xl border border-emerald-300/30 px-4 text-sm font-medium text-emerald-200 transition hover:bg-emerald-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
             >
-              Apri {activeStep.viewLabel}
+              {"Apri " + activeStep.viewLabel}
             </button>
           </div>
           <div className="flex items-center justify-end gap-2">
