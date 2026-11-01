@@ -158,7 +158,11 @@ export function SuperDashboard() {
       }
       setAuditEvents(payload.events as AdminAuditEvent[]);
     } catch (error) {
-      setAuditError(error instanceof Error ? error.message : "Errore durante il caricamento del registro.");
+      setAuditError(
+        error instanceof Error
+          ? error.message
+          : "Errore durante il caricamento del registro.",
+      );
     } finally {
       setAuditLoading(false);
     }
@@ -168,12 +172,15 @@ export function SuperDashboard() {
     if (!selectedTenant || tenantActionLoading) return;
     const company = selectedTenant.company;
     const actionLabel = isActive ? "riattivare" : "sospendere";
-    if (!window.confirm("Confermi di " + actionLabel + " l'azienda \"" + company.name + "\"?")) return;
+    const confirmation =
+      "Confermi di " + actionLabel + " l'azienda \"" + company.name + "\"?";
+    if (!window.confirm(confirmation)) return;
 
     setTenantActionLoading(true);
     try {
+      const action = isActive ? "reactivate" : "suspend";
       const response = await fetch(
-        "/api/v1/admin/tenants/" + encodeURIComponent(company.id) + "/" + (isActive ? "reactivate" : "suspend"),
+        "/api/v1/admin/tenants/" + encodeURIComponent(company.id) + "/" + action,
         {
           method: "POST",
           credentials: "include",
@@ -182,14 +189,36 @@ export function SuperDashboard() {
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.company || typeof payload.company.is_active !== "boolean") {
-        throw new Error(payload?.detail || ("Impossibile " + actionLabel + " l'azienda."));
+        throw new Error(payload?.detail || "Impossibile " + actionLabel + " l'azienda.");
       }
-      setSelectedTenant((current) => current ? { ...current, company: { ...current.company, is_active: payload.company.is_active } } : current);
-      setTenants((current) => current.map((tenant) => tenant.id === company.id ? { ...tenant, is_active: payload.company.is_active } : tenant));
-      toast.success(payload.changed === false ? "Lo stato dell'azienda era già aggiornato." : ("Azienda " + (isActive ? "riattivata" : "sospesa") + "."));
+
+      setSelectedTenant((current) =>
+        current
+          ? {
+              ...current,
+              company: { ...current.company, is_active: payload.company.is_active },
+            }
+          : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === company.id
+            ? { ...tenant, is_active: payload.company.is_active }
+            : tenant,
+        ),
+      );
+      toast.success(
+        payload.changed === false
+          ? "Lo stato dell'azienda era già aggiornato."
+          : "Azienda " + (isActive ? "riattivata" : "sospesa") + ".",
+      );
       void loadAuditEvents();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : ("Errore durante l'operazione: " + actionLabel + "."));
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'operazione: " + actionLabel + ".",
+      );
     } finally {
       setTenantActionLoading(false);
     }
@@ -572,26 +601,81 @@ export function SuperDashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-white">Registro amministrativo</h2>
-              <p className="mt-1 text-xs text-white/50">Ultimi 50 eventi restituiti dal backend, incluse sospensioni e riattivazioni.</p>
+              <p className="mt-1 text-xs text-white/50">
+                Ultimi 50 eventi restituiti dal backend, incluse sospensioni e riattivazioni.
+              </p>
             </div>
-            <button type="button" onClick={() => void loadAuditEvents()} disabled={auditLoading} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50">
+            <button
+              type="button"
+              onClick={() => void loadAuditEvents()}
+              disabled={auditLoading}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50"
+            >
               {auditLoading ? "Aggiornamento..." : "Aggiorna registro"}
             </button>
           </div>
-          {auditError && <div role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"><p>{auditError}</p><button type="button" onClick={() => void loadAuditEvents()} disabled={auditLoading} className="mt-2 underline disabled:opacity-50">Riprova</button></div>}
-          {auditLoading && auditEvents.length === 0 ? <p className="text-sm text-white/60">Caricamento registro amministrativo...</p> : auditEvents.length === 0 ? <p className="text-sm text-white/50">{auditError ? "Registro non disponibile." : "Nessun evento amministrativo registrato."}</p> : (
+          {auditError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+            >
+              <p>{auditError}</p>
+              <button
+                type="button"
+                onClick={() => void loadAuditEvents()}
+                disabled={auditLoading}
+                className="mt-2 underline disabled:opacity-50"
+              >
+                Riprova
+              </button>
+            </div>
+          )}
+          {auditLoading && auditEvents.length === 0 ? (
+            <p className="text-sm text-white/60">Caricamento registro amministrativo...</p>
+          ) : auditEvents.length === 0 ? (
+            <p className="text-sm text-white/50">
+              {auditError
+                ? "Registro non disponibile."
+                : "Nessun evento amministrativo registrato."}
+            </p>
+          ) : (
             <div className="overflow-x-auto rounded-xl border border-white/10">
               <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 text-white/55"><tr><th className="p-3">Data</th><th className="p-3">Azione</th><th className="p-3">Destinazione</th><th className="p-3">Attore</th><th className="p-3">Metadati</th></tr></thead>
-                <tbody className="divide-y divide-white/5">{auditEvents.map((event) => (
-                  <tr key={event.id}>
-                    <td className="whitespace-nowrap p-3 text-white/70">{event.created_at ? new Date(event.created_at).toLocaleString("it-IT") : "Data non disponibile"}</td>
-                    <td className="p-3 font-medium text-white">{event.action}</td>
-                    <td className="p-3 text-white/70"><span>{event.target_type}</span><span className="block break-all font-mono text-[10px] text-white/45">{event.target_id}</span></td>
-                    <td className="break-all p-3 font-mono text-[10px] text-white/60">{event.actor_user_id}</td>
-                    <td className="p-3 text-white/60"><pre className="max-w-sm whitespace-pre-wrap break-words font-mono text-[10px]">{event.metadata ? JSON.stringify(event.metadata) : "—"}</pre></td>
+                <thead className="bg-white/5 text-white/55">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Azione</th>
+                    <th className="p-3">Destinazione</th>
+                    <th className="p-3">Attore</th>
+                    <th className="p-3">Metadati</th>
                   </tr>
-                ))}</tbody>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {auditEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td className="whitespace-nowrap p-3 text-white/70">
+                        {event.created_at
+                          ? new Date(event.created_at).toLocaleString("it-IT")
+                          : "Data non disponibile"}
+                      </td>
+                      <td className="p-3 font-medium text-white">{event.action}</td>
+                      <td className="p-3 text-white/70">
+                        <span>{event.target_type}</span>
+                        <span className="block break-all font-mono text-[10px] text-white/45">
+                          {event.target_id}
+                        </span>
+                      </td>
+                      <td className="break-all p-3 font-mono text-[10px] text-white/60">
+                        {event.actor_user_id}
+                      </td>
+                      <td className="p-3 text-white/60">
+                        <pre className="max-w-sm whitespace-pre-wrap break-words font-mono text-[10px]">
+                          {event.metadata ? JSON.stringify(event.metadata) : "—"}
+                        </pre>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           )}
@@ -635,7 +719,10 @@ export function SuperDashboard() {
                       "Stato configurazione",
                       selectedTenant.company.setup_complete ? "Completata" : "Incompleta",
                     ],
-                    ["Stato azienda", selectedTenant.company.is_active === false ? "Sospesa" : "Attiva"],
+                    [
+                      "Stato azienda",
+                      selectedTenant.company.is_active === false ? "Sospesa" : "Attiva",
+                    ],
                     [
                       "Stato abbonamento",
                       selectedTenant.company.subscription_status || "Non disponibile",
