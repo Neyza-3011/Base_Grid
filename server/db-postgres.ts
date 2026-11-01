@@ -91,6 +91,7 @@ function mapCompanyRow(row: any): CompanyRecord {
     stripeSubscriptionStatus: row.stripeSubscriptionStatus || "",
     maxUsers: Number(row.maxUsers) || 0,
     featurePdfExport: Boolean(row.featurePdfExport),
+    logoDataUrl: typeof row.logoDataUrl === "string" && row.logoDataUrl ? row.logoDataUrl : null,
     isActive: row.isActive === undefined ? true : Boolean(row.isActive),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
@@ -310,6 +311,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
+  findCompanyWithLogoById(id: string): Promise<CompanyRecord | null>;
   updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null>;
   setCompanyActiveWithAudit(
     companyId: string,
@@ -1035,6 +1037,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   // --- Company Operations ---
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
+    const res = await this.pool.query(
+      'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies WHERE id = $1 LIMIT 1',
+      [id],
+    );
+    return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
+  }
+
+  public async findCompanyWithLogoById(id: string): Promise<CompanyRecord | null> {
     const res = await this.pool.query("SELECT * FROM companies WHERE id = $1 LIMIT 1", [id]);
     return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
   }
@@ -1043,15 +1053,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
     id: string,
     updates: Partial<CompanyRecord>,
   ): Promise<CompanyRecord | null> {
-    const existing = await this.findCompanyById(id);
+    const existing = await this.findCompanyWithLogoById(id);
     if (!existing) return null;
 
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
 
     await this.pool.query(
       `UPDATE companies 
-       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "updatedAt" = $10
-       WHERE id = $11`,
+       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "logoDataUrl" = $10, "updatedAt" = $11
+       WHERE id = $12`,
       [
         updated.name,
         updated.vatNumber,
@@ -1062,6 +1072,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated.maxUsers,
         updated.featurePdfExport,
         updated.isActive ?? true,
+        updated.logoDataUrl ?? null,
         updated.updatedAt,
         id,
       ],
@@ -1088,7 +1099,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     return this.withTransaction(async (client) => {
       const currentResult = await client.query(
-        'SELECT * FROM companies WHERE id = $1 FOR UPDATE',
+        'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies WHERE id = $1 FOR UPDATE',
         [companyId],
       );
       if (!currentResult.rows[0]) return null;
@@ -1097,7 +1108,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       const now = new Date().toISOString();
       const updatedResult = await client.query(
-        'UPDATE companies SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING *',
+        'UPDATE companies SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt"',
         [isActive, now, companyId],
       );
       await client.query(
@@ -1123,7 +1134,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
-    const res = await this.pool.query('SELECT * FROM companies ORDER BY "createdAt" DESC');
+    const res = await this.pool.query(
+      'SELECT id, name, "vatNumber", address, "defaultHourlyRate", "reportFooterNotes", "stripeSubscriptionStatus", "maxUsers", "featurePdfExport", "isActive", "createdAt", "updatedAt" FROM companies ORDER BY "createdAt" DESC',
+    );
     return res.rows.map(mapCompanyRow);
   }
 

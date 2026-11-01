@@ -26,6 +26,10 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
 
     mockDb = {
       findCompanyById: vi.fn().mockImplementation(async (id: string) => {
+        if (id === sampleCompany.id) return { ...sampleCompany, logoDataUrl: null };
+        return null;
+      }),
+      findCompanyWithLogoById: vi.fn().mockImplementation(async (id: string) => {
         if (id === sampleCompany.id) return { ...sampleCompany };
         return null;
       }),
@@ -49,6 +53,13 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
 
   it("throws NotFoundError if company does not exist", async () => {
     await expect(companyService.getCompanySettings("comp-999")).rejects.toThrow(NotFoundError);
+  });
+
+  it("uses the lightweight lookup when logo data is not requested", async () => {
+    const result = await companyService.getCompanySettings("comp-001", false);
+    expect(result.logoDataUrl).toBeNull();
+    expect(mockDb.findCompanyById).toHaveBeenCalledWith("comp-001");
+    expect(mockDb.findCompanyWithLogoById).not.toHaveBeenCalled();
   });
 
   it("updates standard settings for admin role", async () => {
@@ -83,5 +94,36 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
       "superadmin"
     );
     expect(updated.maxUsers).toBe(100);
+  });
+
+  it("persists a valid PNG company logo for PDF branding", async () => {
+    const logoDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
+    const updated = await companyService.updateCompanySettings(
+      "comp-001",
+      { logoDataUrl },
+      "admin",
+    );
+    expect(updated.logoDataUrl).toBe(logoDataUrl);
+  });
+
+  it("rejects SVG or malformed company logo uploads", async () => {
+    await expect(
+      companyService.updateCompanySettings(
+        "comp-001",
+        { logoDataUrl: "data:image/svg+xml;base64,PHN2Zy8+" },
+        "admin",
+      ),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("rejects oversized logo dimensions before image decoding", async () => {
+    const pngHeader = Buffer.alloc(24);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(pngHeader, 0);
+    pngHeader.writeUInt32BE(4096, 16);
+    pngHeader.writeUInt32BE(4096, 20);
+    const logoDataUrl = `data:image/png;base64,${pngHeader.toString("base64")}`;
+    await expect(
+      companyService.updateCompanySettings("comp-001", { logoDataUrl }, "admin"),
+    ).rejects.toThrow("2048");
   });
 });

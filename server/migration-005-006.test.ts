@@ -372,7 +372,7 @@ describe("Migration 005 Immutability & Migration 006 Correctness", () => {
       expect(versions).toEqual([...versions].sort());
       expect(new Set(versions).size).toBe(versions.length);
       expect(versions).toEqual(
-        expect.arrayContaining(["001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011"]),
+        expect.arrayContaining(["001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012", "013", "014"]),
       );
     });
   });

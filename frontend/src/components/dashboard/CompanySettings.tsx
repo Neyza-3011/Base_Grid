@@ -18,6 +18,8 @@ import {
   Receipt,
   Clock,
   ShieldCheck,
+  ImagePlus,
+  Trash2,
 } from "lucide-react";
 
 interface CompanyData {
@@ -27,6 +29,7 @@ interface CompanyData {
   default_hourly_rate: number;
   report_footer_notes: string;
   stripe_subscription_status: string;
+  logo_data_url: string | null;
 }
 
 export function CompanySettings() {
@@ -44,6 +47,7 @@ export function CompanySettings() {
     default_hourly_rate: 0,
     report_footer_notes: "",
     stripe_subscription_status: "Attivo",
+    logo_data_url: null,
   });
 
   const [preferences, setPreferences] = useState({
@@ -74,6 +78,7 @@ export function CompanySettings() {
             address: data.address || "",
             default_hourly_rate: data.default_hourly_rate || 0,
             report_footer_notes: data.report_footer_notes || "",
+            logo_data_url: data.logo_data_url || null,
             stripe_subscription_status:
               data.stripe_subscription_status || "Attivo (Piano Team Pro)",
           });
@@ -92,6 +97,31 @@ export function CompanySettings() {
   ) => {
     const value = e.target.type === "number" ? parseFloat(e.target.value) : e.target.value;
     setFormData((prev) => ({ ...prev, [e.target.name]: value }));
+  };
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "image/png" && file.type !== "image/jpeg") {
+      toast.error("Carica il logo in formato PNG o JPEG.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 256 * 1024) {
+      toast.error("Il logo deve pesare al massimo 256 KB.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        toast.error("Impossibile leggere il file del logo.");
+        return;
+      }
+      setFormData((current) => ({ ...current, logo_data_url: reader.result as string }));
+    };
+    reader.onerror = () => toast.error("Impossibile leggere il file del logo.");
+    reader.readAsDataURL(file);
   };
 
   const handlePrefChange = (key: string, val: string) => {
@@ -118,6 +148,7 @@ export function CompanySettings() {
           address: formData.address,
           default_hourly_rate: formData.default_hourly_rate,
           report_footer_notes: formData.report_footer_notes,
+          logo_data_url: formData.logo_data_url,
         }),
       });
 
@@ -196,6 +227,55 @@ export function CompanySettings() {
       {activeTab === "azienda" && (
         <div className="p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
           <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/30 p-4 sm:p-5">
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  Logo aziendale nei rapportini PDF
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-white/55">
+                  {
+                    "Facoltativo. Il logo viene salvato nell’azienda e inserito nei PDF solo se presente. PNG o JPEG, massimo 256 KB e 2048 × 2048 pixel."
+                  }
+                </p>
+              </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="grid h-20 w-28 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-white p-2">
+                  {formData.logo_data_url ? (
+                    <img
+                      src={formData.logo_data_url}
+                      alt="Anteprima logo aziendale"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <Building2 className="h-8 w-8 text-slate-400" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition hover:bg-primary/90">
+                    <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                    Carica logo
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      onChange={handleLogoFileChange}
+                      className="sr-only"
+                    />
+                  </label>
+                  {formData.logo_data_url && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((current) => ({ ...current, logo_data_url: null }))
+                      }
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:bg-white/5 hover:text-white"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      Rimuovi logo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
             <div className="space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 pb-2 border-b border-white/10 flex items-center gap-2">
                 <Briefcase className="h-4 w-4 text-primary" /> Anagrafica Fiscale

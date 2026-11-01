@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth";
-import { reportsService } from "../services";
+import { companyService, reportsService } from "../services";
 import { asyncHandler } from "../async-handler";
 import { ValidationError, UnauthorizedError, ForbiddenError } from "../errors";
 import { UserRole } from "../types";
@@ -126,7 +126,8 @@ reportsRouter.get(
       throw new ValidationError("ID non valido.");
     }
     const report = await reportsService.getReportById(req.user.companyId, reportId);
-    const pdf = await generateReportPdf(report);
+    const company = await companyService.getCompanySettings(req.user.companyId);
+    const pdf = await generateReportPdf(report, company);
     const safeFilenameId = report.id.replace(/[^a-zA-Z0-9_-]/g, "_");
     res.status(200);
     res.setHeader("Content-Type", "application/pdf");

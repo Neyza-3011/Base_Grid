@@ -103,15 +103,18 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
         companyId: "comp-rossi-001",
         name: "Tenant B Updated",
         stripe_subscription_status: "canceled",
+        logo_data_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC",
       },
     });
 
     expect(update.status).toBe(200);
-    const companyAAfter = await db.findCompanyById("comp-rossi-001");
-    const companyBAfter = await db.findCompanyById(tenantBCompanyId);
+    const companyAAfter = await db.findCompanyWithLogoById("comp-rossi-001");
+    const companyBAfter = await db.findCompanyWithLogoById(tenantBCompanyId);
     expect(companyAAfter?.name).toBe(companyABefore?.name);
     expect(companyBAfter?.name).toBe("Tenant B Updated");
     expect(companyBAfter?.stripeSubscriptionStatus).toBe(companyBBefore?.stripeSubscriptionStatus);
+    expect(companyAAfter?.logoDataUrl ?? null).toBeNull();
+    expect(companyBAfter?.logoDataUrl).toContain("data:image/png;base64,");
   });
 
   it("rejects malformed runtime field types without mutating the company", async () => {

@@ -339,7 +339,14 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
-    return this.companies.get(id) || null;
+    const company = this.companies.get(id);
+    if (!company) return null;
+    return { ...company, logoDataUrl: null };
+  }
+
+  public async findCompanyWithLogoById(id: string): Promise<CompanyRecord | null> {
+    const company = this.companies.get(id);
+    return company ? { ...company } : null;
   }
 
   public async updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null> {
@@ -394,7 +401,10 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
   public async getAllTenants(): Promise<CompanyRecord[]> {
-    return Array.from(this.companies.values());
+    return Array.from(this.companies.values()).map((company) => ({
+      ...company,
+      logoDataUrl: null,
+    }));
   }
 
   public async getReportsByCompany(companyId: string, limit: number = 100): Promise<ReportRecord[]> {
