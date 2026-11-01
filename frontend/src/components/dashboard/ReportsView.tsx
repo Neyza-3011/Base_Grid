@@ -488,7 +488,7 @@ export function ReportsView({
   }
 
   return (
-    <div className="flex flex-col space-y-6 h-full text-white">
+    <div className="flex w-full min-w-0 flex-col space-y-6 text-white">
       {/* Header & Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div>
@@ -526,14 +526,14 @@ export function ReportsView({
 
       {/* Error state banner if server fetch failed */}
       {error && (
-        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 flex items-center justify-between gap-3">
+        <div className="flex flex-col items-stretch justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2.5">
             <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
-            <span className="text-sm">{error}</span>
+            <span className="min-w-0 break-words text-sm">{error}</span>
           </div>
           <button
             onClick={loadAllData}
-            className="h-8 px-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs font-semibold text-red-200 flex items-center gap-1.5 transition active:scale-95"
+            className="flex h-9 items-center justify-center gap-1.5 self-start rounded-lg bg-red-500/20 px-3 text-xs font-semibold text-red-200 transition hover:bg-red-500/30 active:scale-95 sm:self-auto"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Riprova
           </button>
@@ -579,8 +579,8 @@ export function ReportsView({
 
       {/* Primary Optimized Data Table */}
       <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] overflow-hidden flex-1 flex flex-col">
-        <div className="px-6 py-3.5 border-b border-white/10 bg-white/[0.02] flex items-center justify-between text-xs text-white/60">
-          <div className="flex items-center gap-2 font-medium">
+        <div className="flex flex-col gap-2 border-b border-white/10 bg-white/[0.02] px-3 py-3.5 text-xs text-white/60 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 font-medium">
             <Calendar className="h-4 w-4 text-blue-400" />
             <span>Tutti i Rapportini (Ordinati per data recente)</span>
             <span className="text-white/40">
@@ -893,7 +893,7 @@ export function ReportsView({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-white/70">Ore Lavoro</label>
                   <input
@@ -927,7 +927,7 @@ export function ReportsView({
                 <label className="text-xs font-semibold text-white/80 block">
                   Verifica Materiali Utilizzati
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setMaterialsMode("used")}
@@ -964,7 +964,7 @@ export function ReportsView({
                 </div>
 
                 {materialsMode === "used" && (
-                  <div className="grid grid-cols-3 gap-2 pt-1">
+                  <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
                     <input
                       disabled={submitting}
                       value={newMaterialName}

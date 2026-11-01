@@ -181,10 +181,10 @@ function Wizard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090D16] text-white flex flex-col">
+    <div className="min-h-screen w-full min-w-0 bg-[#090D16] text-white flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#090D16]/80 border-b border-white/5">
-        <div className="relative mx-auto max-w-2xl px-4 h-14 flex items-center">
+        <div className="relative mx-auto flex h-14 min-w-0 max-w-2xl items-center px-12">
           <Link
             to="/dashboard"
             className="absolute left-2 grid h-10 w-10 place-items-center rounded-lg hover:bg-white/5 active:scale-95 transition"
@@ -195,7 +195,7 @@ function Wizard() {
             <div className="text-[10px] uppercase tracking-wider text-white/40">
               Passo {step + 1} di {steps.length}
             </div>
-            <div className="text-sm font-semibold">{steps[step]}</div>
+            <div className="max-w-full truncate text-sm font-semibold">{steps[step]}</div>
           </div>
         </div>
         <div className="h-1 bg-white/5">

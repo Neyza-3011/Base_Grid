@@ -359,7 +359,7 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -580,7 +580,7 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
 
                   {/* Dates if available */}
                   {(asset.installationDate || asset.warrantyEndDate) && (
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-[11px] text-white/50">
+                    <div className="grid grid-cols-1 gap-2 border-t border-white/5 pt-2 text-[11px] text-white/50 sm:grid-cols-2">
                       {asset.installationDate && (
                         <div>
                           <span>Installato: </span>
