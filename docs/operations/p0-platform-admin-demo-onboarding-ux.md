@@ -8,7 +8,7 @@ Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNV
 
 ## Latest verified baseline
 
-Baseline: `main` at `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38` (2026-10-30, merge of PR #115).
+Baseline: `main` at `ccd83c4699e490d8072851017f5c68504e840082` (2026-11-01, merge of PR #132). Main CI run [41328081643](https://github.com/Neyza-3011/Base_Grid/actions/runs/41328081643) completed successfully on this exact SHA, including lint, backend/frontend type-check, Vitest, build and the PostgreSQL + Redis runtime smoke test.
 
 - PR #85 adds HTTP regression coverage that a tenant admin cannot read/deactivate another tenant's team member. CI run `40668715854` passed lint, backend/frontend type-check, Vitest and build.
 - PR #86 adds HTTP regression coverage that a tenant admin cannot read/update another tenant's location and that the rejected update has no side effect. CI run `40709870748` passed.
@@ -34,23 +34,14 @@ Baseline: `main` at `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38` (2026-10-30, merg
 - PR #103 (`04ce257099284c0de221184ebb06218f8907d9c4`) adds HTTP regression coverage for cross-tenant team activation/deactivation and asserts persisted user state remains unchanged after both rejected requests. PR CI run [40845008831](https://github.com/Neyza-3011/Base_Grid/actions/runs/40845008831) passed lint, backend/frontend type-check, Vitest and build. Merge commit: `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581`.
 - Current `main` CI run [40845568747](https://github.com/Neyza-3011/Base_Grid/actions/runs/40845568747) passed on `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581`. Scheduled Render Smoke Tests run [40825371370](https://github.com/Neyza-3011/Base_Grid/actions/runs/40825371370) passed on PR #99 merge commit. Smoke tests are not full production validation.
 - PR #105 (`feat/p0-account-setup-gate`) adds a first-run company setup gate based on persisted company name/address, an onboarding route, and integration tests. The branch CI run [40865145679](https://github.com/Neyza-3011/Base_Grid/actions/runs/40865145679) passed; PR #105 was subsequently merged as `9bd3bfcccc52fa1fc2285d5bcf905c47c8f2ca9c`, and main CI run [40868378977](https://github.com/Neyza-3011/Base_Grid/actions/runs/40868378977) passed. This is a first implementation slice, not full onboarding; contact details, service categories, service area, locale/time zone, browser E2E and additional failure/retry coverage remain outstanding.
-- The CEO console is still read-only at this baseline. The new branch `feat/p0-ceo-tenant-details` adds a CEO-only tenant-detail API and searchable inspection UI; lifecycle writes, persistent admin audit, status transitions and destructive-operation safeguards are not included in this slice.
-
-
-- PR #106 adds CEO-only tenant detail inspection and safe user summaries; merged on 2026-10-30. This is read-only and does not implement tenant lifecycle mutations.
-- PR #107 validates intervention query date ranges and hardens null request-body handling; merged on 2026-10-30.
-- PR #108 restores `autoDeploy: false` in `render.yaml`; merged on 2026-10-30. This repository setting does not prove the live Render service has synchronized its Blueprint or that live automatic deploy is disabled.
-- PR #109 adds anonymous-request 401 regression tests for platform stats, tenant list and tenant detail; merged on 2026-10-30.
-- PR #110 adds a separate PostgreSQL 16 + Redis 7 backend runtime smoke job. CI run #312 passed lint, backend/frontend type-check, Vitest, build, compiled backend startup, `/health=200`, and `/ready=200` with PostgreSQL and Redis readiness. This validates the disposable CI runtime only, not the live Render deployment or production TLS configuration.
-- PR #111 adds the CEO-only tenant profile update API; merged as `3a617ed5958807b9388030d97d0b4c21bc221fd9`. Its PR CI run #314 passed lint, backend/frontend type-check, Vitest, build, and the PostgreSQL + Redis backend runtime smoke test.
-- PR #113 adds the CEO console company-profile editor; merged as `65afb0233386c03e1a094d0b4733351190750923`. Browser/E2E behavior remains unverified.
-- PR #114 adds strict runtime type validation for company settings; merged as `0d614d6431798087b9f21a03e18ad1d566b3f015`.
-- PR #115 synchronizes this roadmap; merged as `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38`. The merge's CI run #321 passed.
-- PR #116 adds CEO tenant-user profile/role editing and activate/deactivate endpoints with session revocation and last-admin protection. Status: `IN_PROGRESS`; run #328 had lint and both type-checks pass, runtime smoke pass, and Vitest still running at last check.
-- PR #117 adds tenant user management/search/filter UI and company platform-controls UI. Status: `IN_PROGRESS`; an earlier head failed the runtime smoke build because the frontend route file had a syntax error. That error has been corrected in a newer commit; its rerun is not yet verified.
-- PR #118 adds a CEO API for bounded max-user and PDF-export controls. Status: `IN_PROGRESS`; CI is still running at last check.
-- PR #119 corrects false-success dashboard refresh behavior and adds retry/error states. Status: `IN_PROGRESS`; CI is still running at last check.
-- User/company permanent deletion, company suspension, persistent admin audit events and a browser-tested end-to-end admin lifecycle are not implemented by these PRs. Do not label the CEO console complete until these gaps are addressed and verified.
+- PR #116 adds CEO-only tenant-user profile/role editing and activate/deactivate API controls; the current backend route contains these guarded endpoints and session-revocation checks.
+- PR #118 adds CEO tenant platform controls; PRs #121–#124 add persisted platform audit-event storage and audited tenant suspension/reactivation with a CEO console slice. The database migration `012_admin_audit_events.sql` and `/api/v1/admin/audit-events` endpoint exist on this baseline.
+- PR #119 improves admin dashboard load-error reporting and retry states.
+- PR #126 stabilizes the responsive PDF preview layout; PR #128 adds company-branded reports. Browser-level PDF preview/print and screen-reader verification remain outstanding.
+- PR #127 adds a skippable product tour; PR #130 adds the guided company setup wizard. The tour and onboarding code exist, but persisted progress, browser E2E and full first-run setup requirements are not yet fully verified.
+- PR #129 improves responsive dashboard layouts; PR #131 improves the CEO panel's mobile layout; PR #132 improves responsive authentication screens.
+- Direct source inspection confirms the CEO UI includes tenant search, tenant details, profile editing and user information. The route does not currently call the company suspend/reactivate endpoints or render an audit-event viewer; lifecycle UI, deletion safeguards and browser verification remain incomplete.
+- Pull requests [#133](https://github.com/Neyza-3011/Base_Grid/pull/133) and [#134](https://github.com/Neyza-3011/Base_Grid/pull/134) are open and are not included in the `main` baseline. Their CI must be assessed on their own head SHAs. Vercel preview skips/rate limits are not source-code failures and are not to be worked around.
 
 ## Ordered checkpoints
 
@@ -66,7 +57,7 @@ Baseline: `main` at `08ab5e6a61e0f1d0edfb368adfa06c8d89544b38` (2026-10-30, merg
 
 Status: `IN_PROGRESS`
 
-Evidence: PRs #84–#87 and #94 are merged; referenced CI runs passed. Coverage includes canonical CEO email enforcement, rejection of client-supplied role/platformRole fields on registration/invite/profile update, cross-tenant team-member and location isolation, existing asset/intervention/report isolation tests, focused company-settings HTTP tests, and no-side-effect assertions for rejected cross-tenant asset mutations (PR #97), customer mutations (PR #98), team-member profile/role updates (PR #99), and activation/deactivation (PR #103). PR #101 adds runtime input validation and fail-closed handling for email changes requiring session revocation. `main` at `cb456f89c0293099b0e2cd4ed1e35de1ce7ff581` passes CI run `40845568747`. This is still not a complete route-by-route audit.
+Evidence: the current `main` baseline `ccd83c4699e490d8072851017f5c68504e840082` passes CI run `41328081643`. Existing tests cover canonical CEO/platform authority, client-supplied role/platformRole rejection, cross-tenant access and no-side-effect assertions for multiple entity mutations, plus fail-closed session revocation paths. This remains a focused set of protections, not a complete route-by-route authorization audit.
 
 Acceptance criteria:
 - Keep company roles scoped to their own company and platform CEO authority separate from company administration.
@@ -80,7 +71,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Priority: implement this before the remaining general roadmap work, after the current baseline/PR dependencies are clear. Initial implementation branch: `feat/p0-account-setup-gate`. This slice uses persisted company name/address as the completion signal and server-side authentication middleware to block tenant workflow endpoints until the owner completes setup. It is not yet the full setup profile: contact details, service area/categories, locale/time zone, browser E2E, and additional failure/retry coverage remain outstanding.
+The required gate and `/onboarding` route exist on current `main`; PR #130 adds a guided two-step company setup form. The server gate is covered by `server/onboarding-gate.test.ts`. The current form persists name, address, VAT number, hourly-rate default and report-footer notes. It is not the full setup profile: contact details, service area/categories, locale/time zone and browser E2E remain outstanding. PR #133 adds explicit retry handling for settings-load failures but is still open; do not count it as integrated.
 
 Acceptance criteria:
 - After registration and first authentication, route a new owner through a required, resumable company setup before exposing normal operational workflows. The report/rapportino `/wizard` is not company onboarding.
@@ -105,7 +96,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: existing `/api/v1/admin/stats` and `/api/v1/admin/tenants` are server-protected by `requireSuperAdmin`, which delegates to CEO platform authorization. PR #88 adds HTTP integration coverage for company-admin denial and canonical CEO access; its CI run `40716278555` passed lint, backend/frontend type-check, Vitest and build. A separate audit found `total_clients` hardcoded to `42` in both database adapters; PR #91 removes the hard-coded `total_clients: 42` from both adapters and adds regression coverage; CI run `40718888230` passed. The console remains read-only; company/user lifecycle operations, persistent audit events, destructive-operation safeguards and session revocation remain unimplemented or unverified.
+Evidence: the current backend exposes CEO-protected stats, tenant list/detail/profile endpoints, tenant-user profile/role and activate/deactivate operations, tenant suspend/reactivate operations, and bounded persisted audit-event reads. `server/migrations/012_admin_audit_events.sql` defines the durable audit table. The UI provides tenant search, detail inspection, profile editing and user summaries, but direct inspection found no calls from this route to suspend/reactivate endpoints and no audit-event viewer. Permanent deletion is not implemented; browser/E2E lifecycle verification remains outstanding. Do not infer completion from API presence alone.
 
 Acceptance criteria:
 - Finalize the CEO-only control panel as the central platform administration interface, with searchable/filterable company and user lists, detail views, status/usage summaries, linked records and clear empty/loading/error states.
@@ -132,19 +123,22 @@ Acceptance criteria:
 
 ### P0-ONBOARDING — Required first-run setup
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
 
-Audit evidence: the route tree contains `/wizard`, which creates a rapportino, and invite-acceptance routes; no dedicated required first-run company-setup route or onboarding-progress API/model was found in the searched frontend routes, API route mounts, or migration `002_team_and_onboarding.sql`. This is a targeted search, not a full product-wide proof. Do not confuse the rapportino wizard with company onboarding.
+Evidence: current `main` contains `/onboarding`, the server-side company setup gate and `server/onboarding-gate.test.ts`; PR #130 adds the guided setup wizard. The form currently persists company name, address, VAT number, hourly rate and report-footer notes. PR #133 proposes explicit recovery/retry UI for a settings-load failure but is not merged and has not yet passed its current CI.
 
 Acceptance criteria:
-- Require minimal company setup after account creation/authentication before normal workflows.
+- Require minimal company setup after account creation/authentication before exposing normal operational workflows.
 - Persist progress server-side so refresh/relogin cannot bypass required steps.
 - Validate fields server-side and provide accessible loading, validation, error and recovery states.
 - Test new/existing users, incomplete setup, reloads, expired sessions and direct API access.
-
+- Add the remaining supported business contact details, service area/categories and locale/time-zone fields only after confirming the data model and downstream workflow contracts; do not add unsupported fields only to satisfy a checklist.
+- Verify save/resume and the full flow in a browser before `DONE_VERIFIED`.
 ### P0-TUTORIAL — Optional product tour
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
+
+Evidence: PR #127 adds the skippable product-tour component and is merged. Browser-level keyboard/accessibility checks and proof of persistent per-user tour state remain unverified.
 
 Acceptance criteria:
 - Keep tutorial separate from mandatory onboarding; allow skip, dismiss, resume and restart.
@@ -155,7 +149,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: PR #92 is merged and focused unit tests cover PDF signature/MIME/size validation. PR #96 adds a keyboard focus trap and restores focus to the opener; its CI run `40777194209` passed lint, backend/frontend type-check, Vitest and build. Current `main` CI run `40780167543` passed on `b4ebbf66443adccefb4389dd57f80c47e958a534`. Browser/screen-reader behavior, print-iframe failure cleanup and end-to-end preview behavior remain unverified.
+Evidence: PRs #92 and #96 cover PDF blob validation and preview keyboard focus; PR #126 stabilizes the responsive preview layout, and PR #128 adds company branding to reports. Current `main` CI run `41328081643` passed on `ccd83c4699e490d8072851017f5c68504e840082`. Browser/screen-reader behavior, print-iframe failure cleanup, and end-to-end PDF preview/branding behavior remain unverified.
 
 Acceptance criteria:
 - Reproduce reported preview failures and trace generation, response headers/body, browser preview, object URL lifecycle and error states.
@@ -165,7 +159,7 @@ Acceptance criteria:
 
 ## Deferred work and release rules
 
-- P0.9 backup/restore: `NOT_STARTED` — required by the current release plan; implement protected backups, documented retention, and a real restore/integrity test before release.
+- P0.9 backup/restore: `NOT_STARTED` — explicitly skipped by the user until reauthorized. Do not implement or execute backup/restore operations before explicit reauthorization.
 - Supabase RLS: `BLOCKED` — explicitly deferred until the user explicitly reopens it.
 - One checkpoint per PR unless an inseparable dependency is documented.
 - Never push directly to `main`, merge autonomously, deploy autonomously or bypass CI/review.
