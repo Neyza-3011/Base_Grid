@@ -148,7 +148,9 @@ function Dashboard() {
   const handleLogout = async () => {
     const loggedOut = await logoutUser();
     if (!loggedOut) {
-      toast.error("Il server non ha confermato il logout. La sessione potrebbe essere ancora attiva.");
+      toast.error(
+        "Il server non ha confermato il logout. La sessione potrebbe essere ancora attiva.",
+      );
       return;
     }
     toast.info("Sessione terminata. Arrivederci!");
