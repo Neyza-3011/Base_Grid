@@ -13,7 +13,7 @@ import {
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
-import { appendCsrfHeaders, fetchServerSession, UserSession } from "@/lib/auth";
+import { appendCsrfHeaders, fetchServerSession, logoutUser, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/super-dashboard")({
@@ -260,6 +260,18 @@ export function SuperDashboard() {
     }
   };
 
+  const handleLogout = async () => {
+    const loggedOut = await logoutUser();
+    if (!loggedOut) {
+      toast.error(
+        "Il server non ha confermato il logout. La sessione potrebbe essere ancora attiva.",
+      );
+      return;
+    }
+    toast.info("Sessione Super-Admin terminata");
+    navigate({ to: "/" });
+  };
+
   if (!user) return null;
 
   return (
@@ -294,12 +306,10 @@ export function SuperDashboard() {
           </Link>
 
           <button
-            onClick={() => {
-              navigate({ to: "/" });
-              toast.info("Sessione Super-Admin terminata");
-            }}
+            onClick={handleLogout}
             className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 transition"
             title="Esci dall'Area Riservata"
+            aria-label="Esci dall'Area Riservata"
           >
             <LogOut className="h-4 w-4" />
           </button>

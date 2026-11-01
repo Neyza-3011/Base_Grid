@@ -112,15 +112,17 @@ export async function fetchServerSession(
 /**
   Terminates user session on backend server and revokes HttpOnly cookies.
  */
-export async function logoutUser(): Promise<void> {
+export async function logoutUser(): Promise<boolean> {
   try {
-    await fetch("/api/v1/auth/logout", {
+    const response = await fetch("/api/v1/auth/logout", {
       method: "POST",
       headers: appendCsrfHeaders(),
       credentials: "include",
     });
+    return response.ok;
   } catch {
-    // Silent network failure on logout
+    // A failed request must not be reported as a confirmed logout.
+    return false;
   }
 }
 
