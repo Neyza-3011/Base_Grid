@@ -171,7 +171,7 @@ export function SuperDashboard() {
     const company = selectedTenant.company;
     const actionLabel = isActive ? "riattivare" : "sospendere";
     const confirmation =
-      "Confermi di " + actionLabel + " l'azienda \\"" + company.name + '"?';
+      "Confermi di " + actionLabel + " l'azienda \"" + company.name + '"?';
     if (!window.confirm(confirmation)) return;
 
     setTenantActionLoading(true);
