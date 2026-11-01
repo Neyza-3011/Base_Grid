@@ -577,7 +577,13 @@ export function SuperDashboard() {
                         <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                           {t.setup_complete ? "Setup completato" : "Setup incompleto"}
                         </span>
-                        <span className={t.is_active === false ? "ml-2 rounded-full border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] font-semibold text-red-300" : "ml-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"}>
+                        <span
+                          className={
+                            t.is_active === false
+                              ? "ml-2 rounded-full border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] font-semibold text-red-300"
+                              : "ml-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"
+                          }
+                        >
                           {t.is_active === false ? "Sospesa" : "Attiva"}
                         </span>
                       </td>
@@ -772,14 +778,27 @@ export function SuperDashboard() {
                 <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#090D16] p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-white">Stato e accesso aziendale</h3>
-                    <p className="mt-1 text-xs text-white/50">La sospensione revoca le sessioni del tenant. L'operazione viene registrata nel registro amministrativo.</p>
+                    <p className="mt-1 text-xs text-white/50">
+                      La sospensione revoca le sessioni del tenant. L'operazione viene
+                      registrata nel registro amministrativo.
+                    </p>
                   </div>
                   {selectedTenant.company.is_active === false ? (
-                    <button type="button" onClick={() => void changeTenantStatus(true)} disabled={tenantActionLoading} className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
+                    <button
+                      type="button"
+                      onClick={() => void changeTenantStatus(true)}
+                      disabled={tenantActionLoading}
+                      className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       {tenantActionLoading ? "Aggiornamento..." : "Riattiva azienda"}
                     </button>
                   ) : (
-                    <button type="button" onClick={() => void changeTenantStatus(false)} disabled={tenantActionLoading} className="rounded-lg border border-red-400/40 bg-red-400/10 px-4 py-2 text-xs font-semibold text-red-200 disabled:cursor-not-allowed disabled:opacity-50">
+                    <button
+                      type="button"
+                      onClick={() => void changeTenantStatus(false)}
+                      disabled={tenantActionLoading}
+                      className="rounded-lg border border-red-400/40 bg-red-400/10 px-4 py-2 text-xs font-semibold text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       {tenantActionLoading ? "Aggiornamento..." : "Sospendi azienda"}
                     </button>
                   )}
