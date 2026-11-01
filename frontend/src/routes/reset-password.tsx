@@ -63,8 +63,8 @@ function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090D16] text-white flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
+    <div className="min-h-dvh bg-[#090D16] text-white flex flex-col justify-center items-center p-3 sm:p-4">
+      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
         <div className="flex justify-center mb-6">
           <BaseGridLogo />
         </div>

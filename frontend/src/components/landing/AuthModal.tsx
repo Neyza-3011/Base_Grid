@@ -73,9 +73,9 @@ export function AuthModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto overscroll-contain p-3 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl glass-dark p-6 sm:p-8 text-white animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="relative my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl glass-dark p-5 text-white animate-in fade-in slide-in-from-bottom-4 duration-300 sm:max-h-[calc(100dvh-2rem)] sm:p-8">
         <button
           onClick={onClose}
           aria-label="Chiudi"
