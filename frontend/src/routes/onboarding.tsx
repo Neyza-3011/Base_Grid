@@ -1,6 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { Building2, Loader2, Save, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { appendCsrfHeaders, fetchServerSession, type UserSession } from "@/lib/auth";
 
@@ -30,6 +38,7 @@ function CompanyOnboarding() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState(0);
   const [form, setForm] = useState<CompanySettings>({
     name: "",
     vat_number: "",
@@ -52,13 +61,13 @@ function CompanyOnboarding() {
         return;
       }
       if (!cancelled) setUser(session);
-      if (session.role !== "owner") {
+      if (session.role !== "owner" && session.role !== "admin") {
         if (!cancelled) setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch("/api/v1/company/settings", {
+        const response = await fetch("/api/v1/company/settings?include_logo=false", {
           credentials: "include",
           headers: { Accept: "application/json" },
         });
@@ -101,10 +110,22 @@ function CompanyOnboarding() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (user?.role !== "owner") return;
+    if (user?.role !== "owner" && user?.role !== "admin") return;
 
     const name = form.name.trim();
     const address = form.address.trim();
+    if (step === 0) {
+      if (name.length < 2 || name.length > 100) {
+        toast.error("Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.");
+        return;
+      }
+      if (!address || address.length > 255) {
+        toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
+        return;
+      }
+      setStep(1);
+      return;
+    }
     if (name.length < 2 || name.length > 100) {
       toast.error("Inserisci una ragione sociale o un nome aziendale di 2–100 caratteri.");
       return;
@@ -144,6 +165,11 @@ function CompanyOnboarding() {
         throw new Error(result.detail || "Salvataggio non riuscito.");
       }
       toast.success("Configurazione aziendale salvata.");
+      try {
+        sessionStorage.setItem("basegrid:launch-tour", user.id);
+      } catch {
+        // The tour remains available from the dashboard header if storage is disabled.
+      }
       navigate({ to: "/dashboard" });
     } catch (error) {
       toast.error(
@@ -162,15 +188,16 @@ function CompanyOnboarding() {
     );
   }
 
-  if (user && user.role !== "owner") {
+  if (user && user.role !== "owner" && user.role !== "admin") {
     return (
       <main className="min-h-screen grid place-items-center bg-slate-950 px-4 text-white">
         <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8">
           <ShieldCheck className="mb-4 h-8 w-8 text-amber-300" />
           <h1 className="text-2xl font-semibold">Configurazione aziendale in attesa</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
-            Il titolare dell'azienda deve completare la configurazione iniziale prima che il team
-            possa utilizzare BaseGrid. Avvisalo di accedere con il proprio account.
+            Il titolare o un amministratore autorizzato deve completare la configurazione iniziale
+            prima che il team possa utilizzare BaseGrid. Avvisalo di accedere con il proprio
+            account.
           </p>
         </section>
       </main>
@@ -197,87 +224,149 @@ function CompanyOnboarding() {
           onSubmit={submit}
           className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-8"
         >
-          <div>
-            <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
-              Nome azienda / ragione sociale *
-            </label>
-            <input
-              id="company-name"
-              required
-              minLength={2}
-              maxLength={100}
-              value={form.name}
-              onChange={(e) => updateField("name", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="organization"
-            />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                  Passaggio {step + 1} di 2
+                </p>
+                <h2 className="mt-1 text-lg font-semibold">
+                  {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
+                </h2>
+              </div>
+              <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-emerald-300 transition-all duration-300"
+                style={{ width: step === 0 ? "50%" : "100%" }}
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="company-address" className="mb-2 block text-sm font-medium">
-              Indirizzo della sede principale *
-            </label>
-            <input
-              id="company-address"
-              required
-              maxLength={255}
-              value={form.address}
-              onChange={(e) => updateField("address", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="street-address"
-            />
+
+          <div className={step === 0 ? "space-y-5" : "hidden"}>
+            <div>
+              <label htmlFor="company-name" className="mb-2 block text-sm font-medium">
+                Nome azienda / ragione sociale *
+              </label>
+              <input
+                id="company-name"
+                required
+                minLength={2}
+                maxLength={100}
+                value={form.name}
+                onChange={(e) => updateField("name", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="organization"
+              />
+            </div>
+            <div>
+              <label htmlFor="company-address" className="mb-2 block text-sm font-medium">
+                Indirizzo della sede principale *
+              </label>
+              <input
+                id="company-address"
+                required
+                maxLength={255}
+                value={form.address}
+                onChange={(e) => updateField("address", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="street-address"
+              />
+            </div>
+            <div>
+              <label htmlFor="company-vat" className="mb-2 block text-sm font-medium">
+                Partita IVA (facoltativa)
+              </label>
+              <input
+                id="company-vat"
+                maxLength={50}
+                value={form.vat_number}
+                onChange={(e) => updateField("vat_number", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                autoComplete="off"
+              />
+              <p className="mt-1 text-xs text-white/50">
+                Non attiva integrazioni fiscali o contabili.
+              </p>
+            </div>
           </div>
-          <div>
-            <label htmlFor="company-vat" className="mb-2 block text-sm font-medium">
-              Partita IVA (facoltativa)
-            </label>
-            <input
-              id="company-vat"
-              maxLength={50}
-              value={form.vat_number}
-              onChange={(e) => updateField("vat_number", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-              autoComplete="off"
-            />
-            <p className="mt-1 text-xs text-white/50">
-              Non attiva integrazioni fiscali o contabili.
-            </p>
+
+          <div className={step === 1 ? "space-y-5" : "hidden"}>
+            <div>
+              <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
+                Tariffa oraria predefinita (€)
+              </label>
+              <input
+                id="hourly-rate"
+                type="number"
+                min="0"
+                max="10000"
+                step="0.5"
+                value={form.default_hourly_rate}
+                onChange={(e) => updateField("default_hourly_rate", Number(e.target.value))}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="report-footer" className="mb-2 block text-sm font-medium">
+                Note predefinite per i rapportini (facoltative)
+              </label>
+              <textarea
+                id="report-footer"
+                maxLength={1000}
+                rows={3}
+                value={form.report_footer_notes}
+                onChange={(e) => updateField("report_footer_notes", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
-              Tariffa oraria predefinita (€)
-            </label>
-            <input
-              id="hourly-rate"
-              type="number"
-              min="0"
-              max="10000"
-              step="0.5"
-              value={form.default_hourly_rate}
-              onChange={(e) => updateField("default_hourly_rate", Number(e.target.value))}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-            />
+
+          {step === 1 && (
+            <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
+                  <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
+                  <p className="mt-3 text-xs leading-5 text-white/50">
+                    Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o
+                    riaprire in seguito.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+            {step === 1 && (
+              <button
+                type="button"
+                onClick={() => setStep(0)}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 font-medium text-white/80 transition hover:bg-white/5 disabled:opacity-60"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Indietro
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto sm:w-auto"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : step === 0 ? (
+                <ArrowRight className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {saving ? "Salvataggio..." : step === 0 ? "Continua" : "Salva e apri BaseGrid"}
+            </button>
           </div>
-          <div>
-            <label htmlFor="report-footer" className="mb-2 block text-sm font-medium">
-              Note predefinite per i rapportini (facoltative)
-            </label>
-            <textarea
-              id="report-footer"
-              maxLength={1000}
-              rows={3}
-              value={form.report_footer_notes}
-              onChange={(e) => updateField("report_footer_notes", e.target.value)}
-              className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Salvataggio..." : "Salva e apri BaseGrid"}
-          </button>
         </form>
       </section>
     </main>
