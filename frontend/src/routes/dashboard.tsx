@@ -20,6 +20,7 @@ import {
   Cpu,
   Wrench,
   Building2,
+  BookOpen,
 } from "lucide-react";
 import { fetchServerSession, logoutUser, resendVerificationEmail, UserSession } from "@/lib/auth";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import { CompanySettings } from "@/components/dashboard/CompanySettings";
 import { ReportsView } from "@/components/dashboard/ReportsView";
 import { DashboardAnalyticsView } from "@/components/dashboard/DashboardAnalyticsView";
 import { PdfPreviewModal } from "@/components/dashboard/PdfPreviewModal";
+import { ProductTour } from "@/components/dashboard/ProductTour";
 import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
 import { AssetsView } from "@/components/dashboard/AssetsView";
@@ -68,6 +70,7 @@ const VIEW_TITLES: Record<string, string> = {
 function Dashboard() {
   const [activeView, setActiveView] = useState("dashboard");
   const [previewPdfId, setPreviewPdfId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const [currentUser, setUser] = useState<UserSession | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -87,7 +90,7 @@ function Dashboard() {
       if (sessionUser) {
         if (sessionUser.platformRole !== "ceo") {
           try {
-            const settingsResponse = await fetch("/api/v1/company/settings", {
+            const settingsResponse = await fetch("/api/v1/company/settings?include_logo=false", {
               credentials: "include",
               headers: { Accept: "application/json" },
             });
@@ -114,6 +117,33 @@ function Dashboard() {
     }
     initSession();
   }, [navigate]);
+
+  const currentUserId = currentUser?.id;
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const storageKey = `basegrid:product-tour:${currentUserId}`;
+    try {
+      const launchRequested = sessionStorage.getItem("basegrid:launch-tour") === currentUserId;
+      if (launchRequested) sessionStorage.removeItem("basegrid:launch-tour");
+      if (launchRequested && localStorage.getItem(storageKey) !== "completed") {
+        setTourOpen(true);
+      }
+    } catch {
+      // The tour remains available from the header if browser storage is disabled.
+    }
+  }, [currentUserId]);
+
+  const handleCloseTour = () => {
+    if (currentUserId) {
+      try {
+        localStorage.setItem(`basegrid:product-tour:${currentUserId}`, "completed");
+      } catch {
+        // The guide can still be dismissed when browser storage is unavailable.
+      }
+    }
+    setTourOpen(false);
+  };
 
   const handleLogout = async () => {
     await logoutUser();
@@ -295,7 +325,9 @@ function Dashboard() {
           <span>Materiali</span>
         </button>
 
-        {(currentUser.role === "admin" || currentUser.role === "superadmin") && (
+        {(currentUser.role === "admin" ||
+          currentUser.role === "superadmin" ||
+          currentUser.role === "owner") && (
           <button
             onClick={() => {
               setActiveView("company_settings");
@@ -381,6 +413,16 @@ function Dashboard() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              aria-label="Apri guida BaseGrid"
+              title="Apri guida BaseGrid"
+              onClick={() => setTourOpen(true)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-xs font-medium text-white/70 transition hover:bg-white/10 hover:text-white sm:px-3"
+            >
+              <BookOpen className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Guida</span>
+            </button>
             <button
               aria-label="Notifiche"
               onClick={() => toast.info("Nessuna nuova notifica.")}
@@ -511,6 +553,7 @@ function Dashboard() {
         </main>
       </div>
 
+      <ProductTour open={tourOpen} onClose={handleCloseTour} onNavigate={setActiveView} />
       {previewPdfId && (
         <PdfPreviewModal reportId={previewPdfId} onClose={() => setPreviewPdfId(null)} />
       )}
