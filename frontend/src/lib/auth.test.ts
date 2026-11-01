@@ -134,12 +134,20 @@ describe("Server-Authoritative Auth Client (frontend/src/lib/auth.ts)", () => {
       json: async () => ({ message: "Logged out" }),
     } as Response);
 
-    await logoutUser();
+    await expect(logoutUser()).resolves.toBe(true);
     expect(global.fetch).toHaveBeenCalledWith("/api/v1/auth/logout", {
       method: "POST",
       credentials: "include",
       headers: expect.any(Object),
     });
+  });
+
+  it("logoutUser reports an unconfirmed logout when the server rejects or the network fails", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503 } as Response);
+    await expect(logoutUser()).resolves.toBe(false);
+
+    global.fetch = vi.fn().mockRejectedValue(new TypeError("Network unavailable"));
+    await expect(logoutUser()).resolves.toBe(false);
   });
 
   it("7. no auth function uses localStorage to save or read session", async () => {
