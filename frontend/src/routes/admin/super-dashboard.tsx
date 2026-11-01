@@ -265,30 +265,30 @@ export function SuperDashboard() {
   return (
     <div className="min-h-screen bg-[#090D16] text-white flex flex-col">
       {/* Top Admin Navigation */}
-      <header className="border-b border-white/10 bg-[#0F172A]/80 backdrop-blur-md sticky top-0 z-50 px-4 sm:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-50 flex flex-col gap-3 border-b border-white/10 bg-[#0F172A]/80 px-3 py-3.5 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 grid place-items-center font-black text-slate-950 text-sm shadow-lg shadow-emerald-500/20">
             SA
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-white">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words text-xs font-bold tracking-tight text-white sm:text-sm">
                 Master Super-Admin Panel
               </span>
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold uppercase">
                 Zero-Trust Active
               </span>
             </div>
-            <p className="text-[11px] text-white/50">
+            <p className="max-w-full truncate text-[10px] text-white/50 sm:text-[11px]">
               {user.email} · Multi-tenant Global Oversight
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
           <Link
             to="/dashboard"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white/80 hover:text-white transition"
+            className="flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white sm:flex-none"
           >
             Dashboard SaaS <ExternalLink className="h-3 w-3" />
           </Link>
@@ -307,7 +307,7 @@ export function SuperDashboard() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8">
+      <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 space-y-8 p-4 sm:p-8">
         {adminLoadError && (
           <div
             role="alert"
