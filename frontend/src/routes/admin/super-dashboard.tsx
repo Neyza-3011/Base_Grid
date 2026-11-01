@@ -159,9 +159,7 @@ export function SuperDashboard() {
       setAuditEvents(payload.events as AdminAuditEvent[]);
     } catch (error) {
       setAuditError(
-        error instanceof Error
-          ? error.message
-          : "Errore durante il caricamento del registro.",
+        error instanceof Error ? error.message : "Errore durante il caricamento del registro.",
       );
     } finally {
       setAuditLoading(false);
@@ -202,9 +200,7 @@ export function SuperDashboard() {
       );
       setTenants((current) =>
         current.map((tenant) =>
-          tenant.id === company.id
-            ? { ...tenant, is_active: payload.company.is_active }
-            : tenant,
+          tenant.id === company.id ? { ...tenant, is_active: payload.company.is_active } : tenant,
         ),
       );
       toast.success(
@@ -779,8 +775,8 @@ export function SuperDashboard() {
                   <div>
                     <h3 className="text-sm font-semibold text-white">Stato e accesso aziendale</h3>
                     <p className="mt-1 text-xs text-white/50">
-                      La sospensione revoca le sessioni del tenant. L'operazione viene
-                      registrata nel registro amministrativo.
+                      La sospensione revoca le sessioni del tenant. L'operazione viene registrata
+                      nel registro amministrativo.
                     </p>
                   </div>
                   {selectedTenant.company.is_active === false ? (
