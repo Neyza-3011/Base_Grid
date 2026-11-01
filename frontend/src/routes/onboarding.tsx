@@ -33,11 +33,32 @@ type CompanySettings = {
   report_footer_notes: string;
 };
 
+export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promise<CompanySettings> {
+  const response = await fetcher("/api/v1/company/settings?include_logo=false", {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("Impossibile leggere le impostazioni aziendali.");
+  }
+
+  const data = await response.json();
+  return {
+    name: String(data.name || ""),
+    vat_number: String(data.vat_number || ""),
+    address: String(data.address || ""),
+    default_hourly_rate: Number(data.default_hourly_rate) || 0,
+    report_footer_notes: String(data.report_footer_notes || ""),
+  };
+}
+
 function CompanyOnboarding() {
   const navigate = useNavigate();
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<CompanySettings>({
     name: "",
@@ -67,23 +88,10 @@ function CompanyOnboarding() {
       }
 
       try {
-        const response = await fetch("/api/v1/company/settings?include_logo=false", {
-          credentials: "include",
-          headers: { Accept: "application/json" },
-        });
-        if (!response.ok) {
-          throw new Error("Impossibile leggere le impostazioni aziendali.");
-        }
-        const data = await response.json();
+        const current = await loadCompanySettings();
         if (cancelled) return;
 
-        const current = {
-          name: String(data.name || ""),
-          vat_number: String(data.vat_number || ""),
-          address: String(data.address || ""),
-          default_hourly_rate: Number(data.default_hourly_rate) || 0,
-          report_footer_notes: String(data.report_footer_notes || ""),
-        };
+        setLoadError(null);
         setForm(current);
         if (current.name.trim() && current.address.trim()) {
           navigate({ to: "/dashboard" });
@@ -91,7 +99,9 @@ function CompanyOnboarding() {
         }
       } catch (error) {
         if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Errore nel caricamento.");
+          setLoadError(
+            error instanceof Error ? error.message : "Errore nel caricamento delle impostazioni.",
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -102,7 +112,7 @@ function CompanyOnboarding() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, loadAttempt]);
 
   const updateField = (field: keyof CompanySettings, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -185,6 +195,33 @@ function CompanyOnboarding() {
       <div className="min-h-screen grid place-items-center bg-slate-950 text-white">
         <Loader2 className="h-8 w-8 animate-spin" aria-label="Caricamento" />
       </div>
+    );
+  }
+
+  if (loadError && user && (user.role === "owner" || user.role === "admin")) {
+    return (
+      <main className="min-h-screen grid place-items-center bg-slate-950 px-4 py-10 text-white">
+        <section
+          className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-8"
+          role="alert"
+          aria-live="polite"
+        >
+          <Building2 className="mb-4 h-8 w-8 text-amber-300" />
+          <h1 className="text-2xl font-semibold">Impossibile caricare la configurazione</h1>
+          <p className="mt-3 text-sm leading-6 text-white/70">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(null);
+              setLoading(true);
+              setLoadAttempt((attempt) => attempt + 1);
+            }}
+            className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300"
+          >
+            Riprova
+          </button>
+        </section>
+      </main>
     );
   }
 
