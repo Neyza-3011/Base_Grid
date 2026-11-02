@@ -624,6 +624,8 @@ describe("P1.1-RUNTIME — Input Validation & Fail-Closed Error Handling", () =>
     config.EMAIL_VERIFICATION_ENABLED = false;
   });
 
+});
+
 describe("P0-ROLE — concurrent last-admin protection", () => {
   it("preserves one active admin when two admins concurrently demote each other", async () => {
     const teamService = new TeamService(db);
@@ -658,6 +660,4 @@ describe("P0-ROLE — concurrent last-admin protection", () => {
     );
     expect(activeAdmins).toHaveLength(1);
   });
-});
-
 });
