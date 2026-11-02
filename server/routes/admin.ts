@@ -193,7 +193,24 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
       return;
     }
   }
-  const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any);
+  const changedFields = Object.entries(input)
+    .filter(([key, value]) => {
+      const currentValue = key === "fullName" ? target.fullName
+        : key === "phoneNumber" ? target.phoneNumber
+        : key === "role" ? target.role
+        : undefined;
+      return value !== currentValue;
+    })
+    .map(([key]) => key)
+    .sort();
+  const audit = changedFields.length > 0 ? {
+    actorUserId: req.user.id,
+    action: "user.profile.updated",
+    targetType: "user" as const,
+    targetId: userId,
+    metadata: { companyId, changedFields: changedFields.join(",") },
+  } : undefined;
+  const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any, audit);
   res.status(200).json({
     user: {
       id: member.id,

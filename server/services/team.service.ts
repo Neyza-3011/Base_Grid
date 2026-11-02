@@ -153,7 +153,8 @@ export class TeamService {
     companyId: string,
     userId: string,
     executorId: string,
-    input: UpdateTeamMemberInput
+    input: UpdateTeamMemberInput,
+    audit?: CreateAdminAuditEventInput,
   ): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
 
@@ -207,6 +208,7 @@ export class TeamService {
     const shouldIncrementAuthVersion = updates.role !== undefined;
     const updatedUser = await this.db.updateTeamMember(userId, companyId, updates, {
       incrementAuthVersion: shouldIncrementAuthVersion,
+      ...(audit ? { audit } : {}),
     });
     if (!updatedUser) {
       throw new Error("Errore durante l'aggiornamento dell'utente.");

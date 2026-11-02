@@ -53,6 +53,41 @@ describe("Platform admin audit event persistence contract", () => {
     expect(await store.getAdminAuditEvents()).toHaveLength(0);
   });
 
+  it("keeps CEO user-profile audit events atomic with the persisted update", async () => {
+    const store = new DatabaseStore();
+    const { TeamService } = await import("./services/team.service");
+    const service = new TeamService(store);
+    const target = await store.getUserByIdAndCompany("usr-rossi-tech", "comp-rossi-001");
+    const actor = await store.findUserById("usr-superadmin-001");
+    expect(target).toBeTruthy();
+    expect(actor).toBeTruthy();
+
+    const updated = await service.updateTeamMember(
+      "comp-rossi-001",
+      "usr-rossi-tech",
+      actor!.id,
+      { fullName: "Tecnico Aggiornato" },
+      {
+        actorUserId: actor!.id,
+        action: "user.profile.updated",
+        targetType: "user",
+        targetId: "usr-rossi-tech",
+        metadata: { companyId: "comp-rossi-001", changedFields: "fullName" },
+      },
+    );
+
+    expect(updated.fullName).toBe("Tecnico Aggiornato");
+    expect(await store.getAdminAuditEvents(10)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actorUserId: actor!.id,
+        action: "user.profile.updated",
+        targetType: "user",
+        targetId: "usr-rossi-tech",
+        metadata: { companyId: "comp-rossi-001", changedFields: "fullName" },
+      }),
+    ]));
+  });
+
   it("defines a durable PostgreSQL audit table with constrained target type and actor retention", () => {
     const sql = fs.readFileSync(
       path.resolve(__dirname, "migrations/012_admin_audit_events.sql"),
