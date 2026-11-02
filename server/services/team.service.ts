@@ -9,6 +9,7 @@ import {
   UserRole,
   ASSIGNABLE_ROLES,
   ADMIN_OWNER_ROLES,
+  CreateAdminAuditEventInput,
 } from "../types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { generateSecureToken, hashPassword, hashToken, isValidEmail, normalizeEmail, validatePasswordPolicy } from "../security";
@@ -222,7 +223,8 @@ export class TeamService {
     companyId: string,
     userId: string,
     executorId: string,
-    isActive: boolean
+    isActive: boolean,
+    audit?: CreateAdminAuditEventInput,
   ): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
 
@@ -251,6 +253,7 @@ export class TeamService {
     // Atomically updates isActive AND increments authVersion in single mutation
     const updatedUser = await this.db.updateTeamMember(userId, companyId, { isActive }, {
       incrementAuthVersion: true,
+      ...(audit ? { audit } : {}),
     });
     if (!updatedUser) {
       throw new Error("Errore durante l'aggiornamento dello stato dell'utente.");
