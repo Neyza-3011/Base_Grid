@@ -862,8 +862,18 @@ export class DatabaseStore implements IDatabaseAdapter {
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
-    options?: { incrementAuthVersion?: boolean },
+    options?: { incrementAuthVersion?: boolean; audit?: CreateAdminAuditEventInput },
   ): Promise<UserRecord | null> {
+    const audit = options?.audit;
+    if (audit && (
+      !audit.actorUserId ||
+      !audit.action ||
+      audit.targetType !== "user" ||
+      audit.targetId !== userId
+    )) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+
     const user = this.users.get(userId);
     if (!user || user.companyId !== companyId) return null;
 
@@ -891,6 +901,10 @@ export class DatabaseStore implements IDatabaseAdapter {
           throw new ForbiddenError("Impossibile rimuovere l'ultimo amministratore attivo dell'azienda.");
         }
       }
+    }
+
+    if (audit) {
+      await this.createAdminAuditEvent(audit);
     }
 
     const shouldIncrementAuthVersion = options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined;
