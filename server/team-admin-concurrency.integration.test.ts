@@ -18,6 +18,8 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
   const companyId = `p0role-company-${runId}`;
   const firstUserId = `p0role-user-a-${runId}`;
   const secondUserId = `p0role-user-b-${runId}`;
+  const auditTargetUserId = `p0role-audit-user-${runId}`;
+  const auditRollbackUserId = `p0role-audit-rollback-user-${runId}`;
   const deactivationCompanyId = `p0role-deactivate-company-${runId}`;
   const firstDeactivationUserId = `p0role-deactivate-user-a-${runId}`;
   const secondDeactivationUserId = `p0role-deactivate-user-b-${runId}`;
@@ -72,6 +74,25 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
       ],
     );
 
+    await testPool.query(
+      `INSERT INTO users
+         (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt,
+          "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+       VALUES
+         ($1, $2, $3, 'technician', $4, $5, 'test-hash', 'test-salt', true, 'local', true, '', NOW(), NOW()),
+         ($6, $7, $8, 'technician', $4, $5, 'test-hash', 'test-salt', true, 'local', true, '', NOW(), NOW())`,
+      [
+        auditTargetUserId,
+        `audit-target-${runId}@example.test`,
+        "Audit target user",
+        companyId,
+        "P0-ROLE concurrent admin test",
+        auditRollbackUserId,
+        `audit-rollback-${runId}@example.test`,
+        "Audit rollback user",
+      ],
+    );
+
     await testPool.query("INSERT INTO companies (id, name) VALUES ($1, $2)", [
       deactivationCompanyId,
       "P0-ROLE concurrent admin deactivation test",
@@ -103,6 +124,69 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
     }
     if (adminPool) await adminPool.end();
   }, 15_000);
+
+  it("commits user status and audit event atomically in PostgreSQL", async () => {
+    const audit = {
+      actorUserId: firstUserId,
+      action: "user.deactivated",
+      targetType: "user" as const,
+      targetId: auditTargetUserId,
+      metadata: { companyId, isActive: false },
+    };
+
+    const updated = await adapter!.updateTeamMember(
+      auditTargetUserId,
+      companyId,
+      { isActive: false },
+      { incrementAuthVersion: true, audit },
+    );
+
+    expect(updated?.isActive).toBe(false);
+    expect(updated?.authVersion).toBe(1);
+    expect(await adapter!.getAdminAuditEvents(20)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actorUserId: firstUserId,
+          action: "user.deactivated",
+          targetType: "user",
+          targetId: auditTargetUserId,
+          metadata: { companyId, isActive: false },
+        }),
+      ]),
+    );
+  });
+
+  it("rolls back user status if the audit insert fails in PostgreSQL", async () => {
+    const constraintName = "reject_audit_" + runId;
+    await testPool!.query(
+      `ALTER TABLE admin_audit_events ADD CONSTRAINT "${constraintName}" CHECK (action <> 'user.deactivated.rollback-test')`,
+    );
+
+    try {
+      await expect(
+        adapter!.updateTeamMember(
+          auditRollbackUserId,
+          companyId,
+          { isActive: false },
+          {
+            incrementAuthVersion: true,
+            audit: {
+              actorUserId: firstUserId,
+              action: "user.deactivated.rollback-test",
+              targetType: "user",
+              targetId: auditRollbackUserId,
+              metadata: { companyId, isActive: false },
+            },
+          },
+        ),
+      ).rejects.toThrow();
+
+      expect((await adapter!.getUserByIdAndCompany(auditRollbackUserId, companyId))?.isActive).toBe(true);
+      expect((await adapter!.getUserByIdAndCompany(auditRollbackUserId, companyId))?.authVersion).toBe(0);
+    } finally {
+      await testPool!.query(`ALTER TABLE admin_audit_events DROP CONSTRAINT "${constraintName}"`);
+    }
+  });
 
   it("serializes concurrent demotions and preserves one active administrator", async () => {
     const results = await Promise.allSettled([

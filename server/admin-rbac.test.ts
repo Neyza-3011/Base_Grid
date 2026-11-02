@@ -271,6 +271,7 @@ describe("Platform admin endpoint authorization", () => {
       fullName: before!.fullName,
       isActive: before!.isActive,
     });
+    expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
   });
 
   it("lets the CEO deactivate and reactivate a tenant user with persisted status changes", async () => {
@@ -283,6 +284,16 @@ describe("Platform admin endpoint authorization", () => {
     expect(deactivated.status).toBe(200);
     expect(deactivated.body.user.is_active).toBe(false);
     expect((await db.findUserById(target!.id))?.isActive).toBe(false);
+    expect(await db.getAdminAuditEvents(10)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "user.deactivated",
+          targetType: "user",
+          targetId: target!.id,
+          metadata: { companyId: "comp-rossi-001", isActive: false },
+        }),
+      ]),
+    );
 
     const activated = await postWithUser(
       `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/activate`,
@@ -291,6 +302,16 @@ describe("Platform admin endpoint authorization", () => {
     expect(activated.status).toBe(200);
     expect(activated.body.user.is_active).toBe(true);
     expect((await db.findUserById(target!.id))?.isActive).toBe(true);
+    expect(await db.getAdminAuditEvents(10)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "user.activated",
+          targetType: "user",
+          targetId: target!.id,
+          metadata: { companyId: "comp-rossi-001", isActive: true },
+        }),
+      ]),
+    );
   });
 
 
@@ -303,6 +324,7 @@ describe("Platform admin endpoint authorization", () => {
     );
     expect(response.status).toBe(403);
     expect((await db.findUserById(target!.id))?.isActive).toBe(true);
+    expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
   });
 
   it("rejects attempts to modify or deactivate the CEO platform identity", async () => {

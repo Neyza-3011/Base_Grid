@@ -251,7 +251,13 @@ for (const isActive of [true, false]) {
         return;
       }
     }
-    const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, isActive);
+    const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, isActive, {
+      actorUserId: req.user.id,
+      action: isActive ? "user.activated" : "user.deactivated",
+      targetType: "user",
+      targetId: userId,
+      metadata: { companyId, isActive },
+    });
     res.status(200).json({ user: {
       id: member.id, email: member.email, full_name: member.fullName, role: member.role,
       phone_number: member.phoneNumber, is_active: member.isActive,
