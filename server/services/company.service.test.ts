@@ -132,6 +132,8 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
   it("rejects oversized logo dimensions before image decoding", async () => {
     const pngHeader = Buffer.alloc(24);
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(pngHeader, 0);
+    pngHeader.writeUInt32BE(13, 8);
+    pngHeader.write("IHDR", 12, "ascii");
     pngHeader.writeUInt32BE(4096, 16);
     pngHeader.writeUInt32BE(4096, 20);
     const logoDataUrl = `data:image/png;base64,${pngHeader.toString("base64")}`;
