@@ -18,6 +18,9 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
   const companyId = `p0role-company-${runId}`;
   const firstUserId = `p0role-user-a-${runId}`;
   const secondUserId = `p0role-user-b-${runId}`;
+  const deactivationCompanyId = `p0role-deactivate-company-${runId}`;
+  const firstDeactivationUserId = `p0role-deactivate-user-a-${runId}`;
+  const secondDeactivationUserId = `p0role-deactivate-user-b-${runId}`;
 
   beforeAll(async () => {
     if (!testDatabaseUrl) return;
@@ -68,6 +71,29 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
         "Admin B",
       ],
     );
+
+    await testPool.query("INSERT INTO companies (id, name) VALUES ($1, $2)", [
+      deactivationCompanyId,
+      "P0-ROLE concurrent admin deactivation test",
+    ]);
+    await testPool.query(
+      `INSERT INTO users
+         (id, email, "fullName", role, "companyId", "companyName", "passwordHash", salt,
+          "isActive", provider, "emailConfirmed", "phoneNumber", "createdAt", "updatedAt")
+       VALUES
+         ($1, $2, $3, 'admin', $4, $5, 'test-hash', 'test-salt', true, 'local', true, '', NOW(), NOW()),
+         ($6, $7, $8, 'admin', $4, $5, 'test-hash', 'test-salt', true, 'local', true, '', NOW(), NOW())`,
+      [
+        firstDeactivationUserId,
+        `deactivate-a-${runId}@example.test`,
+        "Admin A Deactivation",
+        deactivationCompanyId,
+        "P0-ROLE concurrent admin deactivation test",
+        secondDeactivationUserId,
+        `deactivate-b-${runId}@example.test`,
+        "Admin B Deactivation",
+      ],
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -94,6 +120,28 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
     }
 
     const members = await adapter!.getUsersByCompany(companyId);
+    const activeAdmins = members.filter(
+      (member) => member.isActive && (member.role === "owner" || member.role === "admin"),
+    );
+    expect(activeAdmins).toHaveLength(1);
+  });
+
+  it("serializes concurrent deactivations and preserves one active administrator", async () => {
+    const results = await Promise.allSettled([
+      adapter!.updateTeamMember(firstDeactivationUserId, deactivationCompanyId, { isActive: false }),
+      adapter!.updateTeamMember(secondDeactivationUserId, deactivationCompanyId, { isActive: false }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      expect(rejected.reason).toMatchObject({ statusCode: 403 });
+      expect(rejected.reason.message).toMatch(/ultimo amministratore attivo/i);
+    }
+
+    const members = await adapter!.getUsersByCompany(deactivationCompanyId);
     const activeAdmins = members.filter(
       (member) => member.isActive && (member.role === "owner" || member.role === "admin"),
     );
