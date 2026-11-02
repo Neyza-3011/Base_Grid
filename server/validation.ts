@@ -73,7 +73,7 @@ export function hasSafeImageDimensions(buffer: Buffer, mime: string): boolean {
   let height = 0;
 
   if (mime === "image/png") {
-    if (buffer.length < 24 || buffer.toString("ascii", 12, 16) !== "IHDR") return false;
+    if (buffer.length < 24 || buffer.readUInt32BE(8) !== 13 || buffer.toString("ascii", 12, 16) !== "IHDR") return false;
     width = buffer.readUInt32BE(16);
     height = buffer.readUInt32BE(20);
   } else {
