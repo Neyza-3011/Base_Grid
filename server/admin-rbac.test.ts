@@ -192,6 +192,11 @@ describe("Platform admin endpoint authorization", () => {
     expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
     expect(after?.maxUsers).toBe(before?.maxUsers);
     expect(after?.featurePdfExport).toBe(before?.featurePdfExport);
+    const auditEvents = await db.getAdminAuditEvents(10);
+    const audit = auditEvents.find((event) => event.action === "tenant.profile.updated");
+    expect(audit?.targetId).toBe("comp-rossi-001");
+    expect(audit?.metadata).toEqual({ changedFields: "name,address,defaultHourlyRate,reportFooterNotes" });
+    expect(JSON.stringify(audit)).not.toContain("Via Roma 25");
   });
 
   it("denies tenant admins from updating another tenant through the platform profile endpoint", async () => {
