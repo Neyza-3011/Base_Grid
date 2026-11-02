@@ -36,6 +36,7 @@ type TenantCompany = {
   plan?: string | null;
   max_users?: number;
   setup_complete?: boolean;
+  is_active?: boolean;
 };
 
 type TenantDetails = {
@@ -52,6 +53,7 @@ type TenantDetails = {
     created_at?: string;
     updated_at?: string;
     setup_complete: boolean;
+    is_active?: boolean;
   };
   users: Array<{
     id: string;
@@ -77,6 +79,16 @@ type GlobalStats = {
   system_status: string;
 };
 
+type AdminAuditEvent = {
+  id: string | number;
+  actor_user_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 export function SuperDashboard() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [tenants, setTenants] = useState<TenantCompany[]>([]);
@@ -88,6 +100,10 @@ export function SuperDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [tenantActionLoading, setTenantActionLoading] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     name: "",
     vat_number: "",
@@ -125,6 +141,81 @@ export function SuperDashboard() {
       );
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const loadAuditEvents = async () => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const response = await fetch("/api/v1/admin/audit-events?limit=50", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || !Array.isArray(payload.events)) {
+        throw new Error(payload?.detail || "Impossibile caricare il registro amministrativo.");
+      }
+      setAuditEvents(payload.events as AdminAuditEvent[]);
+    } catch (error) {
+      setAuditError(
+        error instanceof Error ? error.message : "Errore durante il caricamento del registro.",
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const changeTenantStatus = async (isActive: boolean) => {
+    if (!selectedTenant || tenantActionLoading) return;
+    const company = selectedTenant.company;
+    const actionLabel = isActive ? "riattivare" : "sospendere";
+    const confirmation = `Confermi di ${actionLabel} l'azienda "${company.name}"?`;
+    if (!window.confirm(confirmation)) return;
+
+    setTenantActionLoading(true);
+    try {
+      const action = isActive ? "reactivate" : "suspend";
+      const response = await fetch(
+        "/api/v1/admin/tenants/" + encodeURIComponent(company.id) + "/" + action,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: appendCsrfHeaders({ Accept: "application/json" }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.company || typeof payload.company.is_active !== "boolean") {
+        throw new Error(payload?.detail || "Impossibile " + actionLabel + " l'azienda.");
+      }
+
+      setSelectedTenant((current) =>
+        current
+          ? {
+              ...current,
+              company: { ...current.company, is_active: payload.company.is_active },
+            }
+          : current,
+      );
+      setTenants((current) =>
+        current.map((tenant) =>
+          tenant.id === company.id ? { ...tenant, is_active: payload.company.is_active } : tenant,
+        ),
+      );
+      toast.success(
+        payload.changed === false
+          ? "Lo stato dell'azienda era già aggiornato."
+          : "Azienda " + (isActive ? "riattivata" : "sospesa") + ".",
+      );
+      void loadAuditEvents();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Errore durante l'operazione: " + actionLabel + ".",
+      );
+    } finally {
+      setTenantActionLoading(false);
     }
   };
 
@@ -240,7 +331,8 @@ export function SuperDashboard() {
         return;
       }
       setUser(usr);
-      loadAdminData();
+      void loadAdminData();
+      void loadAuditEvents();
     }
     checkAdminAccess();
   }, [navigate]);
@@ -480,6 +572,15 @@ export function SuperDashboard() {
                         <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                           {t.setup_complete ? "Setup completato" : "Setup incompleto"}
                         </span>
+                        <span
+                          className={
+                            t.is_active === false
+                              ? "ml-2 rounded-full border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] font-semibold text-red-300"
+                              : "ml-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300"
+                          }
+                        >
+                          {t.is_active === false ? "Sospesa" : "Attiva"}
+                        </span>
                       </td>
                       <td className="p-3.5 text-right">
                         <button
@@ -496,6 +597,90 @@ export function SuperDashboard() {
             </table>
           </div>
         </div>
+
+        <section className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Registro amministrativo</h2>
+              <p className="mt-1 text-xs text-white/50">
+                Ultimi 50 eventi restituiti dal backend, incluse sospensioni e riattivazioni.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadAuditEvents()}
+              disabled={auditLoading}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-50"
+            >
+              {auditLoading ? "Aggiornamento..." : "Aggiorna registro"}
+            </button>
+          </div>
+          {auditError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+            >
+              <p>{auditError}</p>
+              <button
+                type="button"
+                onClick={() => void loadAuditEvents()}
+                disabled={auditLoading}
+                className="mt-2 underline disabled:opacity-50"
+              >
+                Riprova
+              </button>
+            </div>
+          )}
+          {auditLoading && auditEvents.length === 0 ? (
+            <p className="text-sm text-white/60">Caricamento registro amministrativo...</p>
+          ) : auditEvents.length === 0 ? (
+            <p className="text-sm text-white/50">
+              {auditError
+                ? "Registro non disponibile."
+                : "Nessun evento amministrativo registrato."}
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-white/5 text-white/55">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Azione</th>
+                    <th className="p-3">Destinazione</th>
+                    <th className="p-3">Attore</th>
+                    <th className="p-3">Metadati</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {auditEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td className="whitespace-nowrap p-3 text-white/70">
+                        {event.created_at
+                          ? new Date(event.created_at).toLocaleString("it-IT")
+                          : "Data non disponibile"}
+                      </td>
+                      <td className="p-3 font-medium text-white">{event.action}</td>
+                      <td className="p-3 text-white/70">
+                        <span>{event.target_type}</span>
+                        <span className="block break-all font-mono text-[10px] text-white/45">
+                          {event.target_id}
+                        </span>
+                      </td>
+                      <td className="break-all p-3 font-mono text-[10px] text-white/60">
+                        {event.actor_user_id}
+                      </td>
+                      <td className="p-3 text-white/60">
+                        <pre className="max-w-sm whitespace-pre-wrap break-words font-mono text-[10px]">
+                          {event.metadata ? JSON.stringify(event.metadata) : "—"}
+                        </pre>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         {(detailLoading || detailError || selectedTenant) && (
           <section
@@ -534,6 +719,10 @@ export function SuperDashboard() {
                     [
                       "Stato configurazione",
                       selectedTenant.company.setup_complete ? "Completata" : "Incompleta",
+                    ],
+                    [
+                      "Stato azienda",
+                      selectedTenant.company.is_active === false ? "Sospesa" : "Attiva",
                     ],
                     [
                       "Stato abbonamento",
@@ -579,6 +768,35 @@ export function SuperDashboard() {
                       <p className="mt-1 break-words text-sm text-white">{value}</p>
                     </div>
                   ))}
+                </div>
+
+                <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#090D16] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Stato e accesso aziendale</h3>
+                    <p className="mt-1 text-xs text-white/50">
+                      La sospensione revoca le sessioni del tenant. L'operazione viene registrata
+                      nel registro amministrativo.
+                    </p>
+                  </div>
+                  {selectedTenant.company.is_active === false ? (
+                    <button
+                      type="button"
+                      onClick={() => void changeTenantStatus(true)}
+                      disabled={tenantActionLoading}
+                      className="rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tenantActionLoading ? "Aggiornamento..." : "Riattiva azienda"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void changeTenantStatus(false)}
+                      disabled={tenantActionLoading}
+                      className="rounded-lg border border-red-400/40 bg-red-400/10 px-4 py-2 text-xs font-semibold text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {tenantActionLoading ? "Aggiornamento..." : "Sospendi azienda"}
+                    </button>
+                  )}
                 </div>
 
                 <form
