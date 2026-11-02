@@ -654,6 +654,12 @@ describe("P0-ROLE — concurrent last-admin protection", () => {
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      expect(rejected.reason).toMatchObject({ statusCode: 403 });
+      expect(rejected.reason.message).toMatch(/ultimo amministratore attivo/i);
+    }
 
     const activeAdmins = (await db.getUsersByCompany(firstAdmin.companyId)).filter(
       (member) => member.isActive && (member.role === "owner" || member.role === "admin"),
