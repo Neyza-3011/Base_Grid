@@ -208,7 +208,7 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
     action: "user.profile.updated",
     targetType: "user" as const,
     targetId: userId,
-    metadata: { companyId, changedFields },
+    metadata: { companyId, changedFields: changedFields.join(",") },
   } : undefined;
   const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any, audit);
   res.status(200).json({
