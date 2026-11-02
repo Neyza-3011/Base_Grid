@@ -1,5 +1,5 @@
 import { IDatabaseAdapter } from "../db";
-import { CompanyRecord, UpdateCompanyInput } from "../types";
+import { CompanyRecord, CreateAdminAuditEventInput, UpdateCompanyInput } from "../types";
 import { NotFoundError, ValidationError } from "../errors";
 import { PDFDocument } from "pdf-lib";
 
@@ -67,6 +67,7 @@ export class CompanyService {
     companyId: string,
     input: UpdateCompanyInput,
     userRole: string,
+    audit?: CreateAdminAuditEventInput,
   ): Promise<CompanyRecord> {
     if (!companyId) {
       throw new ValidationError("Company ID is required");
@@ -157,7 +158,9 @@ export class CompanyService {
       updates.featurePdfExport = input.featurePdfExport;
     }
 
-    const updated = await this.db.updateCompany(companyId, updates);
+    const updated = audit
+      ? await this.db.updateCompanyWithAudit(companyId, updates, audit)
+      : await this.db.updateCompany(companyId, updates);
     if (!updated) {
       throw new NotFoundError("Company not found or update failed");
     }

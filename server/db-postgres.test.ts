@@ -181,6 +181,40 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(mockClient.release).toHaveBeenCalled();
   });
 
+  it("writes a company profile audit event in the same PostgreSQL transaction", async () => {
+    const current = { id: "comp-456", name: "Original", vatNumber: "IT123", address: "Address", defaultHourlyRate: "60", reportFooterNotes: "Notes", stripeSubscriptionStatus: "Active", maxUsers: "10", featurePdfExport: true, isActive: true, logoDataUrl: null, createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-02T00:00:00Z") };
+    const updated = { ...current, name: "Changed Company", updatedAt: new Date("2026-01-03T00:00:00Z") };
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({ rows: [updated] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.updateCompanyWithAudit("comp-456", { name: "Changed Company" }, { actorUserId: "usr-ceo", action: "tenant.profile.updated", targetType: "company", targetId: "comp-456" });
+    expect(result?.name).toBe("Changed Company");
+    expect(mockClient.query).toHaveBeenCalledWith("BEGIN");
+    expect(mockClient.query).toHaveBeenCalledWith("COMMIT");
+    const auditCall = mockClient.query.mock.calls.find((call: any[]) => String(call[0]).includes("INSERT INTO admin_audit_events"));
+    expect(auditCall).toBeTruthy();
+    expect(JSON.parse(auditCall![1][5])).toEqual({ changedFields: "name" });
+    expect(JSON.stringify(auditCall![1][5])).not.toContain("Changed Company");
+  });
+
+  it("rolls back a company profile update when audit insertion fails", async () => {
+    const current = { id: "comp-456", name: "Original", vatNumber: "IT123", address: "Address", defaultHourlyRate: "60", reportFooterNotes: "Notes", stripeSubscriptionStatus: "Active", maxUsers: "10", featurePdfExport: true, isActive: true, logoDataUrl: null, createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-02T00:00:00Z") };
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({ rows: [{ ...current, name: "Changed Company" }] })
+      .mockRejectedValueOnce(new Error("audit insertion failed"))
+      .mockResolvedValueOnce({ rows: [] });
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.updateCompanyWithAudit("comp-456", { name: "Changed Company" }, { actorUserId: "usr-ceo", action: "tenant.profile.updated", targetType: "company", targetId: "comp-456" })).rejects.toThrow("audit insertion failed");
+    expect(mockClient.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(mockClient.query).not.toHaveBeenCalledWith("COMMIT");
+    expect(mockClient.release).toHaveBeenCalled();
+  });
   it("findUserByEmail normalizes email and properly maps SQL row", async () => {
     const fakeRow = {
       id: "usr-123",

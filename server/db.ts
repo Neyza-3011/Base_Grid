@@ -364,6 +364,49 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
 
+  public async updateCompanyWithAudit(
+    id: string,
+    updates: Partial<CompanyRecord>,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null> {
+    const editableFields = [
+      "name",
+      "vatNumber",
+      "address",
+      "defaultHourlyRate",
+      "reportFooterNotes",
+    ] as const;
+    if (
+      !id ||
+      audit.targetType !== "company" ||
+      audit.targetId !== id ||
+      !audit.actorUserId ||
+      !audit.action ||
+      Object.keys(updates).some((key) => !editableFields.includes(key as typeof editableFields[number]))
+    ) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+
+    const current = this.companies.get(id);
+    if (!current) return null;
+    const changedFields = editableFields.filter(
+      (key) => updates[key] !== undefined && updates[key] !== current[key],
+    );
+    if (changedFields.length === 0) return { ...current, logoDataUrl: current.logoDataUrl ?? null };
+
+    await this.createAdminAuditEvent({
+      ...audit,
+      metadata: { changedFields: changedFields.join(",") },
+    });
+    const updated: CompanyRecord = {
+      ...current,
+      ...Object.fromEntries(changedFields.map((key) => [key, updates[key]])),
+      updatedAt: new Date().toISOString(),
+    };
+    this.companies.set(id, updated);
+    return { ...updated };
+  }
+
   public async setCompanyActiveWithAudit(
     companyId: string,
     isActive: boolean,

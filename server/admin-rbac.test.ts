@@ -192,6 +192,21 @@ describe("Platform admin endpoint authorization", () => {
     expect(after?.stripeSubscriptionStatus).toBe(before?.stripeSubscriptionStatus);
     expect(after?.maxUsers).toBe(before?.maxUsers);
     expect(after?.featurePdfExport).toBe(before?.featurePdfExport);
+    const auditEvents = await db.getAdminAuditEvents(10);
+    const audit = auditEvents.find((event) => event.action === "tenant.profile.updated");
+    expect(audit?.targetId).toBe("comp-rossi-001");
+    expect(audit?.metadata).toEqual({ changedFields: "name,address,defaultHourlyRate,reportFooterNotes" });
+    expect(JSON.stringify(audit)).not.toContain("Via Roma 25");
+  });
+
+  it("does not emit an audit event for an unchanged company profile value", async () => {
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { name: "Rossi Impianti Srl" },
+    );
+    expect(response.status).toBe(200);
+    expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
   });
 
   it("denies tenant admins from updating another tenant through the platform profile endpoint", async () => {
