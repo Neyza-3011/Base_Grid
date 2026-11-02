@@ -62,12 +62,13 @@ export function isValidTime(val: any): boolean {
  * - Must strictly match data:<allowed-image-mime>;base64,<payload>
  * - Allowed MIMEs: image/png, image/jpeg (and image/jpg)
  * - Payload must be non-empty, strictly conform to Base64 syntax (no spaces/arbitrary chars, proper padding)
- * - Decoded binary content must match magic bytes for the declared MIME
+ * - Decoded binary content must match the declared image format
+ * - Image dimensions are capped at 2048 × 2048 pixels before PDF decoding
  */
 const MAX_SIGNATURE_IMAGE_DIMENSION = 2048;
 const MAX_SIGNATURE_IMAGE_PIXELS = 4_194_304;
 
-function hasSafeImageDimensions(buffer: Buffer, mime: string): boolean {
+export function hasSafeImageDimensions(buffer: Buffer, mime: string): boolean {
   let width = 0;
   let height = 0;
 
