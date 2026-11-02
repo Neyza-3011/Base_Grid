@@ -24,6 +24,7 @@ import {
   CreateAdminAuditEventInput,
 } from "./types";
 import { tokenStore } from "./token-store";
+import { ForbiddenError } from "./errors";
 import { hashPassword } from "./security";
 import { getRuntimeMode } from "./runtime-mode";
 import { getPostgresConnectionOptions } from "./postgres-connection-options";
@@ -1793,46 +1794,85 @@ export class PostgresAdapter implements IDatabaseAdapter {
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
     options?: { incrementAuthVersion?: boolean },
   ): Promise<UserRecord | null> {
-    const existing = await this.getUserByIdAndCompany(userId, companyId);
-    if (!existing) return null;
+    return this.withTransaction(async (client) => {
+      const guardAdminInvariant = updates.role !== undefined || updates.isActive === false;
+      if (guardAdminInvariant) {
+        // Serialize role/deactivation changes per tenant so concurrent requests cannot
+        // both pass a stale "another active admin exists" check.
+        const companyResult = await client.query(
+          "SELECT id FROM companies WHERE id = $1 FOR UPDATE",
+          [companyId],
+        );
+        if (!companyResult.rows[0]) return null;
+      }
 
-    const now = new Date().toISOString();
-    const setClauses: string[] = ['"updatedAt" = $1'];
-    const params: any[] = [now];
-    let paramIndex = 2;
+      const existingResult = await client.query(
+        'SELECT * FROM users WHERE id = $1 AND "companyId" = $2 FOR UPDATE',
+        [userId, companyId],
+      );
+      if (!existingResult.rows[0]) return null;
+      const existing = mapUserRow(existingResult.rows[0]);
 
-    if (updates.fullName !== undefined) {
-      setClauses.push(`"fullName" = $${paramIndex}`);
-      params.push(updates.fullName);
-      paramIndex++;
-    }
-    if (updates.role !== undefined) {
-      setClauses.push(`role = $${paramIndex}`);
-      params.push(updates.role);
-      paramIndex++;
-    }
-    if (updates.phoneNumber !== undefined) {
-      setClauses.push(`"phoneNumber" = $${paramIndex}`);
-      params.push(updates.phoneNumber);
-      paramIndex++;
-    }
-    if (updates.isActive !== undefined) {
-      setClauses.push(`"isActive" = $${paramIndex}`);
-      params.push(updates.isActive);
-      paramIndex++;
-    }
+      const nextRole = updates.role ?? existing.role;
+      const nextIsActive = updates.isActive ?? existing.isActive;
+      const removesActiveAdmin =
+        existing.isActive &&
+        (existing.role === "owner" || existing.role === "admin") &&
+        ((nextRole !== "owner" && nextRole !== "admin") || !nextIsActive);
 
-    if (options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined) {
-      setClauses.push('"authVersion" = "authVersion" + 1');
-    }
+      if (removesActiveAdmin) {
+        const countResult = await client.query(
+          `SELECT COUNT(*)::int AS count
+           FROM users
+           WHERE "companyId" = $1
+             AND role IN ('owner', 'admin')
+             AND "isActive" = true
+             AND id <> $2`,
+          [companyId, userId],
+        );
+        if (Number(countResult.rows[0]?.count ?? 0) === 0) {
+          throw new ForbiddenError("Impossibile rimuovere l'ultimo amministratore attivo dell'azienda.");
+        }
+      }
 
-    params.push(userId);
-    params.push(companyId);
-    const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${paramIndex} AND "companyId" = $${paramIndex + 1} RETURNING *`;
+      const now = new Date().toISOString();
+      const setClauses: string[] = ['"updatedAt" = $1'];
+      const params: any[] = [now];
+      let paramIndex = 2;
 
-    const res = await this.pool.query(sql, params);
-    if (!res.rows[0]) return null;
-    return mapUserRow(res.rows[0]);
+      if (updates.fullName !== undefined) {
+        setClauses.push(`"fullName" = $${paramIndex}`);
+        params.push(updates.fullName);
+        paramIndex++;
+      }
+      if (updates.role !== undefined) {
+        setClauses.push(`role = $${paramIndex}`);
+        params.push(updates.role);
+        paramIndex++;
+      }
+      if (updates.phoneNumber !== undefined) {
+        setClauses.push(`"phoneNumber" = $${paramIndex}`);
+        params.push(updates.phoneNumber);
+        paramIndex++;
+      }
+      if (updates.isActive !== undefined) {
+        setClauses.push(`"isActive" = $${paramIndex}`);
+        params.push(updates.isActive);
+        paramIndex++;
+      }
+
+      if (options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined) {
+        setClauses.push('"authVersion" = "authVersion" + 1');
+      }
+
+      params.push(userId);
+      params.push(companyId);
+      const sql = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${paramIndex} AND "companyId" = $${paramIndex + 1} RETURNING *`;
+
+      const result = await client.query(sql, params);
+      if (!result.rows[0]) return null;
+      return mapUserRow(result.rows[0]);
+    });
   }
 
   public async countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number> {

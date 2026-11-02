@@ -21,6 +21,7 @@ import {
 } from "./types";
 import { hashPassword, normalizeEmail } from "./security";
 import { tokenStore } from "./token-store";
+import { ForbiddenError } from "./errors";
 import { config, ServerConfig } from "./config";
 import { getRuntimeMode } from "./runtime-mode";
 import { IDatabaseAdapter, TransactionClient, PostgresAdapter, DeleteReportWithRegressionResult, UpdateDraftReportResult } from "./db-postgres";
@@ -865,6 +866,32 @@ export class DatabaseStore implements IDatabaseAdapter {
   ): Promise<UserRecord | null> {
     const user = this.users.get(userId);
     if (!user || user.companyId !== companyId) return null;
+
+    const guardAdminInvariant = updates.role !== undefined || updates.isActive === false;
+    if (guardAdminInvariant && user.isActive && (user.role === "owner" || user.role === "admin")) {
+      const nextRole = updates.role ?? user.role;
+      const nextIsActive = updates.isActive ?? user.isActive;
+      const removesActiveAdmin =
+        (nextRole !== "owner" && nextRole !== "admin") || !nextIsActive;
+
+      if (removesActiveAdmin) {
+        let otherActiveAdmins = 0;
+        for (const candidate of this.users.values()) {
+          if (
+            candidate.companyId === companyId &&
+            candidate.id !== userId &&
+            (candidate.role === "owner" || candidate.role === "admin") &&
+            candidate.isActive
+          ) {
+            otherActiveAdmins++;
+          }
+        }
+
+        if (otherActiveAdmins === 0) {
+          throw new ForbiddenError("Impossibile rimuovere l'ultimo amministratore attivo dell'azienda.");
+        }
+      }
+    }
 
     const shouldIncrementAuthVersion = options?.incrementAuthVersion || updates.role !== undefined || updates.isActive !== undefined;
     const updatedUser: UserRecord = {
