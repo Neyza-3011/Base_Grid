@@ -460,6 +460,11 @@ export class InterventionService {
         }
         updates.assetId = cleanAssetId;
       }
+    } else if (existing.assetId && (targetCustomerId !== existing.customerId || targetLocationId !== existing.locationId)) {
+      const asset = await this.db.getAssetByIdAndCompany(existing.assetId, companyId);
+      if (!asset || asset.customerId !== targetCustomerId || asset.locationId !== targetLocationId) {
+        throw new BadRequestError("L'impianto selezionato non appartiene al cliente e alla sede indicati.");
+      }
     }
 
     // Technician validation

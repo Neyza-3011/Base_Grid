@@ -473,6 +473,155 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(res.data.detail || res.data.error).toMatch(/non appartiene/i);
     });
 
+    it("rejects updating location when existing asset does not belong to new location (returns 400)", async () => {
+      // Create second location for customer A
+      const locationA2 = await db.createLocation(companyA, customerA.id, {
+        name: "Sede Secondaria",
+        address: "Via Roma 2",
+        city: "Milano",
+      });
+
+      // Create intervention linked to assetA (which belongs to locationA)
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento con asset",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // Attempt to update locationId to locationA2 without specifying assetId:
+      // must fail because assetA belongs to locationA, not locationA2!
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          locationId: locationA2.id,
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/non appartiene/i);
+
+      // Verify that explicitly clearing the asset via assetId: null allows changing location
+      const resClearAsset = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          locationId: locationA2.id,
+          assetId: null,
+        },
+      });
+      expect(resClearAsset.status).toBe(200);
+      expect(resClearAsset.data.locationId).toBe(locationA2.id);
+      expect(resClearAsset.data.assetId).toBeUndefined();
+    });
+
+    it("rejects updating customer when existing asset belongs to previous customer (returns 400)", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Cliente Altro",
+      });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede Altro Cliente",
+        address: "Via Napoli 1",
+        city: "Napoli",
+      });
+
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento con asset cliente A",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      // Updating customerId and locationId without clearing or updating assetId must be rejected
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          customerId: otherCustomer.id,
+          locationId: otherLocation.id,
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(/non appartiene/i);
+    });
+
+    it("allows updating location when a valid asset belonging to target location is provided", async () => {
+      const locationA2 = await db.createLocation(companyA, customerA.id, {
+        name: "Sede Secondaria Con Asset",
+        address: "Via Roma 3",
+        city: "Milano",
+      });
+      const assetA2 = await db.createAsset(companyA, customerA.id, locationA2.id, {
+        name: "Quadro Secondario",
+        assetType: "quadro",
+      });
+
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento con asset da trasferire",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          locationId: locationA2.id,
+          assetId: assetA2.id,
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.data.locationId).toBe(locationA2.id);
+      expect(res.data.assetId).toBe(assetA2.id);
+    });
+
+    it("preserves assigned asset when updating non-relational fields on intervention", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Descrizione iniziale",
+        priority: "bassa",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          description: "Descrizione aggiornata",
+          notes: "Note aggiuntive",
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.data.description).toBe("Descrizione aggiornata");
+      expect(res.data.assetId).toBe(assetA.id);
+    });
+
     it("rejects assignment of technician belonging to another company (returns 404/400)", async () => {
       const techB = await createTestUserAndLogin(companyB, "technician");
 
