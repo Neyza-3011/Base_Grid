@@ -375,7 +375,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
-    options?: { incrementAuthVersion?: boolean },
+    options?: { incrementAuthVersion?: boolean; audit?: CreateAdminAuditEventInput },
   ): Promise<UserRecord | null>;
   countAdminOwnersByCompany(companyId: string, excludeUserId?: string): Promise<number>;
 
@@ -1792,8 +1792,18 @@ export class PostgresAdapter implements IDatabaseAdapter {
     userId: string,
     companyId: string,
     updates: Partial<Pick<UserRecord, "fullName" | "role" | "phoneNumber" | "isActive">>,
-    options?: { incrementAuthVersion?: boolean },
+    options?: { incrementAuthVersion?: boolean; audit?: CreateAdminAuditEventInput },
   ): Promise<UserRecord | null> {
+    const audit = options?.audit;
+    if (audit && (
+      !audit.actorUserId ||
+      !audit.action ||
+      audit.targetType !== "user" ||
+      audit.targetId !== userId
+    )) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+
     return this.withTransaction(async (client) => {
       const guardAdminInvariant = updates.role !== undefined || updates.isActive === false;
       if (guardAdminInvariant) {
@@ -1871,6 +1881,22 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       const result = await client.query(sql, params);
       if (!result.rows[0]) return null;
+
+      if (audit) {
+        await client.query(
+          `INSERT INTO admin_audit_events (id, "actorUserId", action, "targetType", "targetId", metadata)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+          [
+            `audit-${randomUUID()}`,
+            audit.actorUserId,
+            audit.action,
+            audit.targetType,
+            audit.targetId,
+            JSON.stringify(audit.metadata ?? {}),
+          ],
+        );
+      }
+
       return mapUserRow(result.rows[0]);
     });
   }
