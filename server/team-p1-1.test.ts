@@ -666,4 +666,40 @@ describe("P0-ROLE — concurrent last-admin protection", () => {
     );
     expect(activeAdmins).toHaveLength(1);
   });
+
+  it("preserves one active admin when two admins concurrently deactivate each other", async () => {
+    const teamService = new TeamService(db);
+    const firstAdmin = (await db.findUserByEmail("admin@rossi.it"))!;
+    const invited = await teamService.inviteTeamMember(
+      firstAdmin.companyId,
+      firstAdmin.companyName,
+      firstAdmin.id,
+      {
+        email: `concurrent-deactivate-admin-${Date.now()}@rossi.it`,
+        fullName: "Second Admin",
+        role: "admin",
+      },
+    );
+    const secondAdmin = await db.getUserByIdAndCompany(invited.member.id, firstAdmin.companyId);
+    expect(secondAdmin?.role).toBe("admin");
+
+    const results = await Promise.allSettled([
+      teamService.changeMemberStatus(firstAdmin.companyId, firstAdmin.id, secondAdmin!.id, false),
+      teamService.changeMemberStatus(firstAdmin.companyId, secondAdmin!.id, firstAdmin.id, false),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      expect(rejected.reason).toMatchObject({ statusCode: 403 });
+      expect(rejected.reason.message).toMatch(/ultimo amministratore attivo/i);
+    }
+
+    const activeAdmins = (await db.getUsersByCompany(firstAdmin.companyId)).filter(
+      (member) => member.isActive && (member.role === "owner" || member.role === "admin"),
+    );
+    expect(activeAdmins).toHaveLength(1);
+  });
 });
