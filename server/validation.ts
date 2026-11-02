@@ -62,8 +62,55 @@ export function isValidTime(val: any): boolean {
  * - Must strictly match data:<allowed-image-mime>;base64,<payload>
  * - Allowed MIMEs: image/png, image/jpeg (and image/jpg)
  * - Payload must be non-empty, strictly conform to Base64 syntax (no spaces/arbitrary chars, proper padding)
- * - Decoded binary content must match magic bytes for the declared MIME
+ * - Decoded binary content must match the declared image format
+ * - Image dimensions are capped at 2048 × 2048 pixels before PDF decoding
  */
+const MAX_SIGNATURE_IMAGE_DIMENSION = 2048;
+const MAX_SIGNATURE_IMAGE_PIXELS = 4_194_304;
+
+export function hasSafeImageDimensions(buffer: Buffer, mime: string): boolean {
+  let width = 0;
+  let height = 0;
+
+  if (mime === "image/png") {
+    if (buffer.length < 24 || buffer.readUInt32BE(8) !== 13 || buffer.toString("ascii", 12, 16) !== "IHDR") return false;
+    width = buffer.readUInt32BE(16);
+    height = buffer.readUInt32BE(20);
+  } else {
+    // JPEG dimensions are declared in a Start Of Frame (SOF) segment before image data.
+    // Parse segment lengths instead of trusting only the JPEG magic bytes.
+    let offset = 2;
+    let foundFrame = false;
+    const sofMarkers = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+
+    while (offset + 1 < buffer.length) {
+      if (buffer[offset] !== 0xff) return false;
+      while (offset < buffer.length && buffer[offset] === 0xff) offset++;
+      if (offset >= buffer.length) return false;
+      const marker = buffer[offset++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 2 > buffer.length) return false;
+      const segmentLength = buffer.readUInt16BE(offset);
+      if (segmentLength < 2 || offset + segmentLength > buffer.length) return false;
+      if (sofMarkers.has(marker)) {
+        if (segmentLength < 8) return false;
+        height = buffer.readUInt16BE(offset + 3);
+        width = buffer.readUInt16BE(offset + 5);
+        foundFrame = true;
+        break;
+      }
+      offset += segmentLength;
+    }
+    if (!foundFrame) return false;
+  }
+
+  return width > 0 && height > 0 &&
+    width <= MAX_SIGNATURE_IMAGE_DIMENSION &&
+    height <= MAX_SIGNATURE_IMAGE_DIMENSION &&
+    width * height <= MAX_SIGNATURE_IMAGE_PIXELS;
+}
+
 export function validateSignatureBase64(signature: any): { valid: boolean; status: number; error: string } {
   if (typeof signature !== "string") {
     return { valid: false, status: 400, error: "La firma deve essere una stringa nel formato Data URL." };
@@ -101,7 +148,7 @@ export function validateSignatureBase64(signature: any): { valid: boolean; statu
     return { valid: false, status: 400, error: "Payload base64 non decodificabile o non canonico." };
   }
 
-  // Magic bytes inspection
+  // Validate the file signature before reading image metadata.
   if (mime === "image/png") {
     if (
       buffer.length < 8 ||
@@ -125,6 +172,14 @@ export function validateSignatureBase64(signature: any): { valid: boolean; statu
     ) {
       return { valid: false, status: 400, error: "Il contenuto binario non corrisponde al formato image/jpeg." };
     }
+  }
+
+  if (!hasSafeImageDimensions(buffer, mime)) {
+    return {
+      valid: false,
+      status: 400,
+      error: "Le dimensioni della firma non possono superare 2048 × 2048 pixel e devono essere valide.",
+    };
   }
 
   return { valid: true, status: 200, error: "" };
