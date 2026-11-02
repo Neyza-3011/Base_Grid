@@ -118,7 +118,12 @@ adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res
     input.defaultHourlyRate = req.body.default_hourly_rate;
   }
 
-  const updated = await companyService.updateCompanySettings(companyId, input as any, "superadmin");
+  const updated = await companyService.updateCompanySettings(companyId, input as any, "superadmin", {
+    actorUserId: req.user.id,
+    action: "tenant.profile.updated",
+    targetType: "company",
+    targetId: companyId,
+  });
   res.status(200).json({
     company: {
       id: updated.id,
