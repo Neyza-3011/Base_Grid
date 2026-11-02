@@ -623,4 +623,41 @@ describe("P1.1-RUNTIME — Input Validation & Fail-Closed Error Handling", () =>
     tokenStore.setAvailability(true);
     config.EMAIL_VERIFICATION_ENABLED = false;
   });
+
+describe("P0-ROLE — concurrent last-admin protection", () => {
+  it("preserves one active admin when two admins concurrently demote each other", async () => {
+    const teamService = new TeamService(db);
+    const firstAdmin = (await db.findUserByEmail("admin@rossi.it"))!;
+    const invited = await teamService.inviteTeamMember(
+      firstAdmin.companyId,
+      firstAdmin.companyName,
+      firstAdmin.id,
+      {
+        email: `concurrent-admin-${Date.now()}@rossi.it`,
+        fullName: "Second Admin",
+        role: "admin",
+      },
+    );
+    const secondAdmin = await db.getUserByIdAndCompany(invited.member.id, firstAdmin.companyId);
+    expect(secondAdmin?.role).toBe("admin");
+
+    const results = await Promise.allSettled([
+      teamService.updateTeamMember(firstAdmin.companyId, firstAdmin.id, secondAdmin!.id, {
+        role: "technician",
+      }),
+      teamService.updateTeamMember(firstAdmin.companyId, secondAdmin!.id, firstAdmin.id, {
+        role: "technician",
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+
+    const activeAdmins = (await db.getUsersByCompany(firstAdmin.companyId)).filter(
+      (member) => member.isActive && (member.role === "owner" || member.role === "admin"),
+    );
+    expect(activeAdmins).toHaveLength(1);
+  });
+});
+
 });
