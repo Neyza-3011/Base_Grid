@@ -2,6 +2,7 @@ import { IDatabaseAdapter } from "../db";
 import { CompanyRecord, CreateAdminAuditEventInput, UpdateCompanyInput } from "../types";
 import { NotFoundError, ValidationError } from "../errors";
 import { PDFDocument } from "pdf-lib";
+import { hasSafeImageDimensions } from "../validation";
 
 const MAX_COMPANY_LOGO_BYTES = 256 * 1024;
 const MAX_COMPANY_LOGO_DATA_URL_LENGTH = 350_000;
@@ -26,13 +27,11 @@ async function validateCompanyLogoDataUrl(value: string): Promise<string> {
     if (bytes.length < 24 || !bytes.subarray(0, 8).equals(signature)) {
       throw new ValidationError("Il contenuto del logo PNG non è valido.");
     }
-    const width = bytes.readUInt32BE(16);
-    const height = bytes.readUInt32BE(20);
-    if (!width || !height || width > 2048 || height > 2048 || width * height > 4_194_304) {
-      throw new ValidationError("Le dimensioni del logo non possono superare 2048 × 2048 pixel.");
-    }
   } else if (bytes.length < 3 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
     throw new ValidationError("Il contenuto del logo JPEG non è valido.");
+  }
+  if (!hasSafeImageDimensions(bytes, mime === "png" ? "image/png" : "image/jpeg")) {
+    throw new ValidationError("Le dimensioni del logo non possono superare 2048 × 2048 pixel e devono essere valide.");
   }
 
   try {
