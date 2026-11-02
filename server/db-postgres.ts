@@ -314,6 +314,11 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   findCompanyById(id: string): Promise<CompanyRecord | null>;
   findCompanyWithLogoById(id: string): Promise<CompanyRecord | null>;
   updateCompany(id: string, updates: Partial<CompanyRecord>): Promise<CompanyRecord | null>;
+  updateCompanyWithAudit(
+    id: string,
+    updates: Partial<CompanyRecord>,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null>;
   setCompanyActiveWithAudit(
     companyId: string,
     isActive: boolean,
@@ -1083,11 +1088,83 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
 
-  public async setCompanyActiveWithAudit(
-    companyId: string,
-    isActive: boolean,
+  /**
+   * Atomically updates CEO-editable company profile fields and records only changed field names.
+   * Submitted profile values are never copied into audit metadata.
+   */
+  public async updateCompanyWithAudit(
+    id: string,
+    updates: Partial<CompanyRecord>,
     audit: CreateAdminAuditEventInput,
   ): Promise<CompanyRecord | null> {
+    const editableFields = [
+      { key: "name", column: "name" },
+      { key: "vatNumber", column: '"vatNumber"' },
+      { key: "address", column: "address" },
+      { key: "defaultHourlyRate", column: '"defaultHourlyRate"' },
+      { key: "reportFooterNotes", column: '"reportFooterNotes"' },
+    ] as const;
+    const unsupportedFields = Object.keys(updates).filter(
+      (key) => !editableFields.some((field) => field.key === key),
+    );
+    if (
+      !id ||
+      audit.targetType !== "company" ||
+      audit.targetId !== id ||
+      !audit.actorUserId ||
+      !audit.action ||
+      unsupportedFields.length > 0
+    ) {
+      throw new Error("ADMIN_AUDIT_INVALID_INPUT");
+    }
+
+    return this.withTransaction(async (client) => {
+      const currentResult = await client.query(
+        "SELECT * FROM companies WHERE id = $1 FOR UPDATE",
+        [id],
+      );
+      if (!currentResult.rows[0]) return null;
+      const current = mapCompanyRow(currentResult.rows[0]);
+      const changedFields = editableFields.filter(({ key }) =>
+        updates[key] !== undefined && updates[key] !== current[key],
+      );
+      if (changedFields.length === 0) return current;
+
+      const now = new Date().toISOString();
+      const setClauses: string[] = [];
+      const params: unknown[] = [];
+      for (const field of changedFields) {
+        params.push(updates[field.key]);
+        setClauses.push(`${field.column} = ${params.length}`);
+      }
+      params.push(now);
+      setClauses.push(`"updatedAt" = ${params.length}`);
+      params.push(id);
+
+      const updatedResult = await client.query(
+        `UPDATE companies SET ${setClauses.join(", ")} WHERE id = ${params.length} RETURNING *`,
+        params,
+      );
+      if (!updatedResult.rows[0]) return null;
+
+      const changedFieldsValue = changedFields.map(({ key }) => key).join(",");
+      await client.query(
+        `INSERT INTO admin_audit_events (id, "actorUserId", action, "targetType", "targetId", metadata)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [
+          `audit-${randomUUID()}`,
+          audit.actorUserId,
+          audit.action,
+          audit.targetType,
+          audit.targetId,
+          JSON.stringify({ changedFields: changedFieldsValue }),
+        ],
+      );
+      return mapCompanyRow(updatedResult.rows[0]);
+    });
+  }
+
+  public async setCompanyActiveWithAudit(
     if (
       !companyId ||
       audit.targetType !== "company" ||
