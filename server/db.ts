@@ -408,6 +408,10 @@ export class DatabaseStore implements IDatabaseAdapter {
   }
 
   public async setCompanyActiveWithAudit(
+    companyId: string,
+    isActive: boolean,
+    audit: CreateAdminAuditEventInput,
+  ): Promise<CompanyRecord | null> {
     if (
       !companyId ||
       audit.targetType !== "company" ||
