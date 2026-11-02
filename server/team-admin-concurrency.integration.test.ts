@@ -86,6 +86,12 @@ postgresDescribe("P0-ROLE PostgreSQL last-admin concurrency", () => {
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      expect(rejected.reason).toMatchObject({ statusCode: 403 });
+      expect(rejected.reason.message).toMatch(/ultimo amministratore attivo/i);
+    }
 
     const members = await adapter!.getUsersByCompany(companyId);
     const activeAdmins = members.filter(
