@@ -72,7 +72,7 @@ describe("Platform admin audit event persistence contract", () => {
         action: "user.profile.updated",
         targetType: "user",
         targetId: "usr-rossi-tech",
-        metadata: { companyId: "comp-rossi-001", changedFields: ["fullName"] },
+        metadata: { companyId: "comp-rossi-001", changedFields: "fullName" },
       },
     );
 
@@ -83,7 +83,7 @@ describe("Platform admin audit event persistence contract", () => {
         action: "user.profile.updated",
         targetType: "user",
         targetId: "usr-rossi-tech",
-        metadata: { companyId: "comp-rossi-001", changedFields: ["fullName"] },
+        metadata: { companyId: "comp-rossi-001", changedFields: "fullName" },
       }),
     ]));
   });
