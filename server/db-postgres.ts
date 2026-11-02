@@ -1135,10 +1135,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
       const params: unknown[] = [];
       for (const field of changedFields) {
         params.push(updates[field.key]);
-        setClauses.push(field.column + " = $" + params.length);
+        setClauses.push(field.column + " = " + String.fromCharCode(36) + params.length);
       }
       params.push(now);
-      setClauses.push('"updatedAt" = 
+      setClauses.push('"updatedAt" = ' + String.fromCharCode(36) + params.length);
+      params.push(id);
+
+      const updateSql = "UPDATE companies SET " + setClauses.join(", ") +
+        " WHERE id = " + String.fromCharCode(36) + params.length + " RETURNING *";
+      const updatedResult = await client.query(updateSql, params);
       if (!updatedResult.rows[0]) return null;
 
       const changedFieldsValue = changedFields.map(({ key }) => key).join(",");
