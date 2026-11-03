@@ -24,6 +24,18 @@ describe("Runtime Mode & Dual-Environment Architecture", () => {
       expect(getRuntimeMode({})).toBe("development");
     });
 
+    it("fails closed when NODE_ENV is set to an unsupported value", () => {
+      expect(() => getRuntimeMode({ NODE_ENV: "staging" })).toThrow(
+        /CRITICAL CONFIG ERROR: unsupported NODE_ENV/i
+      );
+    });
+
+    it("fails closed when BASEGRID_RUNTIME_MODE is set to an unsupported value", () => {
+      expect(() =>
+        getRuntimeMode({ BASEGRID_RUNTIME_MODE: "prod", NODE_ENV: "production" })
+      ).toThrow(/CRITICAL CONFIG ERROR: unsupported BASEGRID_RUNTIME_MODE/i);
+    });
+
     it("13. defaults to strict production when NODE_ENV=production without AI Studio indicator", () => {
       expect(getRuntimeMode({ NODE_ENV: "production" })).toBe("production");
       expect(getRuntimeMode({ NODE_ENV: "production", K_SERVICE: "service" })).toBe("production");
