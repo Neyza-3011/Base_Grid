@@ -123,8 +123,12 @@ function mapReportRow(row: any): ReportRecord {
     try {
       materialsUsed = JSON.parse(materialsUsed);
     } catch {
-      materialsUsed = [];
+      throw new Error("Invalid persisted report materials JSON");
     }
+  }
+
+  if (materialsUsed !== null && materialsUsed !== undefined && !Array.isArray(materialsUsed)) {
+    throw new Error("Invalid persisted report materials shape");
   }
 
   const rawMaterialsStatus = row.materialsStatus;
