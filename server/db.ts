@@ -1639,13 +1639,17 @@ export class DatabaseStore implements IDatabaseAdapter {
   public async updateIntervention(
     companyId: string,
     interventionId: string,
-    data: Partial<InterventionRecord> & { updatedBy: string }
+    data: Partial<InterventionRecord> & { updatedBy: string },
+    expectedStatus?: InterventionStatus,
   ): Promise<InterventionRecord | null> {
     if (!companyId || !interventionId || !data) {
       throw new Error("DB_CONTRACT_ERROR: missing companyId/interventionId/data in updateIntervention");
     }
-    const existing = await this.getInterventionByIdAndCompany(interventionId, companyId);
-    if (!existing) return null;
+    // Keep the expected-status check and map replacement synchronous: this is the
+    // in-memory adapter compare-and-set boundary for concurrent transitions.
+    const existing = this.interventions.get(interventionId);
+    if (!existing || existing.companyId !== companyId) return null;
+    if (expectedStatus !== undefined && existing.status !== expectedStatus) return null;
 
     const updatedRecord: InterventionRecord = {
       ...existing,

@@ -357,6 +357,36 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
   });
 
+  describe("Atomic intervention status transitions", () => {
+    it("allows only one compare-and-set update from the same expected status", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Test compare-and-set transizioni",
+        priority: "media",
+        status: "in_lavorazione",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const results = await Promise.all([
+        db.updateIntervention(companyA, created.id, { status: "in_attesa", updatedBy: adminA.user.id }, "in_lavorazione"),
+        db.updateIntervention(companyA, created.id, { status: "completato", actualHours: 2.5, notes: "Lavoro completato", updatedBy: adminA.user.id }, "in_lavorazione"),
+      ]);
+
+      expect(results.filter((result) => result !== null)).toHaveLength(1);
+      expect(results.filter((result) => result === null)).toHaveLength(1);
+
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted).not.toBeNull();
+      expect(["in_attesa", "completato"]).toContain(persisted?.status);
+      if (persisted?.status === "completato") {
+        expect(persisted.actualHours).toBe(2.5);
+        expect(persisted.notes).toBe("Lavoro completato");
+      }
+    });
+  });
+
   describe("2. Tenant Isolation & Cross-Tenant Access Protection", () => {
     it("prevents Company B from listing Company A interventions", async () => {
       await db.createIntervention(companyA, {

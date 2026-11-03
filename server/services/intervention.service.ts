@@ -14,7 +14,7 @@ import {
   TECHNICIAN_ALLOWED_STATUS_TRANSITIONS,
   UserRole,
 } from "../types";
-import { BadRequestError, NotFoundError, ForbiddenError } from "../errors";
+import { BadRequestError, NotFoundError, ForbiddenError, ConflictError } from "../errors";
 
 function validateInputObject(input: unknown): void {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -560,9 +560,15 @@ export class InterventionService {
       }
     }
 
-    const updated = await this.db.updateIntervention(companyId, interventionId, updates);
+    // Compare-and-set prevents concurrent requests from applying transitions
+    // validated against the same stale status.
+    const updated = await this.db.updateIntervention(companyId, interventionId, updates, existing.status);
     if (!updated) {
-      throw new NotFoundError("Intervento non trovato.");
+      const current = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
+      if (!current) {
+        throw new NotFoundError("Intervento non trovato.");
+      }
+      throw new ConflictError("Lo stato dell'intervento è cambiato durante l'operazione. Ricarica e riprova.");
     }
     return updated;
   }

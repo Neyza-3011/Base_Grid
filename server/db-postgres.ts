@@ -472,7 +472,12 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
       updatedBy: string;
     }
   ): Promise<InterventionRecord>;
-  updateIntervention(companyId: string, interventionId: string, data: Partial<InterventionRecord> & { updatedBy: string }): Promise<InterventionRecord | null>;
+  updateIntervention(
+    companyId: string,
+    interventionId: string,
+    data: Partial<InterventionRecord> & { updatedBy: string },
+    expectedStatus?: InterventionStatus,
+  ): Promise<InterventionRecord | null>;
 }
 
 export class PostgresAdapter implements IDatabaseAdapter {
@@ -2793,7 +2798,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
   public async updateIntervention(
     companyId: string,
     interventionId: string,
-    data: Partial<InterventionRecord> & { updatedBy: string }
+    data: Partial<InterventionRecord> & { updatedBy: string },
+    expectedStatus?: InterventionStatus,
   ): Promise<InterventionRecord | null> {
     if (!companyId || !interventionId || !data) {
       throw new Error("DB_CONTRACT_ERROR: missing companyId/interventionId/data in updateIntervention");
@@ -2828,7 +2834,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     params.push(interventionId, companyId);
-    const sql = `UPDATE interventions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1} RETURNING *`;
+    const expectedStatusClause = expectedStatus === undefined ? "" : ` AND status = $${paramIdx + 2}`;
+    if (expectedStatus !== undefined) params.push(expectedStatus);
+    const sql = `UPDATE interventions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1}${expectedStatusClause} RETURNING *`;
 
     const res = await this.pool.query(sql, params);
     if (!res.rows[0]) return null;
