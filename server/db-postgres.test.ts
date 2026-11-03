@@ -376,6 +376,53 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(reports[0].materialsUsed[0].description).toBe("Pipe");
   });
 
+  it("rejects malformed persisted materials JSON instead of treating it as an empty list", async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "rep-corrupt-json",
+        companyId: "comp-123",
+        date: "18/08/2026",
+        time: "10:00",
+        workHours: "1",
+        travelHours: "0",
+        status: "submitted",
+        client: { name: "Client A" },
+        technician: { fullName: "Tech A" },
+        // A JSONB scalar string can be returned by pg as a plain string.
+        materialsUsed: "not-json",
+        notes: "",
+        createdAt: new Date("2026-08-18T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getReportsByCompany("comp-123", 50))
+      .rejects.toThrow("Invalid persisted report materials JSON");
+  });
+
+  it("rejects persisted materials JSON with a non-array shape", async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "rep-corrupt-shape",
+        companyId: "comp-123",
+        date: "18/08/2026",
+        time: "10:00",
+        workHours: "1",
+        travelHours: "0",
+        status: "submitted",
+        client: { name: "Client A" },
+        technician: { fullName: "Tech A" },
+        materialsUsed: { unexpected: true },
+        notes: "",
+        createdAt: new Date("2026-08-18T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getReportsByCompany("comp-123", 50))
+      .rejects.toThrow("Invalid persisted report materials shape");
+  });
+
   it("createReport properly persists interventionId when linked to an intervention", async () => {
     mockPool.query.mockResolvedValueOnce({ rows: [] });
 
