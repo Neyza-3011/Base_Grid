@@ -126,12 +126,12 @@ export function CompanySettings() {
 
   const handlePrefChange = (key: string, val: string) => {
     setPreferences((prev) => ({ ...prev, [key]: val }));
-    toast.success("Preferenza aggiornata");
+    toast.info("Modifica temporanea: questa preferenza non viene salvata sul server.");
   };
 
   const handleNotifToggle = (key: keyof typeof notifications) => {
     setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
-    toast.success("Impostazione notifiche salvata");
+    toast.info("Modifica temporanea: questa impostazione non viene salvata sul server.");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
