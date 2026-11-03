@@ -203,7 +203,7 @@ export async function fetchReports(limit: number = 1000): Promise<Report[]> {
 
     const data: unknown = await parseResponseOrThrow<unknown>(res);
     if (!Array.isArray(data)) {
-      throw new ReportsApiError("Risposta non valida dal server dei rapportini.", res.status);
+      throw new ReportsApiError("Risposta non valida dal server dei rapportini.", 502);
     }
     return data.map(mapDtoToReport);
   } catch (err: unknown) {
