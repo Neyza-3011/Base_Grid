@@ -86,13 +86,13 @@ export class InterventionService {
     }
 
     // Each relation type is fetched with one tenant-scoped adapter query per page.
-    // Customer/location/technician enrichment remains non-blocking as before; score
-    // dependencies (asset/report) must propagate read failures rather than fake nulls.
+    // Database read failures must propagate instead of returning a successful but
+    // misleading response with silently missing customer/location/technician data.
     const [customers, locations, assets, technicians, reports] = await Promise.all([
-      this.db.getCustomersByIdsAndCompany(Array.from(customerIds), companyId).catch(() => []),
-      this.db.getLocationsByIdsAndCompany(Array.from(locationIds), companyId).catch(() => []),
+      this.db.getCustomersByIdsAndCompany(Array.from(customerIds), companyId),
+      this.db.getLocationsByIdsAndCompany(Array.from(locationIds), companyId),
       this.db.getAssetsByIdsAndCompany(Array.from(assetIds), companyId),
-      this.db.getUsersByIdsAndCompany(Array.from(technicianIds), companyId).catch(() => []),
+      this.db.getUsersByIdsAndCompany(Array.from(technicianIds), companyId),
       this.db.getReportsByInterventionIdsAndCompany(result.items.map((item) => item.id), companyId),
     ]);
 
@@ -198,33 +198,30 @@ export class InterventionService {
     let assetName: string | undefined;
     let technicianName: string | undefined;
 
-    try {
-      if (item.customerId) {
-        const cust = await this.db.getCustomerByIdAndCompany(item.customerId, companyId);
-        if (cust) {
-          customerName = cust.displayName;
-          customerPhone = cust.phoneNumber;
-        }
+    if (item.customerId) {
+      const cust = await this.db.getCustomerByIdAndCompany(item.customerId, companyId);
+      if (cust) {
+        customerName = cust.displayName;
+        customerPhone = cust.phoneNumber;
       }
-      if (item.locationId) {
-        const loc = await this.db.getLocationByIdAndCompany(item.locationId, companyId);
-        if (loc) {
-          locationName = loc.name;
-          locationAddress = loc.address;
-          locationCity = loc.city;
-        }
-      }
-      if (item.assetId) {
-        const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
-        if (ast) assetName = ast.name;
-      }
-      if (item.technicianId) {
-        const tech = await this.db.getUserByIdAndCompany(item.technicianId, companyId);
-        if (tech) technicianName = tech.fullName;
-      }
-    } catch {
-      // Non-blocking enrichment
     }
+    if (item.locationId) {
+      const loc = await this.db.getLocationByIdAndCompany(item.locationId, companyId);
+      if (loc) {
+        locationName = loc.name;
+        locationAddress = loc.address;
+        locationCity = loc.city;
+      }
+    }
+    if (item.assetId) {
+      const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
+      if (ast) assetName = ast.name;
+    }
+    if (item.technicianId) {
+      const tech = await this.db.getUserByIdAndCompany(item.technicianId, companyId);
+      if (tech) technicianName = tech.fullName;
+    }
+
 
     const report = await this.db.getReportByInterventionId(companyId, interventionId);
     const asset = item.assetId ? await this.db.getAssetByIdAndCompany(item.assetId, companyId) : null;
