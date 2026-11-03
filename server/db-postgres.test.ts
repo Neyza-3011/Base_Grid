@@ -45,6 +45,22 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     };
   });
 
+  it("uses an expected-status predicate for atomic intervention transitions", async () => {
+    const adapter = new PostgresAdapter(mockPool);
+
+    const result = await adapter.updateIntervention(
+      "company-alpha",
+      "intervention-123",
+      { status: "completato", updatedBy: "user-123" },
+      "in_lavorazione",
+    );
+
+    expect(result).toBeNull();
+    expect(mockPool.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain("AND status = $6");
+    expect(params.slice(-3)).toEqual(["intervention-123", "company-alpha", "in_lavorazione"]);
+  });
   it("fails closed in production if DATABASE_URL is missing", () => {
     const originalEnv = process.env.NODE_ENV;
     const originalDbUrl = process.env.DATABASE_URL;
