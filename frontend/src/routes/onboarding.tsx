@@ -43,11 +43,33 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
   }
 
   const data = await response.json();
+  const rawHourlyRate = data.default_hourly_rate;
+  let defaultHourlyRate = 0;
+
+  if (
+    rawHourlyRate !== null &&
+    rawHourlyRate !== undefined &&
+    !(typeof rawHourlyRate === "string" && rawHourlyRate.trim() === "")
+  ) {
+    if (typeof rawHourlyRate !== "number" && typeof rawHourlyRate !== "string") {
+      throw new Error("La tariffa oraria predefinita ricevuta non è valida.");
+    }
+
+    defaultHourlyRate = Number(rawHourlyRate);
+    if (
+      !Number.isFinite(defaultHourlyRate) ||
+      defaultHourlyRate < 0 ||
+      defaultHourlyRate > 10000
+    ) {
+      throw new Error("La tariffa oraria predefinita ricevuta non è valida.");
+    }
+  }
+
   return {
     name: String(data.name || ""),
     vat_number: String(data.vat_number || ""),
     address: String(data.address || ""),
-    default_hourly_rate: Number(data.default_hourly_rate) || 0,
+    default_hourly_rate: defaultHourlyRate,
     report_footer_notes: String(data.report_footer_notes || ""),
   };
 }
