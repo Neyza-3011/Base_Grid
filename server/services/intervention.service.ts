@@ -222,7 +222,6 @@ export class InterventionService {
       if (tech) technicianName = tech.fullName;
     }
 
-
     const report = await this.db.getReportByInterventionId(companyId, interventionId);
     const asset = item.assetId ? await this.db.getAssetByIdAndCompany(item.assetId, companyId) : null;
     const jobCompleteScore = calculateJobCompleteScore(item, report, asset);
