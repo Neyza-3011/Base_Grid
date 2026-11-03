@@ -147,9 +147,13 @@ export function TeamManagementView({
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Link copiato negli appunti!");
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Link copiato negli appunti!");
+    } catch {
+      toast.error("Impossibile copiare il link. Controlla i permessi del browser.");
+    }
   };
 
   const openInviteModal = () => {
