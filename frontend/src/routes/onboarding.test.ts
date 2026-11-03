@@ -30,6 +30,31 @@ describe("loadCompanySettings", () => {
     );
   });
 
+  it.each([null, undefined, ""])("defaults an absent hourly rate to zero (%s)", async (rate) => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ default_hourly_rate: rate }),
+    } as unknown as Response);
+
+    await expect(loadCompanySettings(fetcher)).resolves.toMatchObject({
+      default_hourly_rate: 0,
+    });
+  });
+
+  it.each(["not-a-number", -1, 10001, true, {}])(
+    "rejects an invalid persisted hourly rate (%s)",
+    async (rate) => {
+      const fetcher = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ default_hourly_rate: rate }),
+      } as unknown as Response);
+
+      await expect(loadCompanySettings(fetcher)).rejects.toThrow(
+        "La tariffa oraria predefinita ricevuta non è valida.",
+      );
+    },
+  );
+
   it("rejects a non-success response so the onboarding screen can offer retry", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: false,
