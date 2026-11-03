@@ -229,7 +229,9 @@ function CompanyOnboarding() {
           aria-live="polite"
         >
           <Building2 className="mb-4 h-8 w-8 text-amber-300" />
-          <h1 className="text-2xl font-semibold">{user ? "Impossibile caricare la configurazione" : "Impossibile verificare la sessione"}</h1>
+          <h1 className="text-2xl font-semibold">
+            {user ? "Impossibile caricare la configurazione" : "Impossibile verificare la sessione"}
+          </h1>
           <p className="mt-3 text-sm leading-6 text-white/70">{loadError}</p>
           <button
             type="button"
