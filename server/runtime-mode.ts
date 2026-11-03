@@ -16,10 +16,16 @@ export type RuntimeMode = "production" | "ai-studio" | "development" | "test";
  */
 export function getRuntimeMode(env: NodeJS.ProcessEnv = process.env): RuntimeMode {
   const explicit = env.BASEGRID_RUNTIME_MODE?.trim().toLowerCase();
-  if (explicit === "production") return "production";
-  if (explicit === "ai-studio" || explicit === "aistudio" || explicit === "ai_studio") return "ai-studio";
-  if (explicit === "development" || explicit === "dev") return "development";
-  if (explicit === "test") return "test";
+  if (explicit) {
+    if (explicit === "production") return "production";
+    if (explicit === "ai-studio" || explicit === "aistudio" || explicit === "ai_studio") return "ai-studio";
+    if (explicit === "development" || explicit === "dev") return "development";
+    if (explicit === "test") return "test";
+
+    throw new Error(
+      "CRITICAL CONFIG ERROR: unsupported BASEGRID_RUNTIME_MODE. Use production, ai-studio, development, or test."
+    );
+  }
 
   const nodeEnv = env.NODE_ENV?.trim().toLowerCase();
 
@@ -35,5 +41,7 @@ export function getRuntimeMode(env: NodeJS.ProcessEnv = process.env): RuntimeMod
     return "production";
   }
 
-  return "development";
+  throw new Error(
+    "CRITICAL CONFIG ERROR: unsupported NODE_ENV. Use production, development, or test, or set BASEGRID_RUNTIME_MODE explicitly."
+  );
 }
