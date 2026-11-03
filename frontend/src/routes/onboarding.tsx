@@ -56,11 +56,7 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
     }
 
     defaultHourlyRate = Number(rawHourlyRate);
-    if (
-      !Number.isFinite(defaultHourlyRate) ||
-      defaultHourlyRate < 0 ||
-      defaultHourlyRate > 10000
-    ) {
+    if (!Number.isFinite(defaultHourlyRate) || defaultHourlyRate < 0 || defaultHourlyRate > 10000) {
       throw new Error("La tariffa oraria predefinita ricevuta non è valida.");
     }
   }
