@@ -58,7 +58,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(result).toBeNull();
     expect(mockPool.query).toHaveBeenCalledTimes(1);
     const [sql, params] = mockPool.query.mock.calls[0];
-    expect(sql).toContain("AND status = $6");
+    expect(sql).toContain('WHERE id = $4 AND "companyId" = $5 AND status = $6');
     expect(params.slice(-3)).toEqual(["intervention-123", "company-alpha", "in_lavorazione"]);
   });
   it("fails closed in production if DATABASE_URL is missing", () => {
