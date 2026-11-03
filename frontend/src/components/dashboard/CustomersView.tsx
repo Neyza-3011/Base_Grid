@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   Users,
@@ -34,6 +34,7 @@ import {
 
 export function CustomersView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const customersRequestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
@@ -76,15 +77,22 @@ export function CustomersView() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadCustomers = useCallback(async () => {
+    const requestId = ++customersRequestId.current;
     setLoading(true);
     try {
       const data = await fetchCustomers(query || undefined, activeOnly);
-      setCustomers(data);
+      if (requestId === customersRequestId.current) {
+        setCustomers(data);
+      }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Impossibile caricare i clienti.";
-      toast.error(msg);
+      if (requestId === customersRequestId.current) {
+        const msg = err instanceof Error ? err.message : "Impossibile caricare i clienti.";
+        toast.error(msg);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === customersRequestId.current) {
+        setLoading(false);
+      }
     }
   }, [query, activeOnly]);
 
@@ -92,7 +100,10 @@ export function CustomersView() {
     const delay = setTimeout(() => {
       loadCustomers();
     }, 300);
-    return () => clearTimeout(delay);
+    return () => {
+      clearTimeout(delay);
+      customersRequestId.current += 1;
+    };
   }, [loadCustomers]);
 
   const loadLocations = useCallback(async (customerId: string) => {
