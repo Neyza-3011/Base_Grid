@@ -64,7 +64,7 @@ export function ProfileSettings({
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result as string);
-        toast.success("Foto profilo aggiornata");
+        toast.info("Anteprima temporanea: la foto profilo non viene salvata sul server.");
       };
       reader.readAsDataURL(file);
     }
