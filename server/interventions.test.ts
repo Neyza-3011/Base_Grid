@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import http from "http";
 import { createApp } from "./app";
 import { db } from "./db";
@@ -1680,5 +1680,58 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resInverted.data.detail || resInverted.data.error).toMatch(/antecedente/i);
     });
   });
+
+  describe("10. Database read failure handling for intervention enrichment", () => {
+    it("fails the intervention list request when customer enrichment cannot be read", async () => {
+      await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per test errore lettura cliente",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const customerLookup = vi
+        .spyOn(db, "getCustomersByIdsAndCompany")
+        .mockRejectedValueOnce(new Error("simulated database read failure"));
+
+      try {
+        const response = await apiRequest("/api/v1/interventions", {
+          cookies: adminA.cookies,
+        });
+
+        expect(response.status).toBe(500);
+        expect(response.data.detail).toBe("Errore interno del server.");
+      } finally {
+        customerLookup.mockRestore();
+      }
+    });
+
+    it("fails the intervention detail request when customer enrichment cannot be read", async () => {
+      const intervention = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per test errore lettura dettaglio",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const customerLookup = vi
+        .spyOn(db, "getCustomerByIdAndCompany")
+        .mockRejectedValueOnce(new Error("simulated database read failure"));
+
+      try {
+        const response = await apiRequest(`/api/v1/interventions/${intervention.id}`, {
+          cookies: adminA.cookies,
+        });
+
+        expect(response.status).toBe(500);
+        expect(response.data.detail).toBe("Errore interno del server.");
+      } finally {
+        customerLookup.mockRestore();
+      }
+    });
+  });
+
 });
 
