@@ -69,6 +69,22 @@ describe("InterventionService Job Complete Score dependency reads", () => {
     await expect(service.getInterventions(companyId)).rejects.toThrow("asset read failed");
   });
 
+  it("propagates score calculation failures instead of returning an intervention without a score", async () => {
+    const getInterventions = dbStore.getInterventionsByCompany.bind(dbStore);
+    (dbStore as any).getInterventionsByCompany = async (...args: any[]) => {
+      const result = await getInterventions(...args);
+      return {
+        ...result,
+        items: result.items.map((item: any) => ({ ...item, technicianId: 42 })),
+      };
+    };
+    // Keep this test focused on domain calculation: the malformed persisted value
+    // must reach calculateJobCompleteScore rather than failing during enrichment.
+    (dbStore as any).getUsersByIdsAndCompany = async () => [];
+
+    await expect(service.getInterventions(companyId)).rejects.toThrow();
+  });
+
   it("continues to calculate a score when required reads succeed and the report is genuinely absent", async () => {
     const getReports = dbStore.getReportsByInterventionIdsAndCompany.bind(dbStore);
     (dbStore as any).getReportsByInterventionIdsAndCompany = async (ids: string[], tenantId: string) => {
