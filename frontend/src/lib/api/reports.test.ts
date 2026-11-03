@@ -151,6 +151,23 @@ describe("Frontend Reports API Client (frontend/src/lib/api/reports.ts & reports
       expect(result).toEqual([]);
     });
 
+    it.each([null, { reports: [] }, "not-an-array"])(
+      "throws instead of presenting a malformed success payload as an empty report list",
+      async (payload) => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => payload,
+        });
+
+        await expect(fetchReports()).rejects.toMatchObject({
+          name: "ReportsApiError",
+          status: 502,
+          message: "Risposta non valida dal server dei rapportini.",
+        });
+      },
+    );
+
     it("throws ReportsApiError on 500 server error without returning mock data", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
