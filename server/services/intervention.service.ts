@@ -145,14 +145,9 @@ export class InterventionService {
       const tech = item.technicianId ? technicianMap.get(item.technicianId) : undefined;
       const technicianName = tech?.fullName;
 
-      let jobCompleteScore: JobCompleteScoreResult | undefined = undefined;
-      try {
-        const report = reportMap.get(item.id) || null;
-        const asset = ast || null; // Reuse cached asset reference without re-querying DB
-        jobCompleteScore = calculateJobCompleteScore(item, report, asset);
-      } catch {
-        // Non-blocking score calculation failure
-      }
+      const report = reportMap.get(item.id) || null;
+      const asset = ast || null; // Reuse cached asset reference without re-querying DB
+      const jobCompleteScore = calculateJobCompleteScore(item, report, asset);
 
       return {
         ...rest,
