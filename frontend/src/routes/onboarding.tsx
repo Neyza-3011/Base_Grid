@@ -90,36 +90,40 @@ function CompanyOnboarding() {
     let cancelled = false;
 
     async function load() {
-      const session = await fetchServerSession();
-      if (!session) {
-        navigate({ to: "/" });
-        return;
-      }
-      if (session.platformRole === "ceo") {
-        navigate({ to: "/admin/super-dashboard" });
-        return;
-      }
-      if (!cancelled) setUser(session);
-      if (session.role !== "owner") {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-
       try {
-        const current = await loadCompanySettings();
+        const session = await fetchServerSession();
         if (cancelled) return;
-
-        setLoadError(null);
-        setForm(current);
-        if (current.name.trim() && current.address.trim()) {
-          navigate({ to: "/dashboard" });
+        if (!session) {
+          navigate({ to: "/" });
           return;
         }
-      } catch (error) {
+        if (session.platformRole === "ceo") {
+          navigate({ to: "/admin/super-dashboard" });
+          return;
+        }
+        setUser(session);
+        if (session.role !== "owner") return;
+
+        try {
+          const current = await loadCompanySettings();
+          if (cancelled) return;
+
+          setLoadError(null);
+          setForm(current);
+          if (current.name.trim() && current.address.trim()) {
+            navigate({ to: "/dashboard" });
+            return;
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setLoadError(
+              error instanceof Error ? error.message : "Errore nel caricamento delle impostazioni.",
+            );
+          }
+        }
+      } catch {
         if (!cancelled) {
-          setLoadError(
-            error instanceof Error ? error.message : "Errore nel caricamento delle impostazioni.",
-          );
+          setLoadError("Impossibile verificare la sessione. Controlla la connessione e riprova.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -216,7 +220,7 @@ function CompanyOnboarding() {
     );
   }
 
-  if (loadError && user?.role === "owner") {
+  if (loadError && (user?.role === "owner" || user === null)) {
     return (
       <main className="min-h-screen grid place-items-center bg-slate-950 px-4 py-10 text-white">
         <section
@@ -225,7 +229,7 @@ function CompanyOnboarding() {
           aria-live="polite"
         >
           <Building2 className="mb-4 h-8 w-8 text-amber-300" />
-          <h1 className="text-2xl font-semibold">Impossibile caricare la configurazione</h1>
+          <h1 className="text-2xl font-semibold">{user ? "Impossibile caricare la configurazione" : "Impossibile verificare la sessione"}</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">{loadError}</p>
           <button
             type="button"
