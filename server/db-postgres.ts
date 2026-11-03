@@ -2834,9 +2834,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
 
     params.push(interventionId, companyId);
-    const expectedStatusClause = expectedStatus === undefined ? "" : ` AND status = ${paramIdx + 2}`;
+    const expectedStatusClause = expectedStatus === undefined ? "" : ` AND status = $${paramIdx + 2}`;
     if (expectedStatus !== undefined) params.push(expectedStatus);
-    const sql = `UPDATE interventions SET ${setClauses.join(", ")} WHERE id = ${paramIdx} AND "companyId" = ${paramIdx + 1}${expectedStatusClause} RETURNING *`;
+    const sql = `UPDATE interventions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} AND "companyId" = $${paramIdx + 1}${expectedStatusClause} RETURNING *`;
 
     const res = await this.pool.query(sql, params);
     if (!res.rows[0]) return null;
