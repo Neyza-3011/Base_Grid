@@ -201,9 +201,9 @@ export async function fetchReports(limit: number = 1000): Promise<Report[]> {
       headers: appendCsrfHeaders({ Accept: "application/json" }),
     });
 
-    const data = await parseResponseOrThrow<ApiReportResponse[]>(res);
+    const data: unknown = await parseResponseOrThrow<unknown>(res);
     if (!Array.isArray(data)) {
-      return [];
+      throw new ReportsApiError("Risposta non valida dal server dei rapportini.", res.status);
     }
     return data.map(mapDtoToReport);
   } catch (err: unknown) {
