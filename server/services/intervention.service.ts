@@ -568,7 +568,7 @@ export class InterventionService {
       if (!current) {
         throw new NotFoundError("Intervento non trovato.");
       }
-      throw new ConflictError("Lo stato dell intervento è cambiato durante l operazione. Ricarica e riprova.");
+      throw new ConflictError("Lo stato dell'intervento è cambiato durante l'operazione. Ricarica e riprova.");
     }
     return updated;
   }
