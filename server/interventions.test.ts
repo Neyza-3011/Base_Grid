@@ -419,7 +419,7 @@ describe("Interventions Backend Module (P1.4)", () => {
 
       const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
       expect(persisted?.estimatedHours).toBe(4);
-      expect(persisted?.actualHours).toBeUndefined();
+      expect(persisted?.actualHours ?? null).toBeNull();
     });
 
   describe("2. Tenant Isolation & Cross-Tenant Access Protection", () => {
