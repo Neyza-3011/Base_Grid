@@ -16,7 +16,6 @@ const currentUser: UserSession = {
   role: "admin",
   companyId: "company-1",
   companyName: "Test Company",
-  phoneNumber: "+39 333 1234567",
 };
 
 describe("ProfileSettings notification preferences", () => {
