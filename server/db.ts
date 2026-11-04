@@ -714,7 +714,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       return { success: false, error: "already_used" };
     }
     const expiresAt = new Date(token.expiresAt).getTime();
-    if (Date.now() > expiresAt) {
+    if (Date.now() >= expiresAt) {
       return { success: false, error: "expired_token" };
     }
 
@@ -745,7 +745,7 @@ export class DatabaseStore implements IDatabaseAdapter {
       return { success: false, error: "already_used" };
     }
     const expiresAt = new Date(token.expiresAt).getTime();
-    if (Date.now() > expiresAt) {
+    if (Date.now() >= expiresAt) {
       return { success: false, error: "expired_token" };
     }
 
