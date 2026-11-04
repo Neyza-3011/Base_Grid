@@ -352,6 +352,29 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(updateRes.data.serialNumber).toBe("SN-MOD-4411");
     });
 
+    it("rejects asset values exceeding PostgreSQL VARCHAR limits with 400", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Length Test Customer" });
+      const location = await db.createLocation(companyA, customer.id, { name: "Sede", address: "Via Roma", city: "Roma" });
+
+      const createTooLong = await apiRequest("/api/v1/assets", {
+        method: "POST",
+        body: { customerId: customer.id, locationId: location.id, assetType: "quadro", name: "A".repeat(256) },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(createTooLong.status).toBe(400);
+
+      const asset = await db.createAsset(companyA, customer.id, location.id, { name: "Quadro Test", assetType: "quadro" });
+      const updateTooLong = await apiRequest(`/api/v1/assets/${asset.id}`, {
+        method: "PUT",
+        body: { serialNumber: "S".repeat(256) },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(updateTooLong.status).toBe(400);
+    });
+
     it("rejects invalid calendar dates for installationDate or warrantyEndDate (400)", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const customer = await db.createCustomer(companyA, { displayName: "Acme SpA" });

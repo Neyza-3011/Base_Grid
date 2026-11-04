@@ -22,6 +22,12 @@ function validateOptionalStringField(value: unknown, fieldName: string, nullable
   }
 }
 
+function validateColumnLength(value: unknown, fieldName: string, maxLength: number): void {
+  if (typeof value === "string" && value.length > maxLength) {
+    throw new BadRequestError(`${fieldName} non può superare ${maxLength} caratteri.`);
+  }
+}
+
 export const VALID_ASSET_TYPES: readonly AssetType[] = [
   "quadro",
   "fotovoltaico",
@@ -76,13 +82,19 @@ export class AssetService {
   ): Promise<AssetRecord> {
     validateInputObject(input, "I dati impianto/asset");
     validateOptionalStringField(input.manufacturer, "Produttore", true);
+    validateColumnLength(input.manufacturer, "Produttore", 255);
     validateOptionalStringField(input.model, "Modello", true);
+    validateColumnLength(input.model, "Modello", 255);
     validateOptionalStringField(input.serialNumber, "Numero di serie", true);
+    validateColumnLength(input.serialNumber, "Numero di serie", 255);
     validateOptionalStringField(input.installationDate, "Data di installazione", true);
+    validateColumnLength(input.installationDate, "Data di installazione", 50);
     validateOptionalStringField(input.warrantyEndDate, "Data fine garanzia", true);
+    validateColumnLength(input.warrantyEndDate, "Data fine garanzia", 50);
     validateOptionalStringField(input.notes, "Note", true);
 
     // 1. Validate required fields
+    validateColumnLength(input.name, "Nome impianto/asset", 255);
     if (!input.name || typeof input.name !== "string" || input.name.trim().length < 2) {
       throw new BadRequestError("Il nome dell'impianto/asset è obbligatorio e deve avere almeno 2 caratteri.");
     }
@@ -162,15 +174,21 @@ export class AssetService {
     validateInputObject(input, "I dati impianto/asset");
     validateOptionalStringField(input.name, "Nome impianto/asset", true);
     validateOptionalStringField(input.manufacturer, "Produttore", true);
+    validateColumnLength(input.manufacturer, "Produttore", 255);
     validateOptionalStringField(input.model, "Modello", true);
+    validateColumnLength(input.model, "Modello", 255);
     validateOptionalStringField(input.serialNumber, "Numero di serie", true);
+    validateColumnLength(input.serialNumber, "Numero di serie", 255);
     validateOptionalStringField(input.installationDate, "Data di installazione", true);
+    validateColumnLength(input.installationDate, "Data di installazione", 50);
     validateOptionalStringField(input.warrantyEndDate, "Data fine garanzia", true);
+    validateColumnLength(input.warrantyEndDate, "Data fine garanzia", 50);
     validateOptionalStringField(input.notes, "Note", true);
 
     const existing = await this.getAssetById(companyId, assetId);
 
     // Validate name if provided
+    validateColumnLength(input.name, "Nome impianto/asset", 255);
     if (input.name !== undefined && input.name !== null) {
       if (typeof input.name !== "string" || input.name.trim().length < 2) {
         throw new BadRequestError("Il nome dell'impianto/asset, se specificato, deve avere almeno 2 caratteri.");
