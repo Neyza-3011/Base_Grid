@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DatabaseStore } from "./db";
 
 describe("In-memory user creation concurrency contract", () => {
@@ -64,4 +64,30 @@ describe("In-memory user creation concurrency contract", () => {
       provider: "google",
     });
   });
+ 
+  it("rejects an email-verification token at its exact expiry timestamp", async () => {
+    const db = new DatabaseStore();
+    const expiresAt = new Date("2026-11-04T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(expiresAt);
+    try {
+      const user = await db.findUserByEmail("admin@rossi.it");
+      expect(user).not.toBeNull();
+      await db.createAuthToken({
+        userId: user!.id,
+        tokenHash: "exact-expiry-verification-token",
+        type: "email_verification",
+        expiresAt: expiresAt.toISOString(),
+      });
+
+      await expect(db.verifyEmailWithToken("exact-expiry-verification-token")).resolves.toMatchObject({
+        success: false,
+        error: "expired_token",
+      });
+      expect((await db.findUserById(user!.id))?.emailConfirmed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });
