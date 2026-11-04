@@ -1568,6 +1568,36 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       expect(newLoginRes.body.email).toBe("tech@rossi.it");
     });
 
+    it("rejects a reset token at its exact expiry before revoking sessions", async () => {
+      const user = (await db.findUserByEmail("tech@rossi.it"))!;
+      const { generateSecureToken, hashToken } = await import("./security");
+      const rawToken = generateSecureToken();
+      const expiresAtMs = Date.now() + 60_000;
+
+      await db.createAuthToken({
+        userId: user.id,
+        tokenHash: hashToken(rawToken),
+        type: "password_reset",
+        expiresAt: new Date(expiresAtMs).toISOString(),
+      });
+
+      const nowSpy = vi.spyOn(Date, "now").mockReturnValue(expiresAtMs);
+      const revokeSpy = vi.spyOn(tokenStore, "revokeAllUserTokens").mockResolvedValue(undefined);
+      try {
+        const resetRes = await apiRequest("/api/v1/auth/reset-password", {
+          method: "POST",
+          body: { token: rawToken, new_password: "NewSuperPassword1234!" },
+        });
+
+        expect(resetRes.status).toBe(400);
+        expect(resetRes.body.detail).toMatch(/link di reset password è scaduto/i);
+        expect(revokeSpy).not.toHaveBeenCalled();
+      } finally {
+        nowSpy.mockRestore();
+        revokeSpy.mockRestore();
+      }
+    });
+
     it("rejects weak passwords violating password policy", async () => {
       const { generateSecureToken, hashToken } = await import("./security");
       const user = (await db.findUserByEmail("admin@rossi.it"))!;
