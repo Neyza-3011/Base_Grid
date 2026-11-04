@@ -197,6 +197,36 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(mockClient.release).toHaveBeenCalled();
   });
 
+  it("updateCompany patches only supplied fields using parameterized placeholders", async () => {
+    const updated = {
+      id: "comp-456",
+      name: "Changed Company",
+      vatNumber: "IT123",
+      address: "Address",
+      defaultHourlyRate: "60",
+      reportFooterNotes: "Notes",
+      stripeSubscriptionStatus: "active",
+      maxUsers: "10",
+      featurePdfExport: true,
+      isActive: true,
+      logoDataUrl: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-03T00:00:00Z"),
+    };
+    mockPool.query.mockResolvedValueOnce({ rows: [updated], rowCount: 1 });
+
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.updateCompany("comp-456", { name: "Changed Company" });
+
+    expect(result?.name).toBe("Changed Company");
+    expect(mockPool.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain("name = $1");
+    expect(sql).toContain('"updatedAt" = $2');
+    expect(sql).toContain("WHERE id = $3 RETURNING *");
+    expect(params).toEqual(["Changed Company", expect.any(String), "comp-456"]);
+  });
+
   it("writes a company profile audit event in the same PostgreSQL transaction", async () => {
     const current = { id: "comp-456", name: "Original", vatNumber: "IT123", address: "Address", defaultHourlyRate: "60", reportFooterNotes: "Notes", stripeSubscriptionStatus: "Active", maxUsers: "10", featurePdfExport: true, isActive: true, logoDataUrl: null, createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-02T00:00:00Z") };
     const updated = { ...current, name: "Changed Company", updatedAt: new Date("2026-01-03T00:00:00Z") };
