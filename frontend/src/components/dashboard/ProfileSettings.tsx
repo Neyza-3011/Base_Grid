@@ -25,8 +25,6 @@ export function ProfileSettings({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
-    emailNotifications: true,
-    reportApprovalAlerts: true,
   });
 
   const getInitials = (name: string) => {
@@ -285,39 +283,12 @@ export function ProfileSettings({
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 pb-2 border-b border-white/10 flex items-center gap-2">
               <Bell className="h-4 w-4 text-primary" /> Notifiche Personali
             </h3>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between p-3 rounded-xl bg-slate-950/30 border border-white/5 cursor-pointer hover:border-white/10 transition-colors">
-                <div>
-                  <div className="text-sm font-medium text-white">Riepilogo Email Giornaliero</div>
-                  <div className="text-xs text-white/50">
-                    Ricevi un'email a fine giornata con il totale delle ore e dei rapportini
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  name="emailNotifications"
-                  checked={formData.emailNotifications}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-white/20 bg-slate-900 text-primary focus:ring-primary"
-                />
-              </label>
-              <label className="flex items-center justify-between p-3 rounded-xl bg-slate-950/30 border border-white/5 cursor-pointer hover:border-white/10 transition-colors">
-                <div>
-                  <div className="text-sm font-medium text-white">
-                    Avviso Approvazione Rapportini
-                  </div>
-                  <div className="text-xs text-white/50">
-                    Notifica istantanea quando un cliente firma o approva un rapportino
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  name="reportApprovalAlerts"
-                  checked={formData.reportApprovalAlerts}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-white/20 bg-slate-900 text-primary focus:ring-primary"
-                />
-              </label>
+            <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3">
+              <p role="status" className="text-sm text-white/60">
+                {
+                  "Le preferenze di notifica non sono ancora configurabili. Questa schermata non salva né attiva notifiche."
+                }
+              </p>
             </div>
           </div>
 
