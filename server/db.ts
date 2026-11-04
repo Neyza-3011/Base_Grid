@@ -698,7 +698,7 @@ export class DatabaseStore implements IDatabaseAdapter {
 
   public async consumeAuthToken(tokenHash: string, type: AuthTokenType): Promise<boolean> {
     const token = this.authTokens.get(tokenHash);
-    if (!token || token.type !== type || token.consumed) return false;
+    if (!token || token.type !== type || token.consumed || new Date(token.expiresAt).getTime() <= Date.now()) return false;
     token.consumed = true;
     token.consumedAt = new Date().toISOString();
     this.authTokens.set(tokenHash, token);
