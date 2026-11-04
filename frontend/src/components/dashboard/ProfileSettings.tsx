@@ -286,8 +286,7 @@ export function ProfileSettings({
             </h3>
             <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3">
               <p role="status" className="text-sm text-white/60">
-                Le preferenze di notifica non sono ancora configurabili. Questa schermata
-                non salva né attiva notifiche.
+                {"Le preferenze di notifica non sono ancora configurabili. Questa schermata non salva né attiva notifiche."}
               </p>
             </div>
           </div>
