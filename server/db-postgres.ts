@@ -1017,37 +1017,37 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async updateUser(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null> {
-    const existing = await this.findUserById(id);
-    if (!existing) return null;
+    // Apply only explicitly supplied fields. Read-modify-write of the full user row can
+    // overwrite concurrent password, role, or activation changes with stale values.
+    const columns: Array<[keyof UserRecord, string]> = [
+      ["email", "email"],
+      ["fullName", '"fullName"'],
+      ["role", "role"],
+      ["companyName", '"companyName"'],
+      ["passwordHash", '"passwordHash"'],
+      ["salt", "salt"],
+      ["isActive", '"isActive"'],
+      ["emailConfirmed", '"emailConfirmed"'],
+      ["phoneNumber", '"phoneNumber"'],
+    ];
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    for (const [field, column] of columns) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        params.push(updates[field]);
+        setClauses.push(`${column} = ${params.length}`);
+      }
+    }
 
-    const updated = {
-      ...existing,
-      ...updates,
-      // This generic update path must never mutate platform authority.
-      platformRole: existing.platformRole ?? null,
-      updatedAt: new Date().toISOString(),
-    };
+    params.push(new Date().toISOString());
+    setClauses.push(`"updatedAt" = ${params.length}`);
+    params.push(id);
 
-    await this.pool.query(
-      `UPDATE users 
-       SET email = $1, "fullName" = $2, role = $3, "companyName" = $4, "passwordHash" = $5, salt = $6, "isActive" = $7, "emailConfirmed" = $8, "phoneNumber" = $9, "updatedAt" = $10 
-       WHERE id = $11`,
-      [
-        updated.email,
-        updated.fullName,
-        updated.role,
-        updated.companyName,
-        updated.passwordHash,
-        updated.salt,
-        updated.isActive,
-        updated.emailConfirmed,
-        updated.phoneNumber,
-        updated.updatedAt,
-        id,
-      ],
+    const res = await this.pool.query(
+      `UPDATE users SET ${setClauses.join(", ")} WHERE id = ${params.length} RETURNING *`,
+      params,
     );
-
-    return updated;
+    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
   }
 
   // --- Company Operations ---
