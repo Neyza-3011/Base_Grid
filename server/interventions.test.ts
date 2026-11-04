@@ -387,6 +387,41 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
   });
 
+    it("rejects hour values above the PostgreSQL NUMERIC(6,2) range before persistence", async () => {
+      const invalidCreate = await apiRequest("/api/v1/interventions", {
+        method: "POST",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          customerId: customerA.id,
+          locationId: locationA.id,
+          description: "Intervento con ore fuori intervallo",
+          estimatedHours: 10000,
+        },
+      });
+      expect(invalidCreate.status).toBe(400);
+
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per test limite ore",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+        estimatedHours: 4,
+      });
+      const invalidUpdate = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { estimatedHours: 10000, actualHours: 10000 },
+      });
+      expect(invalidUpdate.status).toBe(400);
+
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.estimatedHours).toBe(4);
+      expect(persisted?.actualHours).toBeUndefined();
+    });
+
   describe("2. Tenant Isolation & Cross-Tenant Access Protection", () => {
     it("prevents Company B from listing Company A interventions", async () => {
       await db.createIntervention(companyA, {
