@@ -387,6 +387,41 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
   });
 
+    it("rejects hour values above the PostgreSQL NUMERIC(6,2) range before persistence", async () => {
+      const invalidCreate = await apiRequest("/api/v1/interventions", {
+        method: "POST",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          customerId: customerA.id,
+          locationId: locationA.id,
+          description: "Intervento con ore fuori intervallo",
+          estimatedHours: 10000,
+        },
+      });
+      expect(invalidCreate.status).toBe(400);
+
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento per test limite ore",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+        estimatedHours: 4,
+      });
+      const invalidUpdate = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { estimatedHours: 10000, actualHours: 10000 },
+      });
+      expect(invalidUpdate.status).toBe(400);
+
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.estimatedHours).toBe(4);
+      expect(persisted?.actualHours ?? null).toBeNull();
+    });
+
   describe("2. Tenant Isolation & Cross-Tenant Access Protection", () => {
     it("prevents Company B from listing Company A interventions", async () => {
       await db.createIntervention(companyA, {
@@ -1612,7 +1647,7 @@ describe("Interventions Backend Module (P1.4)", () => {
         },
       });
       expect(resNegative.status).toBe(400);
-      expect(resNegative.data.detail || resNegative.data.error).toMatch(/maggiore o uguale a 0/i);
+      expect(resNegative.data.detail || resNegative.data.error).toMatch(/comprese tra 0 e 9999,99/i);
 
       // 5b. Non-finite / invalid actualHours (string representing NaN/non-number in JSON)
       const resNonFinite = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
@@ -1625,7 +1660,17 @@ describe("Interventions Backend Module (P1.4)", () => {
         },
       });
       expect(resNonFinite.status).toBe(400);
-      expect(resNonFinite.data.detail || resNonFinite.data.error).toMatch(/maggiore o uguale a 0/i);
+      expect(resNonFinite.data.detail || resNonFinite.data.error).toMatch(/comprese tra 0 e 9999,99/i);
+
+      // 5c. Above the PostgreSQL NUMERIC(6,2) upper bound
+      const resAboveMaximum = await apiRequest(`/api/v1/interventions/${intervention.id}/transition`, {
+        method: "POST",
+        cookies: techA.cookies,
+        headers: techA.headers,
+        body: { targetStatus: "completato", actualHours: 10000 },
+      });
+      expect(resAboveMaximum.status).toBe(400);
+      expect(resAboveMaximum.data.detail || resAboveMaximum.data.error).toMatch(/comprese tra 0 e 9999,99/i);
 
       // Verify no changes were made to the record
       const check = await db.getInterventionByIdAndCompany(intervention.id, companyA);

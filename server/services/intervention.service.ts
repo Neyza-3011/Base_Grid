@@ -332,8 +332,8 @@ export class InterventionService {
 
     // 7. Validate Estimated Hours
     if (input.estimatedHours !== undefined && input.estimatedHours !== null) {
-      if (typeof input.estimatedHours !== "number" || !isFinite(input.estimatedHours) || input.estimatedHours < 0) {
-        throw new BadRequestError("Le ore stimate devono essere un numero maggiore o uguale a 0.");
+      if (typeof input.estimatedHours !== "number" || !isFinite(input.estimatedHours) || input.estimatedHours < 0 || input.estimatedHours > 9999.99) {
+        throw new BadRequestError("Le ore stimate devono essere comprese tra 0 e 9999,99.");
       }
     }
 
@@ -508,8 +508,8 @@ export class InterventionService {
 
     if (input.estimatedHours !== undefined) {
       if (input.estimatedHours !== null) {
-        if (typeof input.estimatedHours !== "number" || !isFinite(input.estimatedHours) || input.estimatedHours < 0) {
-          throw new BadRequestError("Le ore stimate devono essere un numero maggiore o uguale a 0.");
+        if (typeof input.estimatedHours !== "number" || !isFinite(input.estimatedHours) || input.estimatedHours < 0 || input.estimatedHours > 9999.99) {
+          throw new BadRequestError("Le ore stimate devono essere comprese tra 0 e 9999,99.");
         }
         updates.estimatedHours = input.estimatedHours;
       } else {
@@ -519,8 +519,8 @@ export class InterventionService {
 
     if (input.actualHours !== undefined) {
       if (input.actualHours !== null) {
-        if (typeof input.actualHours !== "number" || !isFinite(input.actualHours) || input.actualHours < 0) {
-          throw new BadRequestError("Le ore effettive devono essere un numero maggiore o uguale a 0.");
+        if (typeof input.actualHours !== "number" || !isFinite(input.actualHours) || input.actualHours < 0 || input.actualHours > 9999.99) {
+          throw new BadRequestError("Le ore effettive devono essere comprese tra 0 e 9999,99.");
         }
         updates.actualHours = input.actualHours;
       } else {
@@ -695,8 +695,8 @@ export class InterventionService {
         }
       }
 
-      if (typeof input.actualHours !== "number" || !isFinite(input.actualHours) || input.actualHours < 0) {
-        throw new BadRequestError("Le ore effettive devono essere un numero maggiore o uguale a 0.");
+      if (typeof input.actualHours !== "number" || !isFinite(input.actualHours) || input.actualHours < 0 || input.actualHours > 9999.99) {
+        throw new BadRequestError("Le ore effettive devono essere comprese tra 0 e 9999,99.");
       }
       updates.actualHours = input.actualHours;
     }
