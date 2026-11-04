@@ -15,6 +15,12 @@ function validateOptionalStringField(value: unknown, fieldName: string, nullable
   }
 }
 
+function validateColumnLength(value: unknown, fieldName: string, maxLength: number): void {
+  if (typeof value === "string" && value.length > maxLength) {
+    throw new BadRequestError(`${fieldName} non può superare ${maxLength} caratteri.`);
+  }
+}
+
 export class CustomerService {
   constructor(private db: IDatabaseAdapter) {}
 
@@ -33,13 +39,20 @@ export class CustomerService {
   public async createCustomer(companyId: string, input: CreateCustomerInput): Promise<CustomerRecord> {
     validateInputObject(input, "I dati cliente");
     validateOptionalStringField(input.legalName, "Ragione sociale", true);
+    validateColumnLength(input.legalName, "Ragione sociale", 255);
     validateOptionalStringField(input.vatNumber, "Partita IVA", true);
+    validateColumnLength(input.vatNumber, "Partita IVA", 255);
     validateOptionalStringField(input.taxCode, "Codice fiscale", true);
+    validateColumnLength(input.taxCode, "Codice fiscale", 255);
     validateOptionalStringField(input.pec, "PEC", true);
+    validateColumnLength(input.pec, "PEC", 255);
     validateOptionalStringField(input.phoneNumber, "Telefono", true);
+    validateColumnLength(input.phoneNumber, "Telefono", 255);
     validateOptionalStringField(input.email, "Email", true);
+    validateColumnLength(input.email, "Email", 255);
     validateOptionalStringField(input.notes, "Note", true);
 
+    validateColumnLength(input.displayName, "Nome cliente", 255);
     if (!input.displayName || typeof input.displayName !== "string" || input.displayName.trim().length < 2) {
       throw new BadRequestError("Il nome del cliente è obbligatorio e deve avere almeno 2 caratteri.");
     }
@@ -54,13 +67,20 @@ export class CustomerService {
     validateInputObject(input, "I dati cliente");
     validateOptionalStringField(input.displayName, "Nome cliente", true);
     validateOptionalStringField(input.legalName, "Ragione sociale", true);
+    validateColumnLength(input.legalName, "Ragione sociale", 255);
     validateOptionalStringField(input.vatNumber, "Partita IVA", true);
+    validateColumnLength(input.vatNumber, "Partita IVA", 255);
     validateOptionalStringField(input.taxCode, "Codice fiscale", true);
+    validateColumnLength(input.taxCode, "Codice fiscale", 255);
     validateOptionalStringField(input.pec, "PEC", true);
+    validateColumnLength(input.pec, "PEC", 255);
     validateOptionalStringField(input.phoneNumber, "Telefono", true);
+    validateColumnLength(input.phoneNumber, "Telefono", 255);
     validateOptionalStringField(input.email, "Email", true);
+    validateColumnLength(input.email, "Email", 255);
     validateOptionalStringField(input.notes, "Note", true);
 
+    validateColumnLength(input.displayName, "Nome cliente", 255);
     if (input.displayName !== undefined && input.displayName !== null) {
       if (typeof input.displayName !== "string" || input.displayName.trim().length < 2) {
         throw new BadRequestError("Il nome del cliente, se specificato, deve avere almeno 2 caratteri.");
@@ -103,6 +123,11 @@ export class CustomerService {
   public async createLocation(companyId: string, customerId: string, input: CreateLocationInput): Promise<LocationRecord> {
     validateInputObject(input, "I dati sede");
     validateOptionalStringField(input.postalCode, "CAP", true);
+    validateColumnLength(input.name, "Nome sede", 255);
+    validateColumnLength(input.address, "Indirizzo", 500);
+    validateColumnLength(input.city, "Città", 255);
+    validateColumnLength(input.province, "Provincia", 255);
+    validateColumnLength(input.postalCode, "CAP", 50);
     validateOptionalStringField(input.province, "Provincia", true);
     validateOptionalStringField(input.notes, "Note", true);
 
@@ -135,6 +160,11 @@ export class CustomerService {
     validateOptionalStringField(input.province, "Provincia", true);
     validateOptionalStringField(input.postalCode, "CAP", true);
     validateOptionalStringField(input.notes, "Note", true);
+    validateColumnLength(input.name, "Nome sede", 255);
+    validateColumnLength(input.address, "Indirizzo", 500);
+    validateColumnLength(input.city, "Città", 255);
+    validateColumnLength(input.province, "Provincia", 255);
+    validateColumnLength(input.postalCode, "CAP", 50);
 
     if (input.name !== undefined && input.name !== null) {
       if (typeof input.name !== "string" || input.name.trim().length < 1) {
