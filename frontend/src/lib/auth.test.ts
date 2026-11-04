@@ -65,6 +65,7 @@ describe("Server-Authoritative Auth Client (frontend/src/lib/auth.ts)", () => {
       companyName: "Test Company Srl",
       provider: "local",
       emailConfirmed: true,
+      phoneNumber: "+39 333 1234567",
     };
 
     global.fetch = vi.fn().mockResolvedValue({
