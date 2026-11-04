@@ -139,7 +139,6 @@ describe("Token Store — Safe Scoped Redis Reset", () => {
   });
 });
 
-
 describe("Refresh-token expiry boundary", () => {
   it("rejects a refresh token when now equals expiresAt", async () => {
     const engine = new DistributedStorageEngine();
