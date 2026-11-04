@@ -84,7 +84,7 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
     local familyId = redis.call('HGET', tokenKey, 'familyId')
     local userId = redis.call('HGET', tokenKey, 'userId')
 
-    if expiresAt and nowMs > expiresAt then
+    if expiresAt and nowMs >= expiresAt then
       return {'expired', familyId or '', userId or ''}
     end
 
@@ -580,7 +580,7 @@ export class DistributedStorageEngine implements ITokenStorageAdapter {
       return { success: false, reason: "not_found" };
     }
 
-    if (params.nowMs > record.expiresAt) {
+    if (params.nowMs >= record.expiresAt) {
       return {
         success: false,
         reason: "expired",
