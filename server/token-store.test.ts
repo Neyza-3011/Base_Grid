@@ -138,3 +138,27 @@ describe("Token Store — Safe Scoped Redis Reset", () => {
     expect(recordAfter).toBeNull();
   });
 });
+
+describe("Refresh-token expiry boundary", () => {
+  it("rejects a refresh token when now equals expiresAt", async () => {
+    const engine = new DistributedStorageEngine();
+    const expiresAt = 1_800_000_000_000;
+    await engine.registerToken({
+      tokenHash: "boundary-token",
+      jti: "boundary-jti",
+      userId: "boundary-user",
+      familyId: "boundary-family",
+      expiresAt,
+      createdAt: new Date(expiresAt - 1000).toISOString(),
+      ttlSeconds: 60,
+    });
+
+    const result = await engine.consumeToken({
+      tokenHash: "boundary-token",
+      nowMs: expiresAt,
+      nowIso: new Date(expiresAt).toISOString(),
+    });
+
+    expect(result).toMatchObject({ success: false, reason: "expired" });
+  });
+});
