@@ -131,13 +131,14 @@ export class RedisTokenStorageAdapter implements ITokenStorageAdapter {
       'expiresAt', expiresAt,
       'createdAt', createdAt
     )
+    -- Create/update index sets before applying TTL: EXPIRE on a missing key is a no-op.
+    redis.call('SADD', famKey, tokenHash)
+    redis.call('SADD', userKey, tokenHash)
     if ttl > 0 then
       redis.call('EXPIRE', tokenKey, ttl)
       redis.call('EXPIRE', famKey, ttl)
       redis.call('EXPIRE', userKey, ttl)
     end
-    redis.call('SADD', famKey, tokenHash)
-    redis.call('SADD', userKey, tokenHash)
     return 'OK'
   `;
 
