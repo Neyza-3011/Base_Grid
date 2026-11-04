@@ -19,6 +19,7 @@ export type UserSession = {
   companyName: string;
   provider?: string;
   emailConfirmed?: boolean;
+  phoneNumber?: string;
 };
 
 // Clean up obsolete localStorage authentication keys from previous sessions
@@ -43,6 +44,7 @@ function parseUserSession(data: {
   companyName: string;
   provider?: string;
   emailConfirmed?: boolean;
+  phoneNumber?: string;
 }): UserSession {
   return {
     id: data.id,
@@ -54,6 +56,7 @@ function parseUserSession(data: {
     companyName: data.companyName,
     provider: data.provider || "local",
     emailConfirmed: Boolean(data.emailConfirmed),
+    ...(typeof data.phoneNumber === "string" ? { phoneNumber: data.phoneNumber } : {}),
   };
 }
 
