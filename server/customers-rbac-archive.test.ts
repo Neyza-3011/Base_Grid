@@ -526,6 +526,36 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
     });
   });
 
+  describe("Database column length validation", () => {
+    it("rejects customer and location values that exceed PostgreSQL VARCHAR limits with 400", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customerTooLong = await apiRequest("/api/v1/customers", {
+        method: "POST",
+        body: { displayName: "C".repeat(256) },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(customerTooLong.status).toBe(400);
+
+      const customer = await db.createCustomer(companyA, { displayName: "Length Test Customer" });
+      const updateTooLong = await apiRequest(`/api/v1/customers/${customer.id}`, {
+        method: "PUT",
+        body: { email: "e".repeat(246) + "@example.com" },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(updateTooLong.status).toBe(400);
+
+      const locationTooLong = await apiRequest(`/api/v1/customers/${customer.id}/locations`, {
+        method: "POST",
+        body: { name: "Sede", address: "A".repeat(501), city: "Roma" },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+      expect(locationTooLong.status).toBe(400);
+    });
+  });
+
   describe("Canonical Location Item Endpoints (/api/v1/locations/:id)", () => {
     it("1 & 7. supports GET canonical /api/v1/locations/:id and customer locations collection", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
