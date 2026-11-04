@@ -361,7 +361,7 @@ authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req
       return;
     }
     const expiresAt = new Date(tokenRecord.expiresAt).getTime();
-    if (Date.now() > expiresAt) {
+    if (Date.now() >= expiresAt) {
       res.status(400).json({ detail: "Il link di reset password è scaduto. Richiedi un nuovo link." });
       return;
     }
