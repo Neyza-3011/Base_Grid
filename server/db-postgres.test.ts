@@ -287,27 +287,26 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(result.company.name).toBe("Elettro Tech Srl");
   });
 
-  it("updateUser updates user fields and returns safe updated record", async () => {
-    const existingRow = {
+  it("updateUser patches only supplied fields and returns the current database row", async () => {
+    const currentRow = {
       id: "usr-123",
       email: "old@example.com",
-      fullName: "Old Name",
-      role: "admin",
+      fullName: "New Name",
+      role: "technician",
       companyId: "comp-123",
       companyName: "Acme",
-      passwordHash: "hash",
-      salt: "salt",
-      isActive: true,
+      passwordHash: "latest-hash",
+      salt: "latest-salt",
+      isActive: false,
       provider: "local",
       emailConfirmed: true,
-      phoneNumber: "",
+      phoneNumber: "+39 999",
       createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-11-04T00:00:00Z",
+      authVersion: 2,
+      platformRole: null,
     };
-
-    mockPool.query
-      .mockResolvedValueOnce({ rows: [existingRow] }) // findUserById
-      .mockResolvedValueOnce({ rows: [] }); // UPDATE query
+    mockPool.query.mockResolvedValueOnce({ rows: [currentRow], rowCount: 1 });
 
     const adapter = new PostgresAdapter(mockPool);
     const updated = await adapter.updateUser("usr-123", {
@@ -317,7 +316,18 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     expect(updated?.fullName).toBe("New Name");
     expect(updated?.phoneNumber).toBe("+39 999");
-    expect(mockPool.query).toHaveBeenCalledTimes(2);
+    expect(updated?.passwordHash).toBe("latest-hash");
+    expect(updated?.role).toBe("technician");
+    expect(updated?.isActive).toBe(false);
+    expect(mockPool.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain('"fullName" = $1');
+    expect(sql).toContain('"phoneNumber" = $2');
+    expect(sql).not.toContain('"passwordHash" =');
+    expect(sql).not.toContain('role =');
+    expect(sql).not.toContain('"isActive" =');
+    expect(sql).toContain("RETURNING *");
+    expect(params).toEqual(["New Name", "+39 999", expect.any(String), "usr-123"]);
   });
 
   it("createReport properly inserts report with JSONB strings and returns formatted ReportRecord", async () => {
