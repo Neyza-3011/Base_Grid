@@ -1,4 +1,5 @@
 import { appendCsrfHeaders } from "../../lib/auth";
+import { buildProfileUpdatePayload } from "../../lib/profile-form";
 import { useState } from "react";
 import { toast } from "sonner";
 import { UserSession, logoutUser } from "@/lib/auth";
@@ -20,7 +21,7 @@ export function ProfileSettings({
   const [formData, setFormData] = useState({
     fullName: currentUser.fullName || "",
     email: currentUser.email || "",
-    phone: "+39 340 123 4567",
+    phone: currentUser.phoneNumber || "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
@@ -91,11 +92,7 @@ export function ProfileSettings({
         headers: appendCsrfHeaders({
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({
-          full_name: formData.fullName,
-          email: formData.email,
-          ...(formData.newPassword ? { password: formData.newPassword } : {}),
-        }),
+        body: JSON.stringify(buildProfileUpdatePayload(formData)),
       });
 
       if (!res.ok) {
@@ -111,6 +108,8 @@ export function ProfileSettings({
         ...currentUser,
         fullName: savedUser.fullName || formData.fullName,
         email: savedUser.email || formData.email,
+        phoneNumber:
+          typeof savedUser.phoneNumber === "string" ? savedUser.phoneNumber : formData.phone.trim(),
       };
 
       onUpdate(updatedSession);
