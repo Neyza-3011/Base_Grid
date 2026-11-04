@@ -1068,32 +1068,38 @@ export class PostgresAdapter implements IDatabaseAdapter {
     id: string,
     updates: Partial<CompanyRecord>,
   ): Promise<CompanyRecord | null> {
-    const existing = await this.findCompanyWithLogoById(id);
-    if (!existing) return null;
+    // Patch only caller-supplied columns to avoid overwriting concurrent changes
+    // to subscription, activation, branding, or company settings from a stale snapshot.
+    const columns: Array<[keyof CompanyRecord, string]> = [
+      ["name", "name"],
+      ["vatNumber", '"vatNumber"'],
+      ["address", "address"],
+      ["defaultHourlyRate", '"defaultHourlyRate"'],
+      ["reportFooterNotes", '"reportFooterNotes"'],
+      ["stripeSubscriptionStatus", '"stripeSubscriptionStatus"'],
+      ["maxUsers", '"maxUsers"'],
+      ["featurePdfExport", '"featurePdfExport"'],
+      ["isActive", '"isActive"'],
+      ["logoDataUrl", '"logoDataUrl"'],
+    ];
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    for (const [field, column] of columns) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        params.push(updates[field]);
+        setClauses.push(`${column} = ${params.length}`);
+      }
+    }
 
-    const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    params.push(new Date().toISOString());
+    setClauses.push(`"updatedAt" = ${params.length}`);
+    params.push(id);
 
-    await this.pool.query(
-      `UPDATE companies 
-       SET name = $1, "vatNumber" = $2, address = $3, "defaultHourlyRate" = $4, "reportFooterNotes" = $5, "stripeSubscriptionStatus" = $6, "maxUsers" = $7, "featurePdfExport" = $8, "isActive" = $9, "logoDataUrl" = $10, "updatedAt" = $11
-       WHERE id = $12`,
-      [
-        updated.name,
-        updated.vatNumber,
-        updated.address,
-        updated.defaultHourlyRate,
-        updated.reportFooterNotes,
-        updated.stripeSubscriptionStatus,
-        updated.maxUsers,
-        updated.featurePdfExport,
-        updated.isActive ?? true,
-        updated.logoDataUrl ?? null,
-        updated.updatedAt,
-        id,
-      ],
+    const res = await this.pool.query(
+      `UPDATE companies SET ${setClauses.join(", ")} WHERE id = ${params.length} RETURNING *`,
+      params,
     );
-
-    return updated;
+    return res.rows[0] ? mapCompanyRow(res.rows[0]) : null;
   }
 
 
