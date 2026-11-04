@@ -109,9 +109,7 @@ export function ProfileSettings({
         fullName: savedUser.fullName || formData.fullName,
         email: savedUser.email || formData.email,
         phoneNumber:
-          typeof savedUser.phoneNumber === "string"
-            ? savedUser.phoneNumber
-            : formData.phone.trim(),
+          typeof savedUser.phoneNumber === "string" ? savedUser.phoneNumber : formData.phone.trim(),
       };
 
       onUpdate(updatedSession);
