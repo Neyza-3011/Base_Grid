@@ -1608,7 +1608,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const now = new Date().toISOString();
     const res = await this.pool.query(
       `UPDATE auth_tokens SET consumed = true, "consumedAt" = $1
-       WHERE "tokenHash" = $2 AND type = $3 AND consumed = false`,
+       WHERE "tokenHash" = $2 AND type = $3 AND consumed = false AND "expiresAt" > NOW()`,
       [now, tokenHash, type],
     );
     return Boolean(res.rowCount && res.rowCount > 0);
