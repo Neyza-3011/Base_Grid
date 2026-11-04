@@ -139,6 +139,37 @@ describe("Token Store — Safe Scoped Redis Reset", () => {
   });
 });
 
+describe("Redis refresh-token index expiry", () => {
+  it("creates family/user index sets before applying their TTL", async () => {
+    const mockRedisClient = {
+      status: "ready",
+      eval: vi.fn().mockResolvedValue("OK"),
+    };
+    const adapter = new RedisTokenStorageAdapter(mockRedisClient as any);
+
+    await adapter.registerToken({
+      tokenHash: "index-ttl-token",
+      jti: "index-ttl-jti",
+      userId: "index-ttl-user",
+      familyId: "index-ttl-family",
+      expiresAt: Date.now() + 60_000,
+      createdAt: new Date().toISOString(),
+      ttlSeconds: 60,
+    });
+
+    const script = mockRedisClient.eval.mock.calls[0][0] as string;
+    const familySet = script.indexOf("redis.call('SADD', famKey, tokenHash)");
+    const userSet = script.indexOf("redis.call('SADD', userKey, tokenHash)");
+    const familyTtl = script.indexOf("redis.call('EXPIRE', famKey, ttl)");
+    const userTtl = script.indexOf("redis.call('EXPIRE', userKey, ttl)");
+
+    expect(familySet).toBeGreaterThanOrEqual(0);
+    expect(userSet).toBeGreaterThanOrEqual(0);
+    expect(familyTtl).toBeGreaterThan(familySet);
+    expect(userTtl).toBeGreaterThan(userSet);
+  });
+});
+
 describe("Refresh-token expiry boundary", () => {
   it("rejects a refresh token when now equals expiresAt", async () => {
     const engine = new DistributedStorageEngine();
