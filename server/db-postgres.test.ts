@@ -675,6 +675,19 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(secondCall).toBe(false);
   });
 
+  it("does not consume an expired auth token", async () => {
+    mockPool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+    const adapter = new PostgresAdapter(mockPool);
+    const result = await adapter.consumeAuthToken("expired-hash", "email_verification");
+
+    expect(result).toBe(false);
+    expect(mockPool.query).toHaveBeenCalledWith(
+      expect.stringContaining('"expiresAt" > NOW()'),
+      [expect.any(String), "expired-hash", "email_verification"],
+    );
+  });
+
   it("getReportById strictly enforces multi-tenant isolation by companyId", async () => {
     const rawRow = {
       id: "rep-tenant-1",
