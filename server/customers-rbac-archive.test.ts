@@ -754,7 +754,7 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       ["/api/v1/customers?limit=abc", 400],
       ["/api/v1/customers?limit=1.5", 400],
       ["/api/v1/customers?limit=0", 400],
-    ])("validates customer list limit: %s", async (path, expectedStatus) => {
+    ] as const)("validates customer list limit: %s", async (path, expectedStatus) => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const response = await apiRequest(path, { cookies: auth.cookies });
       expect(response.status).toBe(expectedStatus);
@@ -765,7 +765,7 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       ["/api/v1/customers/customer-limit-test/locations?limit=abc", 400],
       ["/api/v1/customers/customer-limit-test/locations?limit=1.5", 400],
       ["/api/v1/customers/customer-limit-test/locations?limit=0", 400],
-    ])("validates location list limit: %s", async (path, expectedStatus) => {
+    ] as const)("validates location list limit: %s", async (path, expectedStatus) => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const customer = await db.createCustomer(companyA, { displayName: "Pagination Test Customer" });
       const actualPath = path.replace("customer-limit-test", customer.id);
