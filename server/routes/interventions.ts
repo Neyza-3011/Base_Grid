@@ -66,7 +66,7 @@ interventionsRouter.get(
     const scalarQueryKeys = [
       "search", "status", "priority", "technicianId", "customerId", "locationId",
       "assetId", "scheduledStartFrom", "scheduledStartTo", "scheduledStart",
-      "scheduledEnd", "cursor", "limit",
+      "scheduledEnd", "cursor",
     ] as const;
     if (scalarQueryKeys.some((key) => req.query[key] !== undefined && typeof req.query[key] !== "string")) {
       res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
