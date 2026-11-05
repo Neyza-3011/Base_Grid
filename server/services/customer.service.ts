@@ -65,7 +65,7 @@ export class CustomerService {
 
   public async updateCustomer(companyId: string, customerId: string, input: UpdateCustomerInput): Promise<CustomerRecord> {
     validateInputObject(input, "I dati cliente");
-    validateOptionalStringField(input.displayName, "Nome cliente", true);
+    validateOptionalStringField(input.displayName, "Nome cliente");
     validateOptionalStringField(input.legalName, "Ragione sociale", true);
     validateColumnLength(input.legalName, "Ragione sociale", 255);
     validateOptionalStringField(input.vatNumber, "Partita IVA", true);
