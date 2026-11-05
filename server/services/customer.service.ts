@@ -88,7 +88,6 @@ export class CustomerService {
     }
 
     const updated = await this.db.updateCustomer(companyId, customerId, {
-      ...input,
       displayName: input.displayName ? input.displayName.trim() : undefined,
       legalName: input.legalName !== undefined ? (input.legalName && typeof input.legalName === "string" && input.legalName.trim().length > 0 ? input.legalName.trim() : (null as any)) : undefined,
       vatNumber: input.vatNumber !== undefined ? (input.vatNumber && typeof input.vatNumber === "string" && input.vatNumber.trim().length > 0 ? input.vatNumber.trim() : (null as any)) : undefined,
@@ -177,7 +176,6 @@ export class CustomerService {
     }
 
     const updated = await this.db.updateLocation(companyId, locationId, {
-      ...input,
       name: input.name ? input.name.trim() : undefined,
       address: input.address ? input.address.trim() : undefined,
       city: input.city ? input.city.trim() : undefined,
