@@ -385,6 +385,55 @@ describe("Interventions Backend Module (P1.4)", () => {
         expect(persisted.notes).toBe("Lavoro completato");
       }
     });
+
+    it("returns 409 instead of overwriting a concurrent status transition", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Test race transition",
+        priority: "media",
+        status: "in_lavorazione",
+        actualHours: 1.5,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const originalUpdate = db.updateIntervention.bind(db);
+      const updateSpy = vi.spyOn(db, "updateIntervention").mockImplementation(
+        async (companyId, interventionId, updates, expectedStatus) => {
+          // Simulate another request changing the status after validation but before this write.
+          await originalUpdate(companyId, interventionId, {
+            status: "in_attesa",
+            updatedBy: adminA.user.id,
+          });
+          return originalUpdate(companyId, interventionId, updates, expectedStatus);
+        },
+      );
+
+      try {
+        const response = await apiRequest(`/api/v1/interventions/${created.id}/transition`, {
+          method: "POST",
+          cookies: adminA.cookies,
+          headers: adminA.headers,
+          body: { targetStatus: "completato", actualHours: 2.5 },
+        });
+
+        expect(updateSpy).toHaveBeenCalledWith(
+          companyA,
+          created.id,
+          expect.objectContaining({ status: "completato", actualHours: 2.5 }),
+          "in_lavorazione",
+        );
+        expect(response.status).toBe(409);
+        expect(response.data.detail).toMatch(/stato dell'intervento è cambiato/i);
+
+        const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+        expect(persisted?.status).toBe("in_attesa");
+        expect(persisted?.actualHours).toBe(1.5);
+      } finally {
+        updateSpy.mockRestore();
+      }
+    });
   });
 
     it("rejects hour values above the PostgreSQL NUMERIC(6,2) range before persistence", async () => {

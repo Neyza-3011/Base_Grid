@@ -751,9 +751,15 @@ export class InterventionService {
       }
     }
 
-    const updated = await this.db.updateIntervention(companyId, interventionId, updates);
+    // Compare-and-set ensures the transition is applied only if the status
+    // is still the one used for validation above.
+    const updated = await this.db.updateIntervention(companyId, interventionId, updates, existing.status);
     if (!updated) {
-      throw new NotFoundError("Intervento non trovato.");
+      const current = await this.db.getInterventionByIdAndCompany(interventionId, companyId);
+      if (!current) {
+        throw new NotFoundError("Intervento non trovato.");
+      }
+      throw new ConflictError("Lo stato dell'intervento è cambiato durante l'operazione. Ricarica e riprova.");
     }
     return updated;
   }
