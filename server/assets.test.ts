@@ -626,6 +626,32 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(response.status).toBe(400);
     });
 
+    it("rejects unknown asset type, status, and non-boolean activeOnly filters", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      for (const query of [
+        "assetType=unknown",
+        "status=unknown",
+        "activeOnly=maybe",
+        "activeOnly=",
+      ]) {
+        const response = await apiRequest(`/api/v1/assets?${query}`, { cookies: auth.cookies });
+        expect(response.status, query).toBe(400);
+      }
+    });
+
+    it("accepts supported asset list enum filters and explicit activeOnly booleans", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      for (const query of [
+        "assetType=quadro",
+        "status=operativo",
+        "activeOnly=true",
+        "activeOnly=false",
+      ]) {
+        const response = await apiRequest(`/api/v1/assets?${query}`, { cookies: auth.cookies });
+        expect(response.status, query).toBe(200);
+      }
+    });
+
     it("rejects zero as an invalid asset list limit", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const response = await apiRequest("/api/v1/assets?limit=0", { cookies: auth.cookies });
