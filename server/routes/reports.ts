@@ -55,7 +55,7 @@ reportsRouter.get(
     const rawLimit = req.query.limit;
     let limit = 100;
     if (rawLimit !== undefined) {
-      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+      if (typeof rawLimit !== "string" || !/^\d+$/.test(rawLimit)) {
         throw new ValidationError("Parametro limit non valido: usare un intero positivo.");
       }
       const parsedLimit = Number(rawLimit);
