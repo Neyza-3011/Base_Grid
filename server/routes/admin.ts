@@ -33,7 +33,7 @@ adminRouter.get("/audit-events", asyncHandler(async (req: any, res: any): Promis
   const rawLimit = req.query?.limit;
   let limit = 50;
   if (rawLimit !== undefined) {
-    if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+    if (typeof rawLimit !== "string" || !/^\d+$/.test(rawLimit)) {
       throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
     }
     const parsedLimit = Number(rawLimit);
