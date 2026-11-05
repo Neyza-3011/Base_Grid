@@ -144,8 +144,9 @@ export class CompanyService {
         throw new ValidationError("maxUsers must be a number");
       }
       const maxUsers = input.maxUsers;
-      if (!Number.isFinite(maxUsers) || maxUsers < 1) {
-        throw new ValidationError("maxUsers must be at least 1");
+      // PostgreSQL stores maxUsers in a signed 32-bit INTEGER column.
+      if (!Number.isInteger(maxUsers) || maxUsers < 1 || maxUsers > 2_147_483_647) {
+        throw new ValidationError("maxUsers must be a positive integer within the database range");
       }
       updates.maxUsers = maxUsers;
     }
