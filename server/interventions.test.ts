@@ -1185,6 +1185,19 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPrio.data.items[0].priority).toBe("urgente");
     });
 
+    it.each([
+      "/api/v1/interventions?cursor=not-a-valid-cursor",
+      "/api/v1/interventions?cursor=aW52YWxpZDo6aWQ=",
+    ])("rejects malformed pagination cursor: %s", async (url) => {
+      const res = await apiRequest(url, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toMatch(/cursore di paginazione non valido/i);
+    });
+
     it("respects limit and returns stable cursor for pagination", async () => {
       for (let i = 1; i <= 5; i++) {
         await db.createIntervention(companyA, {
