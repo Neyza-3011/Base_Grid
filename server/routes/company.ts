@@ -18,7 +18,12 @@ companyRouter.get(
       throw new UnauthorizedError("Non autenticato.");
     }
 
-    const includeLogo = req.query.include_logo !== "false";
+    const rawIncludeLogo = req.query.include_logo;
+    if (rawIncludeLogo !== undefined && typeof rawIncludeLogo !== "string") {
+      res.status(400).json({ detail: "Il parametro include_logo deve essere un valore singolo." });
+      return;
+    }
+    const includeLogo = rawIncludeLogo !== "false";
     const company = await companyService.getCompanySettings(req.user.companyId, includeLogo);
 
     res.status(200).json({
