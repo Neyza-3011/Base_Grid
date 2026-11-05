@@ -1185,6 +1185,21 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPrio.data.items[0].priority).toBe("urgente");
     });
 
+    it.each([
+      "/api/v1/interventions?limit=1.5",
+      "/api/v1/interventions?limit=10junk",
+      "/api/v1/interventions?limit=1&limit=2",
+      "/api/v1/interventions?limit=999999999999999999999",
+    ])("rejects malformed pagination limit: %s", async (url) => {
+      const res = await apiRequest(url, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toMatch(/limit non valido/i);
+    });
+
     it("respects limit and returns stable cursor for pagination", async () => {
       for (let i = 1; i <= 5; i++) {
         await db.createIntervention(companyA, {
