@@ -1134,6 +1134,19 @@ describe("Interventions Backend Module (P1.4)", () => {
   });
 
   describe("6. Pagination and Query Filters", () => {
+    it.each([
+      "/api/v1/interventions?cursor=not-a-valid-cursor",
+      "/api/v1/interventions?cursor=aW52YWxpZDo6aWQ=",
+    ])("rejects malformed pagination cursor: %s", async (url) => {
+      const res = await apiRequest(url, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toMatch(/cursore di paginazione non valido/i);
+    });
+
     it("filters interventions by status, priority, customerId, technicianId and search", async () => {
       await db.createIntervention(companyA, {
         customerId: customerA.id,
@@ -1223,7 +1236,7 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPage1.data.nextCursor).toBeDefined();
       expect(resPage1.data.totalCount).toBe(5); // totalCount does NOT decrease when limit=2 is applied
 
-      const resPage2 = await apiRequest(`/api/v1/interventions?limit=2&cursor=${resPage1.data.nextCursor}`, {
+      const resPage2 = await apiRequest(`/api/v1/interventions?limit=2&cursor=${encodeURIComponent(resPage1.data.nextCursor)}`, {
         method: "GET",
         cookies: adminA.cookies,
       });
