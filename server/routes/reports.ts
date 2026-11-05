@@ -52,7 +52,19 @@ reportsRouter.get(
     if (!req.user || !req.user.companyId) {
       throw new UnauthorizedError("Non autenticato.");
     }
-    const responseData = await reportsService.listReports(req.user.companyId, req.query.limit as any);
+    const rawLimit = req.query.limit;
+    let limit = 100;
+    if (rawLimit !== undefined) {
+      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+        throw new ValidationError("Parametro limit non valido: usare un intero positivo.");
+      }
+      const parsedLimit = Number(rawLimit);
+      if (!Number.isSafeInteger(parsedLimit) || parsedLimit < 1) {
+        throw new ValidationError("Parametro limit non valido: usare un intero positivo.");
+      }
+      limit = Math.min(parsedLimit, 1000);
+    }
+    const responseData = await reportsService.listReports(req.user.companyId, limit);
     res.status(200).json(responseData);
   })
 );
