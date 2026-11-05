@@ -105,8 +105,11 @@ function mapReportRow(row: any): ReportRecord {
     try {
       client = JSON.parse(client);
     } catch {
-      client = { name: client };
+      throw new Error("Invalid persisted report client JSON");
     }
+  }
+  if (!client || typeof client !== "object" || Array.isArray(client) || typeof client.name !== "string") {
+    throw new Error("Invalid persisted report client shape");
   }
 
   let technician = row.technician;
@@ -114,8 +117,11 @@ function mapReportRow(row: any): ReportRecord {
     try {
       technician = JSON.parse(technician);
     } catch {
-      technician = { fullName: technician };
+      throw new Error("Invalid persisted report technician JSON");
     }
+  }
+  if (!technician || typeof technician !== "object" || Array.isArray(technician) || typeof technician.fullName !== "string") {
+    throw new Error("Invalid persisted report technician shape");
   }
 
   let materialsUsed = row.materialsUsed;
