@@ -137,11 +137,6 @@ customersRouter.get(
       res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
       return;
     }
-    const scalarQueryKeys = ["search", "activeOnly"] as const;
-    if (scalarQueryKeys.some((key) => req.query[key] !== undefined && typeof req.query[key] !== "string")) {
-      res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
-      return;
-    }
     const search = req.query.search as string;
     const activeOnly = req.query.activeOnly !== "false";
     const rawLimit = req.query.limit;
@@ -276,6 +271,11 @@ customersRouter.get(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user || !req.user.companyId) {
       res.status(401).json({ detail: "Azienda non trovata." });
+      return;
+    }
+    const scalarQueryKeys = ["search", "activeOnly"] as const;
+    if (scalarQueryKeys.some((key) => req.query[key] !== undefined && typeof req.query[key] !== "string")) {
+      res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
       return;
     }
     const search = req.query.search as string;
