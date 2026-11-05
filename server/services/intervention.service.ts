@@ -512,10 +512,10 @@ export class InterventionService {
     const targetStart = input.scheduledStart !== undefined ? (input.scheduledStart || undefined) : existing.scheduledStart;
     const targetEnd = input.scheduledEnd !== undefined ? (input.scheduledEnd || undefined) : existing.scheduledEnd;
 
-    if (targetStart && isNaN(new Date(targetStart).getTime())) {
+    if (targetStart && !isValidScheduledDate(targetStart)) {
       throw new BadRequestError("Formato data inizio programmata non valido.");
     }
-    if (targetEnd && isNaN(new Date(targetEnd).getTime())) {
+    if (targetEnd && !isValidScheduledDate(targetEnd)) {
       throw new BadRequestError("Formato data fine programmata non valido.");
     }
     if (targetStart && targetEnd) {
