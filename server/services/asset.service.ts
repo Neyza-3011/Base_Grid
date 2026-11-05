@@ -172,7 +172,7 @@ export class AssetService {
     input: UpdateAssetInput
   ): Promise<AssetRecord> {
     validateInputObject(input, "I dati impianto/asset");
-    validateOptionalStringField(input.name, "Nome impianto/asset", true);
+    validateOptionalStringField(input.name, "Nome impianto/asset");
     validateOptionalStringField(input.manufacturer, "Produttore", true);
     validateColumnLength(input.manufacturer, "Produttore", 255);
     validateOptionalStringField(input.model, "Modello", true);
