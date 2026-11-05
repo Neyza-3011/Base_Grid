@@ -239,6 +239,15 @@ function mapInviteTokenRow(row: any): InviteTokenRecord {
 }
 
 function mapInterventionRow(row: any): InterventionRecord {
+  const mapOptionalFiniteHours = (value: unknown, field: string): number | undefined => {
+    if (value === null || value === undefined) return undefined;
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(`Invalid persisted intervention ${field}`);
+    }
+    return numericValue;
+  };
+
   return {
     id: row.id,
     companyId: row.companyId,
@@ -252,8 +261,8 @@ function mapInterventionRow(row: any): InterventionRecord {
     scheduledStart: row.scheduledStart instanceof Date ? row.scheduledStart.toISOString() : (row.scheduledStart ? String(row.scheduledStart) : undefined),
     scheduledEnd: row.scheduledEnd instanceof Date ? row.scheduledEnd.toISOString() : (row.scheduledEnd ? String(row.scheduledEnd) : undefined),
     technicianId: row.technicianId || undefined,
-    estimatedHours: row.estimatedHours !== null && row.estimatedHours !== undefined ? Number(row.estimatedHours) : undefined,
-    actualHours: row.actualHours !== null && row.actualHours !== undefined ? Number(row.actualHours) : undefined,
+    estimatedHours: mapOptionalFiniteHours(row.estimatedHours, "estimatedHours"),
+    actualHours: mapOptionalFiniteHours(row.actualHours, "actualHours"),
     notes: row.notes || undefined,
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
