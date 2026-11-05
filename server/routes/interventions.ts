@@ -10,6 +10,8 @@ import {
   TransitionInterventionInput,
   UpdateInterventionInput,
   UserRole,
+  VALID_INTERVENTION_PRIORITIES,
+  VALID_INTERVENTION_STATUSES,
 } from "../types";
 
 export const interventionsRouter = Router();
@@ -76,6 +78,14 @@ interventionsRouter.get(
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
     const priority = req.query.priority as string | undefined;
+    if (status !== undefined && !VALID_INTERVENTION_STATUSES.includes(status as any)) {
+      res.status(400).json({ detail: "Stato intervento non valido." });
+      return;
+    }
+    if (priority !== undefined && !VALID_INTERVENTION_PRIORITIES.includes(priority as any)) {
+      res.status(400).json({ detail: "Priorità intervento non valida." });
+      return;
+    }
     let technicianId = req.query.technicianId as string | undefined;
     const customerId = req.query.customerId as string | undefined;
     const locationId = req.query.locationId as string | undefined;
