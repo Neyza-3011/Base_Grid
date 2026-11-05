@@ -749,5 +749,29 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       expect(legacyReact.status).toBe(200);
       expect(legacyReact.data.isActive).toBe(true);
     });
+    it.each([
+      ["/api/v1/customers?limit=25", 200],
+      ["/api/v1/customers?limit=abc", 400],
+      ["/api/v1/customers?limit=1.5", 400],
+      ["/api/v1/customers?limit=0", 400],
+    ] as const)("validates customer list limit: %s", async (path, expectedStatus) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const response = await apiRequest(path, { cookies: auth.cookies });
+      expect(response.status).toBe(expectedStatus);
+    });
+
+    it.each([
+      ["/api/v1/customers/customer-limit-test/locations?limit=25", 200],
+      ["/api/v1/customers/customer-limit-test/locations?limit=abc", 400],
+      ["/api/v1/customers/customer-limit-test/locations?limit=1.5", 400],
+      ["/api/v1/customers/customer-limit-test/locations?limit=0", 400],
+    ] as const)("validates location list limit: %s", async (path, expectedStatus) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Pagination Test Customer" });
+      const actualPath = path.replace("customer-limit-test", customer.id);
+      const response = await apiRequest(actualPath, { cookies: auth.cookies });
+      expect(response.status).toBe(expectedStatus);
+    });
+
   });
 });
