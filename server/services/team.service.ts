@@ -184,6 +184,13 @@ export class TeamService {
     }
 
     if (input.role !== undefined && input.role !== user.role) {
+      if (user.role === "owner") {
+        const executor = await this.db.getUserByIdAndCompany(executorId, companyId);
+        if (!executor || executor.role !== "owner") {
+          throw new ForbiddenError("Solo il titolare può modificare il ruolo di un altro titolare.");
+        }
+      }
+
       if (!ASSIGNABLE_ROLES.includes(input.role)) {
         throw new ForbiddenError("Ruolo non valido o non assegnabile.");
       }
@@ -238,6 +245,13 @@ export class TeamService {
     const user = await this.db.getUserByIdAndCompany(userId, companyId);
     if (!user) {
       throw new NotFoundError("Utente non trovato in questa azienda.");
+    }
+
+    if (user.role === "owner") {
+      const executor = await this.db.getUserByIdAndCompany(executorId, companyId);
+      if (!executor || executor.role !== "owner") {
+        throw new ForbiddenError("Solo il titolare può modificare lo stato di un altro titolare.");
+      }
     }
 
     if (user.isActive === isActive) {
