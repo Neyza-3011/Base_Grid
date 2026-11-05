@@ -246,6 +246,11 @@ usersRouter.get("/team/:id", authenticate, requireRole([...TEAM_ADMIN_ROLES]), a
  * Create a new team member and generate an invite token
  */
 usersRouter.post("/team", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  if (req.body?.role === "owner" && req.user.role !== "owner" && req.user.role !== "superadmin") {
+    res.status(403).json({ detail: "Solo il titolare può assegnare il ruolo di titolare." });
+    return;
+  }
+
   const { member, inviteToken } = await teamService.inviteTeamMember(
     req.user.companyId,
     req.company.name,
@@ -260,6 +265,11 @@ usersRouter.post("/team", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyn
  * Update a team member's profile and role
  */
 usersRouter.put("/team/:id", authenticate, requireRole([...TEAM_ADMIN_ROLES]), asyncHandler(async (req: any, res: any) => {
+  if (req.body?.role === "owner" && req.user.role !== "owner" && req.user.role !== "superadmin") {
+    res.status(403).json({ detail: "Solo il titolare può assegnare il ruolo di titolare." });
+    return;
+  }
+
   const member = await teamService.updateTeamMember(
     req.user.companyId,
     req.params.id,
