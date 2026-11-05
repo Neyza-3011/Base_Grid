@@ -144,8 +144,8 @@ export class CompanyService {
         throw new ValidationError("maxUsers must be a number");
       }
       const maxUsers = input.maxUsers;
-      if (!Number.isFinite(maxUsers) || maxUsers < 1) {
-        throw new ValidationError("maxUsers must be at least 1");
+      if (!Number.isSafeInteger(maxUsers) || maxUsers < 1) {
+        throw new ValidationError("maxUsers must be a positive safe integer");
       }
       updates.maxUsers = maxUsers;
     }
