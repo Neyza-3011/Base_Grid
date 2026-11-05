@@ -17,7 +17,9 @@ export class ReportsService {
     }
 
     let limitValue = Number(rawLimit);
-    if (!Number.isFinite(limitValue) || limitValue < 1) limitValue = 100;
+    // PostgreSQL LIMIT requires an integer. Treat malformed/fractional query values
+    // like other invalid limits instead of letting them fail during database access.
+    if (!Number.isInteger(limitValue) || limitValue < 1) limitValue = 100;
     const limit = Math.min(limitValue, 1000);
 
     const reports = await this.db.getReportsByCompany(companyId, limit);

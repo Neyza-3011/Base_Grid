@@ -215,6 +215,16 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
       expect(reports.length).toBe(0);
     });
 
+    it("falls back to the default limit for fractional query values", async () => {
+      await reportsService.listReports("comp-tenant-a", "1.5");
+      expect(mockDb.getReportsByCompany).toHaveBeenLastCalledWith("comp-tenant-a", 100);
+    });
+
+    it("caps integer limits at 1000", async () => {
+      await reportsService.listReports("comp-tenant-a", "1500");
+      expect(mockDb.getReportsByCompany).toHaveBeenLastCalledWith("comp-tenant-a", 1000);
+    });
+
     it("throws ValidationError if companyId is missing", async () => {
       await expect(reportsService.listReports("")).rejects.toThrow(ValidationError);
     });
