@@ -1221,7 +1221,7 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resPage1.data.nextCursor).toBeDefined();
       expect(resPage1.data.totalCount).toBe(5); // totalCount does NOT decrease when limit=2 is applied
 
-      const resPage2 = await apiRequest(`/api/v1/interventions?limit=2&cursor=${resPage1.data.nextCursor}`, {
+      const resPage2 = await apiRequest(`/api/v1/interventions?limit=2&cursor=${encodeURIComponent(resPage1.data.nextCursor)}`, {
         method: "GET",
         cookies: adminA.cookies,
       });
