@@ -1891,6 +1891,18 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
     expect(response.status).toBe(400);
   });
+
+  it.each([
+    ["/api/v1/interventions?status=unknown", 400],
+    ["/api/v1/interventions?status=", 400],
+    ["/api/v1/interventions?priority=unknown", 400],
+    ["/api/v1/interventions?priority=", 400],
+    ["/api/v1/interventions?status=nuovo", 200],
+    ["/api/v1/interventions?priority=urgente", 200],
+  ] as const)("validates intervention status/priority list filters: %s", async (path, expectedStatus) => {
+    const response = await apiRequest(path, { cookies: adminA.cookies });
+    expect(response.status).toBe(expectedStatus);
+  });
   it("rejects zero as an invalid intervention list limit", async () => {
     const response = await apiRequest("/api/v1/interventions?limit=0", {
       cookies: adminA.cookies,
