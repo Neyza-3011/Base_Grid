@@ -156,4 +156,15 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(response.status).toBe(400);
   });
 
+  it.each([
+    ["/api/v1/company/settings?include_logo=maybe", 400],
+    ["/api/v1/company/settings?include_logo=", 400],
+    ["/api/v1/company/settings?include_logo=true", 200],
+    ["/api/v1/company/settings?include_logo=false", 200],
+  ] as const)("validates include_logo boolean: %s", async (path, expectedStatus) => {
+    const accessToken = await tokenFor("admin@rossi.it");
+    const response = await apiRequest(path, { accessToken });
+    expect(response.status).toBe(expectedStatus);
+  });
+
 });
