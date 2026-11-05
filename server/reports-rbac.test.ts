@@ -54,18 +54,6 @@ afterEach(async () => {
   await new Promise<void>((resolve) => {
     server.close(() => resolve());
   });
-  it.each([
-    ["/api/v1/reports?limit=abc", 400],
-    ["/api/v1/reports?limit=1.5", 400],
-    ["/api/v1/reports?limit=0", 400],
-    ["/api/v1/reports?limit=25", 200],
-    ["/api/v1/reports?limit=10&limit=20", 400],
-  ])("validates report list limit: %s", async (path, expectedStatus) => {
-    const admin = await createTestUserAndLogin(companyA, "admin");
-    const response = await apiRequest(path, { cookies: admin.cookies });
-    expect(response.status).toBe(expectedStatus);
-  });
-
 });
 
 async function createTestUserAndLogin(
@@ -719,6 +707,18 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect(res.status).toBe(403);
       expect((await db.getReportById(companyA, report.id))?.notes).toBe("Bozza iniziale");
     });
+  it.each([
+    ["/api/v1/reports?limit=abc", 400],
+    ["/api/v1/reports?limit=1.5", 400],
+    ["/api/v1/reports?limit=0", 400],
+    ["/api/v1/reports?limit=25", 200],
+    ["/api/v1/reports?limit=10&limit=20", 400],
+  ])("validates report list limit: %s", async (path, expectedStatus) => {
+    const admin = await createTestUserAndLogin(companyA, "admin");
+    const response = await apiRequest(path, { cookies: admin.cookies });
+    expect(response.status).toBe(expectedStatus);
+  });
+
   });
 
 });
