@@ -23,6 +23,10 @@ companyRouter.get(
       res.status(400).json({ detail: "Il parametro include_logo deve essere un valore singolo." });
       return;
     }
+    if (rawIncludeLogo !== undefined && rawIncludeLogo !== "true" && rawIncludeLogo !== "false") {
+      res.status(400).json({ detail: "Il parametro include_logo deve essere true o false." });
+      return;
+    }
     const includeLogo = rawIncludeLogo !== "false";
     const company = await companyService.getCompanySettings(req.user.companyId, includeLogo);
 
