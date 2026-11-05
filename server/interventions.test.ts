@@ -1891,6 +1891,13 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
     expect(response.status).toBe(400);
   });
+  it("rejects zero as an invalid intervention list limit", async () => {
+    const response = await apiRequest("/api/v1/interventions?limit=0", {
+      cookies: adminA.cookies,
+    });
+    expect(response.status).toBe(400);
+  });
+
 
 });
 
