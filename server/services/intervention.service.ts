@@ -15,6 +15,7 @@ import {
   UserRole,
 } from "../types";
 import { BadRequestError, NotFoundError, ForbiddenError, ConflictError } from "../errors";
+import { isValidCalendarDate } from "../validation";
 
 function validateInputObject(input: unknown): void {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -27,6 +28,15 @@ function validateOptionalStringField(value: unknown, field: string, nullable = f
   if (typeof value !== "string") {
     throw new BadRequestError(`${field} deve essere una stringa valida.`);
   }
+}
+
+function isValidScheduledDate(value: string): boolean {
+  if (Number.isNaN(new Date(value).getTime())) return false;
+
+  // JavaScript normalizes impossible ISO calendar dates such as February 30.
+  // Validate the date component explicitly before accepting the parsed timestamp.
+  const isoDatePrefix = /^(\d{4}-\d{2}-\d{2})(?:T|\s|$)/.exec(value);
+  return !isoDatePrefix || isValidCalendarDate(isoDatePrefix[1]);
 }
 
 export interface GetInterventionsFilter {
@@ -336,10 +346,10 @@ export class InterventionService {
     }
 
     // 6. Validate Scheduled Dates
-    if (input.scheduledStart && isNaN(new Date(input.scheduledStart).getTime())) {
+    if (input.scheduledStart && !isValidScheduledDate(input.scheduledStart)) {
       throw new BadRequestError("Formato data inizio programmata non valido.");
     }
-    if (input.scheduledEnd && isNaN(new Date(input.scheduledEnd).getTime())) {
+    if (input.scheduledEnd && !isValidScheduledDate(input.scheduledEnd)) {
       throw new BadRequestError("Formato data fine programmata non valido.");
     }
     if (input.scheduledStart && input.scheduledEnd) {
