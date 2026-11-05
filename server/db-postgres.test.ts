@@ -456,6 +456,56 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       .rejects.toThrow("Invalid persisted report materials JSON");
   });
 
+  it.each([
+    ["client", "not-json", /Invalid persisted report client JSON/],
+    ["technician", "not-json", /Invalid persisted report technician JSON/],
+  ])("rejects malformed persisted %s JSON instead of fabricating a fallback object", async (field, value, expected) => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "rep-corrupt-identity-json",
+        companyId: "comp-123",
+        date: "2026-08-18",
+        time: "10:00",
+        workHours: "1",
+        travelHours: "0",
+        status: "submitted",
+        client: field === "client" ? value : { name: "Client A" },
+        technician: field === "technician" ? value : { fullName: "Tech A" },
+        materialsUsed: [],
+        notes: "",
+        createdAt: new Date("2026-08-18T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getReportsByCompany("comp-123", 50)).rejects.toThrow(expected);
+  });
+
+  it.each([
+    ["client", null, /Invalid persisted report client shape/],
+    ["technician", [], /Invalid persisted report technician shape/],
+  ])("rejects invalid persisted %s shapes", async (field, value, expected) => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "rep-corrupt-identity-shape",
+        companyId: "comp-123",
+        date: "2026-08-18",
+        time: "10:00",
+        workHours: "1",
+        travelHours: "0",
+        status: "submitted",
+        client: field === "client" ? value : { name: "Client A" },
+        technician: field === "technician" ? value : { fullName: "Tech A" },
+        materialsUsed: [],
+        notes: "",
+        createdAt: new Date("2026-08-18T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getReportsByCompany("comp-123", 50)).rejects.toThrow(expected);
+  });
+
   it("rejects persisted materials JSON with a non-array shape", async () => {
     mockPool.query.mockResolvedValueOnce({
       rows: [{
