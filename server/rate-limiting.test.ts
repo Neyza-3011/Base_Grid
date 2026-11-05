@@ -20,6 +20,21 @@ describe("P0.4.4-D - Production Rate Limiting & Abuse Protection", () => {
     (rateLimiter as any).redisClient = originalRedis;
   });
 
+  it("applies the general API limit before rejecting a missing CSRF token", async () => {
+    const entry = { count: 1000, expiresAt: Date.now() + 60000 };
+    (rateLimiter as any).localFallback.set("ratelimit:rl:api:::ffff:127.0.0.1", entry);
+    (rateLimiter as any).localFallback.set("ratelimit:rl:api:127.0.0.1", entry);
+    (rateLimiter as any).localFallback.set("ratelimit:rl:api:::1", entry);
+
+    const response = await request(app)
+      .post("/api/v1/reports")
+      .set("X-Test-RateLimit", "enable")
+      .send({ payload: "bounded before CSRF" });
+
+    expect(response.status).toBe(429);
+    expect(response.body.detail).toContain("Troppe richieste al sistema");
+  });
+
   it("should return 429 when login limit is exceeded", async () => {
     // loginLimiter: 10 requests per 15 minutes
     const testIp = `192.168.250.${Math.floor(Math.random() * 100) + 1}`;
