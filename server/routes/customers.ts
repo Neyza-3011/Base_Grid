@@ -138,7 +138,12 @@ customersRouter.get(
       return;
     }
     const search = req.query.search as string;
-    const activeOnly = req.query.activeOnly !== "false";
+    const activeOnlyRaw = req.query.activeOnly as string | undefined;
+    if (activeOnlyRaw !== undefined && activeOnlyRaw !== "true" && activeOnlyRaw !== "false") {
+      res.status(400).json({ detail: "Parametro activeOnly non valido: usare true o false." });
+      return;
+    }
+    const activeOnly = activeOnlyRaw !== "false";
     const rawLimit = req.query.limit;
     let limit = 100;
     if (rawLimit !== undefined) {
@@ -279,7 +284,12 @@ customersRouter.get(
       return;
     }
     const search = req.query.search as string;
-    const activeOnly = req.query.activeOnly !== "false";
+    const activeOnlyRaw = req.query.activeOnly as string | undefined;
+    if (activeOnlyRaw !== undefined && activeOnlyRaw !== "true" && activeOnlyRaw !== "false") {
+      res.status(400).json({ detail: "Parametro activeOnly non valido: usare true o false." });
+      return;
+    }
+    const activeOnly = activeOnlyRaw !== "false";
     const rawLimit = req.query.limit;
     let limit = 100;
     if (rawLimit !== undefined) {

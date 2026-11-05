@@ -787,6 +787,30 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       expect(response.status).toBe(expectedStatus);
     });
 
+    it.each([
+      ["/api/v1/customers?activeOnly=maybe", 400],
+      ["/api/v1/customers?activeOnly=", 400],
+      ["/api/v1/customers?activeOnly=true", 200],
+      ["/api/v1/customers?activeOnly=false", 200],
+    ] as const)("validates customer activeOnly boolean: %s", async (path, expectedStatus) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const response = await apiRequest(path, { cookies: auth.cookies });
+      expect(response.status).toBe(expectedStatus);
+    });
+
+    it.each([
+      ["/api/v1/customers/customer-active-test/locations?activeOnly=maybe", 400],
+      ["/api/v1/customers/customer-active-test/locations?activeOnly=", 400],
+      ["/api/v1/customers/customer-active-test/locations?activeOnly=true", 200],
+      ["/api/v1/customers/customer-active-test/locations?activeOnly=false", 200],
+    ] as const)("validates location activeOnly boolean: %s", async (path, expectedStatus) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Active Filter Test Customer" });
+      const actualPath = path.replace("customer-active-test", customer.id);
+      const response = await apiRequest(actualPath, { cookies: auth.cookies });
+      expect(response.status).toBe(expectedStatus);
+    });
+
 
   });
 });
