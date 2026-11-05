@@ -31,9 +31,16 @@ adminRouter.get("/stats", asyncHandler(async (_req: any, res: any): Promise<void
  */
 adminRouter.get("/audit-events", asyncHandler(async (req: any, res: any): Promise<void> => {
   const rawLimit = req.query?.limit;
-  const limit = rawLimit === undefined ? 50 : Number(rawLimit);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-    throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
+  let limit = 50;
+  if (rawLimit !== undefined) {
+    if (typeof rawLimit !== "string" || !/^\d+$/.test(rawLimit)) {
+      throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
+    }
+    const parsedLimit = Number(rawLimit);
+    if (!Number.isSafeInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
+      throw new ValidationError("Il limite degli eventi deve essere un intero tra 1 e 200.");
+    }
+    limit = parsedLimit;
   }
   const events = await db.getAdminAuditEvents(limit);
   res.status(200).json({

@@ -459,8 +459,13 @@ describe("Platform admin endpoint authorization", () => {
 
     const tenantAdmin = await getWithUser("/api/v1/admin/audit-events", "admin@rossi.it");
     expect(tenantAdmin.status).toBe(403);
-    const invalidLimit = await getWithUser("/api/v1/admin/audit-events?limit=201", "jack.cardinali15@gmail.com");
-    expect(invalidLimit.status).toBe(400);
+    const invalidLimits = await Promise.all([
+      getWithUser("/api/v1/admin/audit-events?limit=201", "jack.cardinali15@gmail.com"),
+      getWithUser("/api/v1/admin/audit-events?limit=1e2", "jack.cardinali15@gmail.com"),
+      getWithUser("/api/v1/admin/audit-events?limit=50&limit=50", "jack.cardinali15@gmail.com"),
+      getWithUser("/api/v1/admin/audit-events?limit=1.5", "jack.cardinali15@gmail.com"),
+    ]);
+    expect(invalidLimits.map((result) => result.status)).toEqual([400, 400, 400, 400]);
   });
 
   it("returns 404 for a nonexistent tenant ID", async () => {
