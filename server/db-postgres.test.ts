@@ -1968,4 +1968,30 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       expect(userRes.rows[0].authVersion).toBe(3);
     });
   });
+  it.each([
+    ["estimatedHours", "NaN"],
+    ["actualHours", "Infinity"],
+  ])("rejects non-finite persisted intervention %s", async (field, value) => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ total: "1" }] });
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "int-corrupt-hours",
+        companyId: "comp-123",
+        customerId: "cust-123",
+        locationId: "loc-123",
+        description: "Intervento test",
+        priority: "media",
+        status: "nuovo",
+        estimatedHours: field === "estimatedHours" ? value : null,
+        actualHours: field === "actualHours" ? value : null,
+        createdAt: new Date("2026-08-18T10:00:00Z"),
+        updatedAt: new Date("2026-08-18T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getInterventionsByCompany("comp-123"))
+      .rejects.toThrow(new RegExp(`Invalid persisted intervention ${field}`));
+  });
+
 });
