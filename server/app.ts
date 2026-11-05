@@ -36,6 +36,10 @@ export function createApp(): Express {
   // Centralized HTTP Security Headers middleware (applied to API, health, and frontend routes)
   app.use(securityHeaders);
 
+  // Apply API rate limiting before body parsing and CSRF checks so abusive requests
+  // are bounded before consuming parser resources or returning early from CSRF.
+  app.use("/api", generalApiLimiter);
+
   // Basic security and parsing middlewares
   app.use(
     cors({
@@ -89,9 +93,6 @@ export function createApp(): Express {
       }
     }),
   );
-
-  // Apply general API rate limiter to all /api routes
-  app.use("/api", generalApiLimiter);
 
   // API V1 Routes
   app.use("/api/v1/auth", authRouter);
