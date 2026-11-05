@@ -713,7 +713,7 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
     ["/api/v1/reports?limit=0", 400],
     ["/api/v1/reports?limit=25", 200],
     ["/api/v1/reports?limit=10&limit=20", 400],
-  ])("validates report list limit: %s", async (path, expectedStatus) => {
+  ] as const)("validates report list limit: %s", async (path, expectedStatus) => {
     const admin = await createTestUserAndLogin(companyA, "admin");
     const response = await apiRequest(path, { cookies: admin.cookies });
     expect(response.status).toBe(expectedStatus);
