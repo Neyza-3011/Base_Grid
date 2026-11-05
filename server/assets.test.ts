@@ -626,5 +626,11 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(response.status).toBe(400);
     });
 
+    it("rejects zero as an invalid asset list limit", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const response = await apiRequest("/api/v1/assets?limit=0", { cookies: auth.cookies });
+      expect(response.status).toBe(400);
+    });
+
   });
 });

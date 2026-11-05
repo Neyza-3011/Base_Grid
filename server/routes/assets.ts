@@ -79,11 +79,11 @@ assetsRouter.get(
         return;
       }
       const parsedLimit = Number(rawLimit);
-      if (!Number.isSafeInteger(parsedLimit)) {
+      if (!Number.isSafeInteger(parsedLimit) || parsedLimit < 1) {
         res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
         return;
       }
-      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 200, 1), 500);
+      limit = Math.min(parsedLimit, 500);
     }
 
     const assets = await assetService.getAssets(req.user.companyId, {
