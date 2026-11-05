@@ -200,6 +200,24 @@ describe("Field Clearing & Null Safety Suite", () => {
     });
   });
 
+  describe("Required location fields", () => {
+    it.each([
+      ["name", ""],
+      ["name", "   "],
+      ["name", null],
+      ["address", ""],
+      ["address", "   "],
+      ["address", null],
+      ["city", ""],
+      ["city", "   "],
+      ["city", null],
+    ])("rejects an empty required %s update instead of silently preserving stale data", async (field, value) => {
+      await expect(
+        customerService.updateLocation(companyId, "loc-1", { [field]: value } as any),
+      ).rejects.toThrow();
+    });
+  });
+
   describe("PostgresAdapter Query Generation Parity", () => {
     it("should generate SQL containing NULL assignments when null fields are passed to PostgresAdapter", async () => {
       const mockQuery = vi.fn().mockResolvedValue({

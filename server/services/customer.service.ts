@@ -154,9 +154,9 @@ export class CustomerService {
 
   public async updateLocation(companyId: string, locationId: string, input: UpdateLocationInput): Promise<LocationRecord> {
     validateInputObject(input, "I dati sede");
-    validateOptionalStringField(input.name, "Nome sede", true);
-    validateOptionalStringField(input.address, "Indirizzo", true);
-    validateOptionalStringField(input.city, "Città", true);
+    validateOptionalStringField(input.name, "Nome sede");
+    validateOptionalStringField(input.address, "Indirizzo");
+    validateOptionalStringField(input.city, "Città");
     validateOptionalStringField(input.province, "Provincia", true);
     validateOptionalStringField(input.postalCode, "CAP", true);
     validateOptionalStringField(input.notes, "Note", true);
@@ -166,9 +166,13 @@ export class CustomerService {
     validateColumnLength(input.province, "Provincia", 255);
     validateColumnLength(input.postalCode, "CAP", 50);
 
-    if (input.name !== undefined && input.name !== null) {
-      if (typeof input.name !== "string" || input.name.trim().length < 1) {
-        throw new BadRequestError("Il nome della sede, se specificato, non può essere vuoto.");
+    for (const [value, fieldName] of [
+      [input.name, "Nome sede"],
+      [input.address, "Indirizzo"],
+      [input.city, "Città"],
+    ] as const) {
+      if (value !== undefined && (typeof value !== "string" || value.trim().length < 1)) {
+        throw new BadRequestError(`${fieldName}, se specificato, non può essere vuoto.`);
       }
     }
 
