@@ -200,6 +200,20 @@ describe("Field Clearing & Null Safety Suite", () => {
     });
   });
 
+  describe("Required customer and asset names", () => {
+    it.each([null, "", "   "])("rejects null or empty customer displayName updates (%s)", async (displayName) => {
+      await expect(
+        customerService.updateCustomer(companyId, "cust-1", { displayName } as any),
+      ).rejects.toThrow();
+    });
+
+    it.each([null, "", "   "])("rejects null or empty asset name updates (%s)", async (name) => {
+      await expect(
+        assetService.updateAsset(companyId, "asset-1", { name } as any),
+      ).rejects.toThrow();
+    });
+  });
+
   describe("Required location fields", () => {
     it.each([
       ["name", ""],
