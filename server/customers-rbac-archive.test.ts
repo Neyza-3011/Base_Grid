@@ -773,5 +773,20 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       expect(response.status).toBe(expectedStatus);
     });
 
+
+    it.each([
+      ["/api/v1/customers?search=alpha&search=beta", 400],
+      ["/api/v1/customers?activeOnly=true&activeOnly=false", 400],
+      ["/api/v1/customers/customer-scalar-test/locations?search=alpha&search=beta", 400],
+      ["/api/v1/customers/customer-scalar-test/locations?activeOnly=true&activeOnly=false", 400],
+    ] as const)("rejects repeated customer/location list filters: %s", async (path, expectedStatus) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Scalar Filter Test Customer" });
+      const actualPath = path.replace("customer-scalar-test", customer.id);
+      const response = await apiRequest(actualPath, { cookies: auth.cookies });
+      expect(response.status).toBe(expectedStatus);
+    });
+
+
   });
 });
