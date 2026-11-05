@@ -96,7 +96,7 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     expect(updated.maxUsers).toBe(100);
   });
 
-  it.each([1.5, 0.5, Number.MAX_SAFE_INTEGER + 1])(
+  it.each([1.5, 0.5, 2_147_483_648])(
     "rejects non-integer or unsafe maxUsers value %s for superadmin",
     async (maxUsers) => {
       await expect(
