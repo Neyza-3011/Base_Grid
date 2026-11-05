@@ -134,8 +134,20 @@ customersRouter.get(
     }
     const search = req.query.search as string;
     const activeOnly = req.query.activeOnly !== "false";
-    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 100, 1), 500);
+    const rawLimit = req.query.limit;
+    let limit = 100;
+    if (rawLimit !== undefined) {
+      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      const parsedLimit = Number(rawLimit);
+      if (!Number.isSafeInteger(parsedLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 100, 1), 500);
+    }
 
     const customers = await customerService.getCustomers(req.user.companyId, search, activeOnly, limit);
     res.status(200).json(customers.map(toCustomerResponse));
@@ -258,8 +270,20 @@ customersRouter.get(
     }
     const search = req.query.search as string;
     const activeOnly = req.query.activeOnly !== "false";
-    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 100, 1), 500);
+    const rawLimit = req.query.limit;
+    let limit = 100;
+    if (rawLimit !== undefined) {
+      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      const parsedLimit = Number(rawLimit);
+      if (!Number.isSafeInteger(parsedLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 100, 1), 500);
+    }
 
     const locations = await customerService.getLocations(
       req.user.companyId,
