@@ -65,8 +65,20 @@ assetsRouter.get(
     const assetType = req.query.assetType as AssetType | undefined;
     const status = req.query.status as AssetStatus | undefined;
     const activeOnly = req.query.activeOnly !== "false";
-    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 200, 1), 500);
+    const rawLimit = req.query.limit;
+    let limit = 200;
+    if (rawLimit !== undefined) {
+      if (typeof rawLimit !== "string" || !/^\d+$/.test(rawLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      const parsedLimit = Number(rawLimit);
+      if (!Number.isSafeInteger(parsedLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 200, 1), 500);
+    }
 
     const assets = await assetService.getAssets(req.user.companyId, {
       search,

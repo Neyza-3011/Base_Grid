@@ -326,6 +326,18 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(searchRes.data[0].id).toBe(a2.id);
     });
 
+    it.each([
+      "/api/v1/assets?limit=1.5",
+      "/api/v1/assets?limit=10junk",
+      "/api/v1/assets?limit=1&limit=2",
+      "/api/v1/assets?limit=999999999999999999999",
+    ])("rejects malformed asset list limit: %s", async (url) => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const res = await apiRequest(url, { cookies: auth.cookies });
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toMatch(/limit non valido/i);
+    });
+
     it("updates an asset including name, serialNumber and status", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const customer = await db.createCustomer(companyA, { displayName: "Acme SpA" });
