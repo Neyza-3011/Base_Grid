@@ -1885,5 +1885,12 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
   });
 
+  it("rejects repeated scalar list filters with a client error", async () => {
+    const response = await apiRequest("/api/v1/interventions?status=nuovo&status=completato", {
+      cookies: adminA.cookies,
+    });
+    expect(response.status).toBe(400);
+  });
+
 });
 
