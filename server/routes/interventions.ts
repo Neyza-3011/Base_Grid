@@ -63,6 +63,16 @@ interventionsRouter.get(
       return;
     }
 
+    const scalarQueryKeys = [
+      "search", "status", "priority", "technicianId", "customerId", "locationId",
+      "assetId", "scheduledStartFrom", "scheduledStartTo", "scheduledStart",
+      "scheduledEnd", "cursor", "limit",
+    ] as const;
+    if (scalarQueryKeys.some((key) => req.query[key] !== undefined && typeof req.query[key] !== "string")) {
+      res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
+      return;
+    }
+
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
     const priority = req.query.priority as string | undefined;
