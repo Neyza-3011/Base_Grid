@@ -56,6 +56,26 @@ export class InterventionService {
       effectiveFilters.technicianId = actor.id;
     }
 
+    if (effectiveFilters.cursor !== undefined) {
+      const cursor = effectiveFilters.cursor;
+      if (typeof cursor !== "string" || cursor.length > 512 || !/^[A-Za-z0-9+/]+={0,2}$/.test(cursor)) {
+        throw new BadRequestError("Cursore di paginazione non valido.");
+      }
+      const decodedCursor = Buffer.from(cursor, "base64").toString("utf8");
+      const separator = decodedCursor.indexOf("::");
+      const cursorCreatedAt = separator > 0 ? decodedCursor.slice(0, separator) : "";
+      const cursorId = separator > 0 ? decodedCursor.slice(separator + 2) : "";
+      if (
+        Buffer.from(decodedCursor, "utf8").toString("base64") !== cursor ||
+        !cursorCreatedAt ||
+        !cursorId ||
+        decodedCursor.indexOf("::", separator + 2) !== -1 ||
+        !Number.isFinite(new Date(cursorCreatedAt).getTime())
+      ) {
+        throw new BadRequestError("Cursore di paginazione non valido.");
+      }
+    }
+
     if (effectiveFilters.scheduledStartFrom && isNaN(new Date(effectiveFilters.scheduledStartFrom).getTime())) {
       throw new BadRequestError("Formato data inizio ricerca non valido.");
     }
