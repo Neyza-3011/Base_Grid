@@ -618,5 +618,13 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(persistedAsset?.name).toBe("Quadro Elettrico Tenant A");
       expect(persistedAsset?.isActive).toBe(true);
     });
+    it("rejects repeated scalar list filters instead of passing arrays into the service", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const response = await apiRequest("/api/v1/assets?search=quad&search=inverter", {
+        cookies: auth.cookies,
+      });
+      expect(response.status).toBe(400);
+    });
+
   });
 });
