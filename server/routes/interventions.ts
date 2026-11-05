@@ -91,11 +91,11 @@ interventionsRouter.get(
         return;
       }
       const parsedLimit = Number(rawLimit);
-      if (!Number.isSafeInteger(parsedLimit)) {
+      if (!Number.isSafeInteger(parsedLimit) || parsedLimit < 1) {
         res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
         return;
       }
-      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 50, 1), 100);
+      limit = Math.min(parsedLimit, 100);
     }
 
     // Enforce that a technician can only query interventions assigned to themselves
