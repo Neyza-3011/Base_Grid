@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth";
 import { db } from "../db";
 import { asyncHandler } from "../async-handler";
-import { AssetService } from "../services/asset.service";
+import { AssetService, VALID_ASSET_STATUSES, VALID_ASSET_TYPES } from "../services/asset.service";
 import {
   AssetRecord,
   AssetResponse,
@@ -70,7 +70,21 @@ assetsRouter.get(
     const locationId = req.query.locationId as string | undefined;
     const assetType = req.query.assetType as AssetType | undefined;
     const status = req.query.status as AssetStatus | undefined;
-    const activeOnly = req.query.activeOnly !== "false";
+    const activeOnlyRaw = req.query.activeOnly as string | undefined;
+
+    if (assetType !== undefined && !VALID_ASSET_TYPES.includes(assetType)) {
+      res.status(400).json({ detail: "Tipo impianto non valido." });
+      return;
+    }
+    if (status !== undefined && !VALID_ASSET_STATUSES.includes(status)) {
+      res.status(400).json({ detail: "Stato impianto non valido." });
+      return;
+    }
+    if (activeOnlyRaw !== undefined && activeOnlyRaw !== "true" && activeOnlyRaw !== "false") {
+      res.status(400).json({ detail: "Parametro activeOnly non valido: usare true o false." });
+      return;
+    }
+    const activeOnly = activeOnlyRaw !== "false";
     const rawLimit = req.query.limit;
     let limit = 200;
     if (rawLimit !== undefined) {
