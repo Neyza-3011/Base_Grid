@@ -145,4 +145,15 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(after?.address).toBe(before?.address);
     expect(after?.defaultHourlyRate).toBe(before?.defaultHourlyRate);
   });
+
+  it("rejects repeated include_logo query parameters", async () => {
+    const accessToken = await tokenFor("admin@rossi.it");
+    const response = await apiRequest(
+      "/api/v1/company/settings?include_logo=false&include_logo=false",
+      { accessToken },
+    );
+
+    expect(response.status).toBe(400);
+  });
+
 });
