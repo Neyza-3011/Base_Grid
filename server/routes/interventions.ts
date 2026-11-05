@@ -76,7 +76,7 @@ interventionsRouter.get(
     const rawLimit = req.query.limit;
     let limit = 50;
     if (rawLimit !== undefined) {
-      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+      if (typeof rawLimit !== "string" || !/^\d+$/.test(rawLimit)) {
         res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
         return;
       }
