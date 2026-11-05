@@ -96,6 +96,15 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     expect(updated.maxUsers).toBe(100);
   });
 
+  it.each([1.5, 0.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects non-integer or unsafe maxUsers value %s for superadmin",
+    async (maxUsers) => {
+      await expect(
+        companyService.updateCompanySettings("comp-001", { maxUsers }, "superadmin")
+      ).rejects.toThrow(ValidationError);
+    },
+  );
+
   it("persists a valid PNG company logo for PDF branding", async () => {
     const logoDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
     const updated = await companyService.updateCompanySettings(
