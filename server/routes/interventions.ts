@@ -73,8 +73,20 @@ interventionsRouter.get(
     const scheduledStartFrom = (req.query.scheduledStartFrom || req.query.scheduledStart) as string | undefined;
     const scheduledStartTo = (req.query.scheduledStartTo || req.query.scheduledEnd) as string | undefined;
     const cursor = req.query.cursor as string | undefined;
-    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 1), 100);
+    const rawLimit = req.query.limit;
+    let limit = 50;
+    if (rawLimit !== undefined) {
+      if (typeof rawLimit !== "string" || !/^\\d+$/.test(rawLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      const parsedLimit = Number(rawLimit);
+      if (!Number.isSafeInteger(parsedLimit)) {
+        res.status(400).json({ detail: "Parametro limit non valido: usare un intero positivo." });
+        return;
+      }
+      limit = Math.min(Math.max(parsedLimit > 0 ? parsedLimit : 50, 1), 100);
+    }
 
     // Enforce that a technician can only query interventions assigned to themselves
     if (req.user.role === "technician") {
