@@ -72,6 +72,14 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     expect(updated.defaultHourlyRate).toBe(60);
   });
 
+  it.each(["", "   "])("rejects empty company address %j to preserve setup access", async (address) => {
+    await expect(
+      companyService.updateCompanySettings("comp-001", { address }, "admin")
+    ).rejects.toThrow(ValidationError);
+    expect(sampleCompany.address).toBe("Via Roma 10, Milano");
+    expect(mockDb.updateCompany).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid hourly rate", async () => {
     await expect(
       companyService.updateCompanySettings("comp-001", { defaultHourlyRate: -10 }, "admin")
