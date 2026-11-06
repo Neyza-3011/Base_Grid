@@ -66,13 +66,13 @@ export class CustomerService {
 
     return await this.db.createCustomer(companyId, {
       displayName: input.displayName.trim(),
-      legalName: input.legalName?.trim() || undefined,
-      vatNumber: input.vatNumber?.trim() || undefined,
-      taxCode: input.taxCode?.trim() || undefined,
-      email: input.email,
-      phoneNumber: input.phoneNumber?.trim() || undefined,
-      pec: input.pec,
-      notes: input.notes?.trim() || undefined,
+      legalName: input.legalName,
+      vatNumber: input.vatNumber,
+      taxCode: input.taxCode,
+      email: input.email != null && input.email.trim().length > 0 ? input.email.trim() : undefined,
+      phoneNumber: input.phoneNumber,
+      pec: input.pec != null && input.pec.trim().length > 0 ? input.pec.trim() : undefined,
+      notes: input.notes,
     });
   }
 
@@ -166,9 +166,9 @@ export class CustomerService {
       name: input.name.trim(),
       address: input.address.trim(),
       city: input.city.trim(),
-      province: input.province,
-      postalCode: input.postalCode,
-      notes: input.notes,
+      province: input.province?.trim() || undefined,
+      postalCode: input.postalCode?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
     });
   }
 
