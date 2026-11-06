@@ -166,9 +166,9 @@ export class CustomerService {
       name: input.name.trim(),
       address: input.address.trim(),
       city: input.city.trim(),
-      province: input.province,
-      postalCode: input.postalCode,
-      notes: input.notes,
+      province: input.province?.trim() || undefined,
+      postalCode: input.postalCode?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
     });
   }
 
