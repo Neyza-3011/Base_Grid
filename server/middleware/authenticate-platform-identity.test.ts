@@ -4,11 +4,17 @@ import { config } from "../config";
 import { db } from "../db";
 import { generateTokens } from "../security";
 
-describe("authentication middleware canonical CEO identity", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+const originalJwtSecret = process.env.JWT_SECRET;
+const originalEmailVerificationEnabled = config.EMAIL_VERIFICATION_ENABLED;
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  config.EMAIL_VERIFICATION_ENABLED = originalEmailVerificationEnabled;
+  if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = originalJwtSecret;
+});
+
+describe("authentication middleware canonical CEO identity", () => {
   it("does not let a non-canonical user with a stale ceo role bypass tenant suspension", async () => {
     process.env.JWT_SECRET = "test-cryptographic-jwt-secret-key-must-be-32-chars-long-secure!";
     config.EMAIL_VERIFICATION_ENABLED = false;
@@ -41,6 +47,11 @@ describe("authentication middleware canonical CEO identity", () => {
     vi.spyOn(db, "findCompanyById").mockResolvedValue(company as any);
 
     const { accessToken } = generateTokens(user as any);
+    let nextCalled = false;
+    let finish!: () => void;
+    const completed = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     const response = {
       statusCode: 200,
       body: undefined as unknown,
@@ -50,14 +61,10 @@ describe("authentication middleware canonical CEO identity", () => {
       },
       json(body: unknown) {
         this.body = body;
+        finish();
         return this;
       },
     };
-    let nextCalled = false;
-    let finish!: () => void;
-    const completed = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
 
     authenticate(
       {
@@ -72,13 +79,6 @@ describe("authentication middleware canonical CEO identity", () => {
       }) as any,
     );
 
-    // Resolve when the middleware writes a response, or when next() is called.
-    const originalJson = response.json.bind(response);
-    response.json = (body: unknown) => {
-      originalJson(body);
-      finish();
-      return response;
-    };
     await completed;
 
     expect(nextCalled).toBe(false);
