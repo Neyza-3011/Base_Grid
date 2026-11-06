@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "./db";
 import { TeamService } from "./services/team.service";
+import { config } from "./config";
 
 describe("Team owner account protection", () => {
   let service: TeamService;
@@ -45,7 +46,7 @@ describe("Team owner account protection", () => {
     expect(unchanged?.isActive).toBe(true);
   });
   async function createMasterTenantAdmin() {
-    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
     if (!ceo) throw new Error("Missing seeded platform CEO");
     return db.createTeamMember({
       companyId: ceo.companyId,
@@ -61,7 +62,7 @@ describe("Team owner account protection", () => {
   }
 
   it("prevents a master-tenant admin from changing the platform CEO role", async () => {
-    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
     if (!ceo) throw new Error("Missing seeded platform CEO");
     const masterAdmin = await createMasterTenantAdmin();
 
@@ -75,7 +76,7 @@ describe("Team owner account protection", () => {
   });
 
   it("prevents a master-tenant admin from deactivating the platform CEO", async () => {
-    const ceo = await db.findUserByEmail("jack.cardinali15@gmail.com");
+    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
     if (!ceo) throw new Error("Missing seeded platform CEO");
     const masterAdmin = await createMasterTenantAdmin();
 
