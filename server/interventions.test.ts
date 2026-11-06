@@ -1850,6 +1850,21 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(resTo.data.detail || resTo.data.error).toMatch(/data/i);
     });
 
+    it.each([
+      ["scheduledStartFrom", "2026-02-30T00:00:00.000Z", /data inizio/i],
+      ["scheduledStartTo", "2026-02-30T00:00:00.000Z", /data fine/i],
+      ["scheduledStart", "2026-02-30T00:00:00.000Z", /data inizio/i],
+      ["scheduledEnd", "2026-02-30T00:00:00.000Z", /data fine/i],
+    ])("rejects impossible calendar dates for GET filter %s", async (field, value, expectedMessage) => {
+      const response = await apiRequest(`/api/v1/interventions?${field}=${encodeURIComponent(value)}`, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.data.detail || response.data.error).toMatch(expectedMessage);
+    });
+
     it("rejects inverted scheduledStartFrom and scheduledStartTo date range in GET list query filters (returns 400)", async () => {
       const resInverted = await apiRequest("/api/v1/interventions?scheduledStartFrom=2026-10-05T00:00:00.000Z&scheduledStartTo=2026-10-01T00:00:00.000Z", {
         method: "GET",

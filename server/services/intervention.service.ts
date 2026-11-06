@@ -86,10 +86,10 @@ export class InterventionService {
       }
     }
 
-    if (effectiveFilters.scheduledStartFrom && isNaN(new Date(effectiveFilters.scheduledStartFrom).getTime())) {
+    if (effectiveFilters.scheduledStartFrom && !isValidScheduledDate(effectiveFilters.scheduledStartFrom)) {
       throw new BadRequestError("Formato data inizio ricerca non valido.");
     }
-    if (effectiveFilters.scheduledStartTo && isNaN(new Date(effectiveFilters.scheduledStartTo).getTime())) {
+    if (effectiveFilters.scheduledStartTo && !isValidScheduledDate(effectiveFilters.scheduledStartTo)) {
       throw new BadRequestError("Formato data fine ricerca non valido.");
     }
     if (effectiveFilters.scheduledStartFrom && effectiveFilters.scheduledStartTo) {
