@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "./db";
 import { TeamService } from "./services/team.service";
-import { config } from "./config";
 
 describe("Team owner account protection", () => {
   let service: TeamService;
@@ -45,48 +44,64 @@ describe("Team owner account protection", () => {
     const unchanged = await db.getUserByIdAndCompany(owner.id, companyId);
     expect(unchanged?.isActive).toBe(true);
   });
-  async function createMasterTenantAdmin() {
-    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
-    if (!ceo) throw new Error("Missing seeded platform CEO");
-    return db.createTeamMember({
-      companyId: ceo.companyId,
-      companyName: ceo.companyName,
-      email: `master-admin-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`,
-      fullName: "Master Tenant Admin",
-      role: "admin",
+  function createIsolatedPlatformService() {
+    const ceo = {
+      id: "usr-platform-ceo-protection-test",
+      email: "platform-ceo-test@example.test",
+      fullName: "Platform CEO",
+      role: "superadmin",
+      platformRole: "ceo",
+      companyId: "comp-master-protection-test",
+      companyName: "Master Platform",
       passwordHash: "test-hash",
       salt: "test-salt",
       isActive: true,
+      provider: "local",
       emailConfirmed: true,
-    });
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      authVersion: 0,
+    };
+    const updateTeamMember = vi.fn().mockImplementation(async () => ({
+      ...ceo,
+      role: "technician",
+      isActive: false,
+    }));
+    const isolatedDb = {
+      getUserByIdAndCompany: vi.fn(async (userId: string, targetCompanyId: string) =>
+        userId === ceo.id && targetCompanyId === ceo.companyId ? ceo : null
+      ),
+      updateTeamMember,
+    };
+    return {
+      service: new TeamService(isolatedDb as any),
+      ceo,
+      updateTeamMember,
+    };
   }
 
   it("prevents a master-tenant admin from changing the platform CEO role", async () => {
-    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
-    if (!ceo) throw new Error("Missing seeded platform CEO");
-    const masterAdmin = await createMasterTenantAdmin();
+    const { service: isolatedService, ceo, updateTeamMember } = createIsolatedPlatformService();
 
     await expect(
-      service.updateTeamMember(ceo.companyId, ceo.id, masterAdmin.id, { role: "technician" }),
-    ).rejects.toThrow(/Account CEO\/piattaforma non modificabile tramite la gestione team/i);
+      isolatedService.updateTeamMember(ceo.companyId, ceo.id, "master-admin-test", { role: "technician" }),
+    ).rejects.toThrow(/Account CEO\\/piattaforma non modificabile tramite la gestione team/i);
 
-    const unchanged = await db.findUserById(ceo.id);
-    expect(unchanged?.role).toBe("superadmin");
-    expect(unchanged?.platformRole).toBe("ceo");
+    expect(updateTeamMember).not.toHaveBeenCalled();
+    expect(ceo.role).toBe("superadmin");
+    expect(ceo.platformRole).toBe("ceo");
   });
 
   it("prevents a master-tenant admin from deactivating the platform CEO", async () => {
-    const ceo = await db.findUserByEmail(config.SUPERADMIN_EMAIL);
-    if (!ceo) throw new Error("Missing seeded platform CEO");
-    const masterAdmin = await createMasterTenantAdmin();
+    const { service: isolatedService, ceo, updateTeamMember } = createIsolatedPlatformService();
 
     await expect(
-      service.changeMemberStatus(ceo.companyId, ceo.id, masterAdmin.id, false),
-    ).rejects.toThrow(/Account CEO\/piattaforma non modificabile tramite la gestione team/i);
+      isolatedService.changeMemberStatus(ceo.companyId, ceo.id, "master-admin-test", false),
+    ).rejects.toThrow(/Account CEO\\/piattaforma non modificabile tramite la gestione team/i);
 
-    const unchanged = await db.findUserById(ceo.id);
-    expect(unchanged?.isActive).toBe(true);
-    expect(unchanged?.platformRole).toBe("ceo");
+    expect(updateTeamMember).not.toHaveBeenCalled();
+    expect(ceo.isActive).toBe(true);
+    expect(ceo.platformRole).toBe("ceo");
   });
 
 });
