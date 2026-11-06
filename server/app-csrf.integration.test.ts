@@ -59,4 +59,22 @@ describe("CSRF middleware integration in the real application", () => {
     expect(response.status).toBe(401);
     expect(response.body.detail).not.toMatch(/CSRF/i);
   });
+
+  it.each(["put", "delete"] as const)(
+    "rejects %s state-changing requests without a CSRF token",
+    async (method) => {
+      const response = method === "put"
+        ? await request(createApp()).put("/api/v1/reports/report-test").send({})
+        : await request(createApp()).delete("/api/v1/reports/report-test");
+
+      expect(response.status).toBe(403);
+      expect(response.body.detail).toMatch(/CSRF/i);
+    },
+  );
+
+  it("does not require CSRF for HEAD requests, while authentication remains enforced", async () => {
+    const response = await request(createApp()).head("/api/v1/reports");
+
+    expect(response.status).toBe(401);
+  });
 });
