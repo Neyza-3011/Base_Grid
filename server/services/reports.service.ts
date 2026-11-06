@@ -98,6 +98,9 @@ export class ReportsService {
       if (!interventionRecord) {
         throw new NotFoundError("Intervento non trovato o non accessibile.");
       }
+      if (interventionRecord.status === "fatturato") {
+        throw new BadRequestError("Non è possibile creare un rapportino per un intervento già fatturato.");
+      }
       if (actor?.role === "technician" && interventionRecord.technicianId !== actor.id) {
         throw new ForbiddenError("Il tecnico può creare un rapportino soltanto per un intervento assegnato a sé.");
       }
