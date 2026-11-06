@@ -58,8 +58,14 @@ export class CustomerService {
     }
 
     return await this.db.createCustomer(companyId, {
-      ...input,
       displayName: input.displayName.trim(),
+      legalName: input.legalName,
+      vatNumber: input.vatNumber,
+      taxCode: input.taxCode,
+      email: input.email,
+      phoneNumber: input.phoneNumber,
+      pec: input.pec,
+      notes: input.notes,
     });
   }
 
@@ -145,10 +151,12 @@ export class CustomerService {
     }
 
     return await this.db.createLocation(companyId, customerId, {
-      ...input,
       name: input.name.trim(),
       address: input.address.trim(),
       city: input.city.trim(),
+      province: input.province,
+      postalCode: input.postalCode,
+      notes: input.notes,
     });
   }
 
