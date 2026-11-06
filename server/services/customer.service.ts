@@ -69,9 +69,9 @@ export class CustomerService {
       legalName: input.legalName?.trim() || undefined,
       vatNumber: input.vatNumber?.trim() || undefined,
       taxCode: input.taxCode?.trim() || undefined,
-      email: input.email != null && input.email.trim().length > 0 ? input.email.trim() : undefined,
+      email: input.email,
       phoneNumber: input.phoneNumber?.trim() || undefined,
-      pec: input.pec != null && input.pec.trim().length > 0 ? input.pec.trim() : undefined,
+      pec: input.pec,
       notes: input.notes?.trim() || undefined,
     });
   }
