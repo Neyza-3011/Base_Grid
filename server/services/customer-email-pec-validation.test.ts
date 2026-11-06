@@ -4,6 +4,31 @@ import { BadRequestError } from "../errors";
 import { CustomerService } from "./customer.service";
 
 describe("CustomerService email and PEC validation", () => {
+  it("trims valid customer email and PEC before persistence", async () => {
+    const db = new DatabaseStore();
+    const service = new CustomerService(db);
+    const customer = await service.createCustomer("company-email-validation", {
+      displayName: "Cliente Test",
+      email: "  cliente@example.it  ",
+      pec: "  cliente@pec.example.it  ",
+    });
+
+    expect(customer.email).toBe("cliente@example.it");
+    expect(customer.pec).toBe("cliente@pec.example.it");
+  });
+
+  it("normalizes blank email and PEC to absent optional values on create", async () => {
+    const service = new CustomerService(new DatabaseStore());
+    const customer = await service.createCustomer("company-email-validation", {
+      displayName: "Cliente Test",
+      email: "   ",
+      pec: "",
+    });
+
+    expect(customer.email).toBeUndefined();
+    expect(customer.pec).toBeUndefined();
+  });
+
   it("rejects malformed customer email on create", async () => {
     const service = new CustomerService(new DatabaseStore());
     await expect(service.createCustomer("company-email-validation", {
