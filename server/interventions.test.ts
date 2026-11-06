@@ -1757,6 +1757,33 @@ describe("Interventions Backend Module (P1.4)", () => {
   });
 
   describe("9. Single-Date Validation in PUT Updates & Query Filter Validation", () => {
+    it.each([
+      ["scheduledStart", "2026-02-30T10:00:00.000Z", /data inizio/i],
+      ["scheduledEnd", "2026-02-30T12:00:00.000Z", /data fine/i],
+    ])("rejects impossible calendar date for %s and leaves the record unchanged", async (field, value, expectedMessage) => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Test data calendario impossibile",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const res = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { [field]: value },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.detail || res.data.error).toMatch(expectedMessage);
+      const unchanged = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(unchanged?.scheduledStart).toBeUndefined();
+      expect(unchanged?.scheduledEnd).toBeUndefined();
+    });
+
+
     it("rejects invalid scheduledStart on PUT update when scheduledEnd is undefined or null (returns 400)", async () => {
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
