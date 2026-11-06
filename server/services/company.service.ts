@@ -101,6 +101,9 @@ export class CompanyService {
         throw new ValidationError("Address must be a string");
       }
       const addr = input.address.trim();
+      if (addr.length === 0) {
+        throw new ValidationError("L'indirizzo aziendale è obbligatorio per completare la configurazione.");
+      }
       if (addr.length > 255) {
         throw new ValidationError("Address exceeds maximum length of 255 characters");
       }
