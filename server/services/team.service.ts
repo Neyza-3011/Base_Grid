@@ -167,7 +167,7 @@ export class TeamService {
       throw new NotFoundError("Utente non trovato in questa azienda.");
     }
     if (user.platformRole === "ceo" || user.role === "superadmin") {
-      throw new ForbiddenError("L'account CEO/piattaforma non può essere modificato dalla gestione team.");
+      throw new ForbiddenError("Account CEO/piattaforma non modificabile tramite la gestione team.");
     }
 
     const updates: Partial<UpdateTeamMemberInput> = {};
@@ -250,7 +250,7 @@ export class TeamService {
       throw new NotFoundError("Utente non trovato in questa azienda.");
     }
     if (user.platformRole === "ceo" || user.role === "superadmin") {
-      throw new ForbiddenError("L'account CEO/piattaforma non può essere modificato dalla gestione team.");
+      throw new ForbiddenError("Account CEO/piattaforma non modificabile tramite la gestione team.");
     }
 
     if (user.role === "owner") {
