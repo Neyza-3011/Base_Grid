@@ -85,7 +85,7 @@ describe("Team owner account protection", () => {
 
     await expect(
       isolatedService.updateTeamMember(ceo.companyId, ceo.id, "master-admin-test", { role: "technician" }),
-    ).rejects.toThrow(/Account CEO\\/piattaforma non modificabile tramite la gestione team/i);
+    ).rejects.toThrow(/Account CEO.*non modificabile tramite la gestione team/i);
 
     expect(updateTeamMember).not.toHaveBeenCalled();
     expect(ceo.role).toBe("superadmin");
@@ -97,7 +97,7 @@ describe("Team owner account protection", () => {
 
     await expect(
       isolatedService.changeMemberStatus(ceo.companyId, ceo.id, "master-admin-test", false),
-    ).rejects.toThrow(/Account CEO\\/piattaforma non modificabile tramite la gestione team/i);
+    ).rejects.toThrow(/Account CEO.*non modificabile tramite la gestione team/i);
 
     expect(updateTeamMember).not.toHaveBeenCalled();
     expect(ceo.isActive).toBe(true);
