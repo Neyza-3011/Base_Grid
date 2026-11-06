@@ -62,7 +62,10 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
     res.status(401).json({ detail: "Azienda associata non trovata." });
     return;
   }
-  if (company.isActive === false && user.platformRole !== "ceo") {
+  const isCanonicalPlatformCeo =
+    user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+
+  if (company.isActive === false && !isCanonicalPlatformCeo) {
     res.status(403).json({ code: "COMPANY_SUSPENDED", detail: "L'accesso all'azienda è stato sospeso dalla piattaforma." });
     return;
   }
@@ -75,7 +78,7 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
   // The company identity and completion state are derived exclusively from persisted server data.
   const requestPath = `${req.baseUrl}${req.path}`;
   const setupComplete = Boolean(company.name?.trim() && company.address?.trim());
-  if (!setupComplete && user.platformRole !== "ceo") {
+  if (!setupComplete && !isCanonicalPlatformCeo) {
     const isSessionEndpoint = requestPath === "/api/v1/auth/session";
     const isCompanySettingsEndpoint = requestPath === "/api/v1/company/settings";
     if (isCompanySettingsEndpoint && user.role !== "owner") {
