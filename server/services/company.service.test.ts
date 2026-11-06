@@ -86,6 +86,32 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     ).rejects.toThrow(ValidationError);
   });
 
+  it("persists subscription status updates for superadmin", async () => {
+    const updated = await companyService.updateCompanySettings(
+      "comp-001",
+      { stripeSubscriptionStatus: "Piano pilota" },
+      "superadmin",
+    );
+    expect(updated.stripeSubscriptionStatus).toBe("Piano pilota");
+    expect(mockDb.updateCompany).toHaveBeenCalledWith(
+      "comp-001",
+      expect.objectContaining({ stripeSubscriptionStatus: "Piano pilota" }),
+    );
+  });
+
+  it("ignores subscription status updates for non-superadmin roles", async () => {
+    const updated = await companyService.updateCompanySettings(
+      "comp-001",
+      { stripeSubscriptionStatus: "Piano non autorizzato" },
+      "admin",
+    );
+    expect(updated.stripeSubscriptionStatus).toBe("active");
+    expect(mockDb.updateCompany).toHaveBeenCalledWith(
+      "comp-001",
+      expect.not.objectContaining({ stripeSubscriptionStatus: expect.anything() }),
+    );
+  });
+
   it("ignores maxUsers update if user is not superadmin", async () => {
     const updated = await companyService.updateCompanySettings(
       "comp-001",
