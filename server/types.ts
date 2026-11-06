@@ -443,6 +443,7 @@ export interface UpdateCompanyInput {
   address?: string;
   defaultHourlyRate?: number;
   reportFooterNotes?: string;
+  stripeSubscriptionStatus?: string;
   maxUsers?: number;
   featurePdfExport?: boolean;
   logoDataUrl?: string | null;
