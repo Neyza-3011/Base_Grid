@@ -676,6 +676,24 @@ describe("ReportsService Domain Logic & Tenant Boundaries", () => {
           );
         });
 
+        it("rejects report creation for an already invoiced intervention", async () => {
+          const intervention = mockInterventions.get("int-1-tenant-a");
+          if (!intervention) throw new Error("Missing test intervention");
+          intervention.status = "fatturato";
+
+          const payload: CreateReportRequest = {
+            work_hours: 2,
+            date: "2026-09-26",
+            time: "10:00",
+            intervention_id: "int-1-tenant-a",
+          };
+
+          await expect(
+            reportsService.createReport("comp-tenant-a", "Luigi", payload)
+          ).rejects.toThrow(BadRequestError);
+          expect(mockDb.createReport).not.toHaveBeenCalled();
+        });
+
         it("automatically derives customer, location, and client name from intervention when omitted", async () => {
           const payload: CreateReportRequest = {
             work_hours: 2,
