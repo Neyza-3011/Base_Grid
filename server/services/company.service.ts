@@ -142,6 +142,19 @@ export class CompanyService {
       updates.reportFooterNotes = notes;
     }
 
+    // The company settings route exposes this metadata field only to superadmins.
+    // Persist it explicitly so the API does not return success while silently ignoring it.
+    if (input.stripeSubscriptionStatus !== undefined && userRole === "superadmin") {
+      if (typeof input.stripeSubscriptionStatus !== "string") {
+        throw new ValidationError("Subscription status must be a string");
+      }
+      const subscriptionStatus = input.stripeSubscriptionStatus.trim();
+      if (subscriptionStatus.length > 255) {
+        throw new ValidationError("Subscription status exceeds maximum length of 255 characters");
+      }
+      updates.stripeSubscriptionStatus = subscriptionStatus;
+    }
+
     if (input.maxUsers !== undefined && userRole === "superadmin") {
       if (typeof input.maxUsers !== "number") {
         throw new ValidationError("maxUsers must be a number");
