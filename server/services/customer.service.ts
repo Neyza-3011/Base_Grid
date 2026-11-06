@@ -1,6 +1,7 @@
 import { IDatabaseAdapter } from "../db";
 import { CreateCustomerInput, CreateLocationInput, CustomerRecord, LocationRecord, UpdateCustomerInput, UpdateLocationInput } from "../types";
 import { BadRequestError, NotFoundError } from "../errors";
+import { isValidEmail } from "../security";
 
 function validateInputObject(input: unknown, entityName = "I dati"): void {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -50,6 +51,12 @@ export class CustomerService {
     validateColumnLength(input.phoneNumber, "Telefono", 255);
     validateOptionalStringField(input.email, "Email", true);
     validateColumnLength(input.email, "Email", 255);
+    if (input.email !== undefined && input.email !== null && input.email.trim() !== "" && !isValidEmail(input.email)) {
+      throw new BadRequestError("Formato email cliente non valido.");
+    }
+    if (input.pec !== undefined && input.pec !== null && input.pec.trim() !== "" && !isValidEmail(input.pec)) {
+      throw new BadRequestError("Formato PEC non valido.");
+    }
     validateOptionalStringField(input.notes, "Note", true);
 
     validateColumnLength(input.displayName, "Nome cliente", 255);
@@ -84,6 +91,12 @@ export class CustomerService {
     validateColumnLength(input.phoneNumber, "Telefono", 255);
     validateOptionalStringField(input.email, "Email", true);
     validateColumnLength(input.email, "Email", 255);
+    if (input.email !== undefined && input.email !== null && input.email.trim() !== "" && !isValidEmail(input.email)) {
+      throw new BadRequestError("Formato email cliente non valido.");
+    }
+    if (input.pec !== undefined && input.pec !== null && input.pec.trim() !== "" && !isValidEmail(input.pec)) {
+      throw new BadRequestError("Formato PEC non valido.");
+    }
     validateOptionalStringField(input.notes, "Note", true);
 
     validateColumnLength(input.displayName, "Nome cliente", 255);
