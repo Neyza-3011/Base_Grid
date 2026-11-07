@@ -33,15 +33,23 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-async function request(path: string, userEmail: string, csrf = "csrf") {
+async function request(
+  path: string,
+  userEmail: string,
+  csrf = "csrf",
+  options: { method?: string; body?: unknown } = {},
+) {
   const user = await db.findUserByEmail(userEmail);
   if (!user) throw new Error(`Missing test user: ${userEmail}`);
   const { accessToken } = generateTokens(user);
   const response = await fetch(`${baseUrl}${path}`, {
+    method: options.method ?? "GET",
     headers: {
       cookie: `access_token=${accessToken}; csrf_token=${csrf}`,
       "x-csrf-token": csrf,
+      ...(options.body === undefined ? {} : { "content-type": "application/json" }),
     },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   return { response, body: await response.json() };
 }
@@ -69,5 +77,47 @@ describe("mandatory company setup gate", () => {
     await db.updateCompany("comp-rossi-001", { address: "Via Demo 10, Roma" });
     const allowed = await request("/api/v1/users/me", "admin@rossi.it");
     expect(allowed.response.status).toBe(200);
+  });
+
+  it("persists setup through the real company settings HTTP route and then unlocks workflows", async () => {
+    const saved = await request("/api/v1/company/settings", "admin@rossi.it", "csrf-save", {
+      method: "PUT",
+      body: {
+        name: "Impianti Rossi Srl",
+        address: "Via Demo 10, Roma",
+        vat_number: "IT12345678901",
+        default_hourly_rate: 45,
+        report_footer_notes: "Interventi verificati",
+      },
+    });
+
+    expect(saved.response.status).toBe(200);
+    const persisted = await db.findCompanyById("comp-rossi-001");
+    expect(persisted).toMatchObject({
+      name: "Impianti Rossi Srl",
+      address: "Via Demo 10, Roma",
+      vatNumber: "IT12345678901",
+      defaultHourlyRate: 45,
+      reportFooterNotes: "Interventi verificati",
+    });
+
+    const workflow = await request("/api/v1/users/me", "admin@rossi.it");
+    expect(workflow.response.status).toBe(200);
+  });
+
+  it("rejects invalid setup without mutating persisted company settings", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const rejected = await request("/api/v1/company/settings", "admin@rossi.it", "csrf-invalid", {
+      method: "PUT",
+      body: {
+        name: "Impianti Rossi Srl",
+        address: "   ",
+      },
+    });
+
+    expect(rejected.response.status).toBe(400);
+    const after = await db.findCompanyById("comp-rossi-001");
+    expect(after?.name).toBe(before?.name);
+    expect(after?.address).toBe(before?.address);
   });
 });
