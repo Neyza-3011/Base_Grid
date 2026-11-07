@@ -6,7 +6,7 @@ import { tokenStore } from "../token-store";
 import { asyncHandler } from "../async-handler";
 import { TeamService } from "../services/team.service";
 import { TEAM_ADMIN_ROLES } from "../types";
-import { config } from "../config";
+import { config, PLATFORM_CEO_EMAIL } from "../config";
 import { emailService } from "../email-service";
 
 export const usersRouter = Router();
@@ -61,8 +61,19 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       res.status(400).json({ detail: "Formato email non valido." });
       return;
     }
+
+    const currentEmail = normalizeEmail(req.user.email);
+    const isCanonicalPlatformCeo =
+      req.user.platformRole === "ceo" && currentEmail === PLATFORM_CEO_EMAIL;
+    if (normalized !== currentEmail && isCanonicalPlatformCeo) {
+      res.status(403).json({
+        detail: "L'email dell'identità CEO della piattaforma non può essere modificata da questa route.",
+      });
+      return;
+    }
+
     // If email is changing, ensure uniqueness
-    if (normalized !== req.user.email) {
+    if (normalized !== currentEmail) {
       const existing = await db.findUserByEmail(normalized);
       if (existing) {
         res.status(409).json({ detail: "Questa email è già in uso da un altro utente." });
