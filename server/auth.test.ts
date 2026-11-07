@@ -3285,4 +3285,26 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         sendSpy.mockRestore();
       }
     });
+
+    it("rejects changing the canonical platform CEO email through the self-profile route", async () => {
+      const { PLATFORM_CEO_EMAIL } = await import("./config");
+      const ceo = await db.findUserByEmail(PLATFORM_CEO_EMAIL);
+      expect(ceo?.platformRole).toBe("ceo");
+      if (!ceo) throw new Error("Canonical platform CEO test account was not seeded.");
+
+      const { accessToken } = generateTokens(ceo);
+      const csrf = "canonical-ceo-email-change-csrf";
+      const updateRes = await apiRequest("/api/v1/users/me", {
+        method: "PUT",
+        headers: { "x-csrf-token": csrf },
+        cookies: { access_token: accessToken, csrf_token: csrf },
+        body: { email: "replacement-platform-ceo@example.com" },
+      });
+
+      expect(updateRes.status).toBe(403);
+      expect(updateRes.body.detail).toMatch(/CEO.*non può essere modificata/i);
+      const persisted = await db.findUserById(ceo.id);
+      expect(persisted?.email).toBe(PLATFORM_CEO_EMAIL);
+      expect(await db.findUserByEmail("replacement-platform-ceo@example.com")).toBeNull();
+    });
   });
