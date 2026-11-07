@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "./db";
 import { TeamService } from "./services/team.service";
 
@@ -44,4 +44,64 @@ describe("Team owner account protection", () => {
     const unchanged = await db.getUserByIdAndCompany(owner.id, companyId);
     expect(unchanged?.isActive).toBe(true);
   });
+  function createIsolatedPlatformService() {
+    const ceo = {
+      id: "usr-platform-ceo-protection-test",
+      email: "platform-ceo-test@example.test",
+      fullName: "Platform CEO",
+      role: "superadmin",
+      platformRole: "ceo",
+      companyId: "comp-master-protection-test",
+      companyName: "Master Platform",
+      passwordHash: "test-hash",
+      salt: "test-salt",
+      isActive: true,
+      provider: "local",
+      emailConfirmed: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      authVersion: 0,
+    };
+    const updateTeamMember = vi.fn().mockImplementation(async () => ({
+      ...ceo,
+      role: "technician",
+      isActive: false,
+    }));
+    const isolatedDb = {
+      getUserByIdAndCompany: vi.fn(async (userId: string, targetCompanyId: string) =>
+        userId === ceo.id && targetCompanyId === ceo.companyId ? ceo : null
+      ),
+      updateTeamMember,
+    };
+    return {
+      service: new TeamService(isolatedDb as any),
+      ceo,
+      updateTeamMember,
+    };
+  }
+
+  it("prevents a master-tenant admin from changing the platform CEO role", async () => {
+    const { service: isolatedService, ceo, updateTeamMember } = createIsolatedPlatformService();
+
+    await expect(
+      isolatedService.updateTeamMember(ceo.companyId, ceo.id, "master-admin-test", { role: "technician" }),
+    ).rejects.toThrow(/Account CEO.*non modificabile tramite la gestione team/i);
+
+    expect(updateTeamMember).not.toHaveBeenCalled();
+    expect(ceo.role).toBe("superadmin");
+    expect(ceo.platformRole).toBe("ceo");
+  });
+
+  it("prevents a master-tenant admin from deactivating the platform CEO", async () => {
+    const { service: isolatedService, ceo, updateTeamMember } = createIsolatedPlatformService();
+
+    await expect(
+      isolatedService.changeMemberStatus(ceo.companyId, ceo.id, "master-admin-test", false),
+    ).rejects.toThrow(/Account CEO.*non modificabile tramite la gestione team/i);
+
+    expect(updateTeamMember).not.toHaveBeenCalled();
+    expect(ceo.isActive).toBe(true);
+    expect(ceo.platformRole).toBe("ceo");
+  });
+
 });
