@@ -785,6 +785,10 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
 
     it("rejects changing only the customer when the existing location belongs to another customer without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Secondario",
+        email: "info+alpha-secondario@example.test",
+      });
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
         locationId: locationA.id,
@@ -800,7 +804,7 @@ describe("Interventions Backend Module (P1.4)", () => {
         method: "PUT",
         cookies: adminA.cookies,
         headers: adminA.headers,
-        body: { customerId: customerB.id, description: "Modifica non deve persistere" },
+        body: { customerId: otherCustomer.id, description: "Modifica non deve persistere" },
       });
 
       expect(response.status).toBe(400);
@@ -813,6 +817,15 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
 
     it("rejects changing only the location when it belongs to another customer without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Terziario",
+        email: "info+alpha-terziario@example.test",
+      });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede Secondaria Alpha",
+        address: "Via Roma 99",
+        city: "Milano",
+      });
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
         locationId: locationA.id,
@@ -828,7 +841,7 @@ describe("Interventions Backend Module (P1.4)", () => {
         method: "PUT",
         cookies: adminA.cookies,
         headers: adminA.headers,
-        body: { locationId: locationB.id, description: "Modifica non deve persistere" },
+        body: { locationId: otherLocation.id, description: "Modifica non deve persistere" },
       });
 
       expect(response.status).toBe(400);
@@ -841,6 +854,15 @@ describe("Interventions Backend Module (P1.4)", () => {
     });
 
     it("rejects moving an intervention with an attached asset to a different customer and location without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Quarto",
+        email: "info+alpha-quarto@example.test",
+      });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede Quarta Alpha",
+        address: "Via Roma 100",
+        city: "Milano",
+      });
       const created = await db.createIntervention(companyA, {
         customerId: customerA.id,
         locationId: locationA.id,
@@ -857,8 +879,8 @@ describe("Interventions Backend Module (P1.4)", () => {
         cookies: adminA.cookies,
         headers: adminA.headers,
         body: {
-          customerId: customerB.id,
-          locationId: locationB.id,
+          customerId: otherCustomer.id,
+          locationId: otherLocation.id,
           description: "Modifica non deve persistere",
         },
       });
