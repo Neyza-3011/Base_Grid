@@ -6,7 +6,7 @@ import {
   CreateAssetInput,
   UpdateAssetInput,
 } from "../types";
-import { BadRequestError, NotFoundError } from "../errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { isValidCalendarDate } from "../validation";
 
 function validateInputObject(input: unknown, entityName = "I dati asset"): void {
@@ -239,7 +239,10 @@ export class AssetService {
       targetLocationId = input.locationId.trim();
     }
 
-    if (targetCustomerId !== existing.customerId || targetLocationId !== existing.locationId) {
+    const relationshipChanged =
+      targetCustomerId !== existing.customerId || targetLocationId !== existing.locationId;
+
+    if (relationshipChanged) {
       const customer = await this.db.getCustomerByIdAndCompany(targetCustomerId, companyId);
       if (!customer) {
         throw new NotFoundError("Cliente non trovato.");
@@ -251,21 +254,52 @@ export class AssetService {
       if (location.customerId !== targetCustomerId) {
         throw new BadRequestError("La sede specificata non appartiene al cliente indicato.");
       }
+
+      // Intervention records reference the asset's full customer/location hierarchy.
+      // Reject normal moves early; PostgreSQL's composite FK remains the concurrency guard.
+      const linkedInterventions = await this.db.getInterventionsByCompany(companyId, {
+        assetId,
+        limit: 1,
+      });
+      if (linkedInterventions.items.length > 0) {
+        throw new ConflictError(
+          "Impossibile spostare l'asset mentre è collegato a uno o più interventi."
+        );
+      }
     }
 
-    const updated = await this.db.updateAsset(companyId, assetId, {
-      customerId: targetCustomerId !== existing.customerId ? targetCustomerId : undefined,
-      locationId: targetLocationId !== existing.locationId ? targetLocationId : undefined,
-      assetType: input.assetType,
-      name: input.name !== undefined && input.name !== null ? input.name.trim() : undefined,
-      manufacturer: input.manufacturer !== undefined ? (input.manufacturer && typeof input.manufacturer === "string" && input.manufacturer.trim().length > 0 ? input.manufacturer.trim() : (null as any)) : undefined,
-      model: input.model !== undefined ? (input.model && typeof input.model === "string" && input.model.trim().length > 0 ? input.model.trim() : (null as any)) : undefined,
-      serialNumber: input.serialNumber !== undefined ? (input.serialNumber && typeof input.serialNumber === "string" && input.serialNumber.trim().length > 0 ? input.serialNumber.trim() : (null as any)) : undefined,
-      installationDate: input.installationDate !== undefined ? (input.installationDate && typeof input.installationDate === "string" && input.installationDate.trim().length > 0 ? input.installationDate.trim() : (null as any)) : undefined,
-      warrantyEndDate: input.warrantyEndDate !== undefined ? (input.warrantyEndDate && typeof input.warrantyEndDate === "string" && input.warrantyEndDate.trim().length > 0 ? input.warrantyEndDate.trim() : (null as any)) : undefined,
-      status: input.status,
-      notes: input.notes !== undefined ? (input.notes && typeof input.notes === "string" && input.notes.trim().length > 0 ? input.notes.trim() : (null as any)) : undefined,
-    });
+    let updated: AssetRecord | null;
+    try {
+      updated = await this.db.updateAsset(companyId, assetId, {
+        customerId: targetCustomerId !== existing.customerId ? targetCustomerId : undefined,
+        locationId: targetLocationId !== existing.locationId ? targetLocationId : undefined,
+        assetType: input.assetType,
+        name: input.name !== undefined && input.name !== null ? input.name.trim() : undefined,
+        manufacturer: input.manufacturer !== undefined ? (input.manufacturer && typeof input.manufacturer === "string" && input.manufacturer.trim().length > 0 ? input.manufacturer.trim() : (null as any)) : undefined,
+        model: input.model !== undefined ? (input.model && typeof input.model === "string" && input.model.trim().length > 0 ? input.model.trim() : (null as any)) : undefined,
+        serialNumber: input.serialNumber !== undefined ? (input.serialNumber && typeof input.serialNumber === "string" && input.serialNumber.trim().length > 0 ? input.serialNumber.trim() : (null as any)) : undefined,
+        installationDate: input.installationDate !== undefined ? (input.installationDate && typeof input.installationDate === "string" && input.installationDate.trim().length > 0 ? input.installationDate.trim() : (null as any)) : undefined,
+        warrantyEndDate: input.warrantyEndDate !== undefined ? (input.warrantyEndDate && typeof input.warrantyEndDate === "string" && input.warrantyEndDate.trim().length > 0 ? input.warrantyEndDate.trim() : (null as any)) : undefined,
+        status: input.status,
+        notes: input.notes !== undefined ? (input.notes && typeof input.notes === "string" && input.notes.trim().length > 0 ? input.notes.trim() : (null as any)) : undefined,
+      });
+    } catch (error) {
+      // A concurrent intervention can be attached after preflight. Preserve the database
+      // invariant while returning a controlled conflict instead of an opaque HTTP 500.
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        "constraint" in error &&
+        (error as { code?: unknown }).code === "23503" &&
+        (error as { constraint?: unknown }).constraint === "fk_interventions_asset_hierarchy_consistency"
+      ) {
+        throw new ConflictError(
+          "Impossibile spostare l'asset mentre è collegato a uno o più interventi."
+        );
+      }
+      throw error;
+    }
 
     if (!updated) {
       throw new NotFoundError("Impianto/Asset non trovato.");

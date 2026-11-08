@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -313,6 +313,93 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(persisted?.name).toBe("Asset relazione coerente");
       expect(persisted?.customerId).toBe(customerA.id);
       expect(persisted?.locationId).toBe(locationA.id);
+    });
+
+    it("rejects moving an asset that is attached to an intervention without partial mutation", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Cliente asset con intervento" });
+      const location = await db.createLocation(companyA, customer.id, {
+        name: "Sede asset originale",
+        address: "Via A 10",
+        city: "Roma",
+      });
+      const otherCustomer = await db.createCustomer(companyA, { displayName: "Cliente asset destinazione" });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede asset destinazione",
+        address: "Via A 20",
+        city: "Roma",
+      });
+      const asset = await db.createAsset(companyA, customer.id, location.id, {
+        name: "Asset collegato",
+        assetType: "quadro",
+      });
+      await db.createIntervention(companyA, {
+        customerId: customer.id,
+        locationId: location.id,
+        assetId: asset.id,
+        description: "Intervento che mantiene il riferimento all'asset",
+        createdBy: auth.user.id,
+        updatedBy: auth.user.id,
+      });
+
+      const response = await apiRequest(`/api/v1/assets/${asset.id}`, {
+        method: "PUT",
+        body: {
+          name: "Nome che non deve persistere",
+          customerId: otherCustomer.id,
+          locationId: otherLocation.id,
+        },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.data.detail).toMatch(/collegato a uno o più interventi/i);
+      const persisted = await db.getAssetByIdAndCompany(asset.id, companyA);
+      expect(persisted?.name).toBe("Asset collegato");
+      expect(persisted?.customerId).toBe(customer.id);
+      expect(persisted?.locationId).toBe(location.id);
+    });
+
+    it("maps a concurrent intervention asset-hierarchy foreign-key conflict to HTTP 409", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Cliente asset race" });
+      const location = await db.createLocation(companyA, customer.id, {
+        name: "Sede asset race",
+        address: "Via A 30",
+        city: "Roma",
+      });
+      const otherLocation = await db.createLocation(companyA, customer.id, {
+        name: "Sede asset race destinazione",
+        address: "Via A 31",
+        city: "Roma",
+      });
+      const asset = await db.createAsset(companyA, customer.id, location.id, {
+        name: "Asset race",
+        assetType: "quadro",
+      });
+      const foreignKeyError = Object.assign(new Error("foreign key violation"), {
+        code: "23503",
+        constraint: "fk_interventions_asset_hierarchy_consistency",
+      });
+      const updateSpy = vi.spyOn(db, "updateAsset").mockRejectedValueOnce(foreignKeyError);
+
+      try {
+        const response = await apiRequest(`/api/v1/assets/${asset.id}`, {
+          method: "PUT",
+          body: { locationId: otherLocation.id },
+          cookies: auth.cookies,
+          headers: auth.headers,
+        });
+
+        expect(response.status).toBe(409);
+        expect(response.data.detail).toMatch(/collegato a uno o più interventi/i);
+        const persisted = await db.getAssetByIdAndCompany(asset.id, companyA);
+        expect(persisted?.name).toBe("Asset race");
+        expect(persisted?.locationId).toBe(location.id);
+      } finally {
+        updateSpy.mockRestore();
+      }
     });
 
     it("ignores any client-provided companyId and assigns authenticated user companyId", async () => {
