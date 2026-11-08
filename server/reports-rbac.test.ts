@@ -675,6 +675,38 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
       expect((await db.getReportById(companyB, reportB.id))?.notes).toBe("Bozza iniziale");
     });
 
+    it.each([
+      "company_id",
+      "companyId",
+      "technician_id",
+      "technicianId",
+      "customer_id",
+      "location_id",
+      "intervention_id",
+    ] as const)("rejects server-owned draft field %s without mutating the report", async (field) => {
+      const admin = await createTestUserAndLogin(companyA, "admin");
+      const report = await db.createReport(companyA, draftRecord);
+      const before = await db.getReportById(companyA, report.id);
+      expect(before).toBeTruthy();
+
+      const res = await apiRequest(`/api/v1/reports/${report.id}`, {
+        method: "PATCH",
+        cookies: admin.cookies,
+        headers: admin.headers,
+        body: { notes: "Tentativo di mass assignment", [field]: "attacker-controlled" },
+      });
+
+      expect(res.status).toBe(400);
+      const after = await db.getReportById(companyA, report.id);
+      expect(after?.companyId).toBe(before?.companyId);
+      expect(after?.technician.fullName).toBe(before?.technician.fullName);
+      expect(after?.customerId).toBe(before?.customerId);
+      expect(after?.locationId).toBe(before?.locationId);
+      expect(after?.interventionId).toBe(before?.interventionId);
+      expect(after?.status).toBe("draft");
+      expect(after?.notes).toBe(before?.notes);
+    });
+
     it("rejects updates to submitted reports", async () => {
       const admin = await createTestUserAndLogin(companyA, "admin");
       const report = await db.createReport(companyA, {
