@@ -2191,6 +2191,35 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.body.total_users).toBeDefined();
     });
     
+    it("denies a tenant user with an untrusted persisted superadmin role without mutating company settings", async () => {
+      const before = await db.findCompanyById(compA.id);
+      const originalName = before?.name;
+      expect(before).not.toBeNull();
+
+      try {
+        const invalidSuperadmin = await db.updateUser(adminA.id, {
+          role: "superadmin",
+          platformRole: null,
+        });
+        expect(invalidSuperadmin).not.toBeNull();
+        const { accessToken } = generateTokens(invalidSuperadmin!);
+
+        const response = await apiRequest("/api/v1/company/settings", {
+          method: "PUT",
+          headers: { "x-csrf-token": "csrf" },
+          cookies: { access_token: accessToken, csrf_token: "csrf" },
+          body: { name: "Unauthorized Superadmin Mutation" },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.body.detail).toMatch(/identità CEO non valida/i);
+        const after = await db.findCompanyById(compA.id);
+        expect(after?.name).toBe(originalName);
+      } finally {
+        await db.updateUser(adminA.id, { role: "admin", platformRole: null });
+      }
+    });
+
     it("Client-supplied role tampering -> DENY (Cannot escalate to superadmin via profile update)", async () => {
       const res = await apiRequest("/api/v1/users/me", {
         method: "PUT",

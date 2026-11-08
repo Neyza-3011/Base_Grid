@@ -460,7 +460,8 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
   });
 
   describe("Role-Based Access Control (RBAC)", () => {
-    it("allows write roles (owner, admin, responsabile_tecnico, dispatcher, commerciale, amministrazione, superadmin)", async () => {
+    it("allows tenant write roles (owner, admin, responsabile_tecnico, dispatcher, commerciale, amministrazione)", async () => {
+      // Platform superadmin is not a tenant-scoped role; its authority is verified separately by auth middleware tests.
       const writeRoles: UserRole[] = [
         "owner",
         "admin",
@@ -468,7 +469,6 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
         "dispatcher",
         "commerciale",
         "amministrazione",
-        "superadmin",
       ];
 
       for (const role of writeRoles) {
