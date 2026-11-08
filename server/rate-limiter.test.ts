@@ -97,7 +97,7 @@ describe("Rate Limiter Middleware", () => {
 
     const mockRedis = {
       status: "ready",
-      eval: vi.fn(async () => [1, -1]),
+      eval: vi.fn(async (..._args: any[]) => [1, -1]),
     };
     (rateLimiter as any).redisClient = mockRedis;
 
