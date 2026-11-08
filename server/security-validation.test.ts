@@ -1181,4 +1181,22 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
       expect(res.body.detail || res.body.error).toBeDefined();
     });
   });
+  it("keeps technician report access read-only and prevents report creation", async () => {
+    const before = await db.getReportsByCompany(adminCompanyId, 1000);
+    const response = await request(app)
+      .post("/api/v1/reports")
+      .set("Cookie", techCookies)
+      .set("x-csrf-token", techCsrfToken)
+      .send({
+        client_name: "Technician write attempt",
+        date: "2026-11-08",
+        time: "10:00",
+        work_hours: 1,
+        travel_hours: 0,
+      });
+
+    expect(response.status).toBe(403);
+    expect(await db.getReportsByCompany(adminCompanyId, 1000)).toHaveLength(before.length);
+  });
+
 });
