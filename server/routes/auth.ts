@@ -730,6 +730,21 @@ authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res:
       return;
     }
 
+    const company = await db.findCompanyById(user.companyId);
+    if (!company) {
+      res.status(401).json({ detail: "Azienda associata non trovata." });
+      return;
+    }
+    const isCanonicalPlatformCeo =
+      user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+    if (company.isActive === false && !isCanonicalPlatformCeo) {
+      res.status(403).json({
+        code: "COMPANY_SUSPENDED",
+        detail: "L'accesso all'azienda è stato sospeso dalla piattaforma.",
+      });
+      return;
+    }
+
     // 7. Issue session tokens with rotation registration
     const { accessToken, refreshToken, jti, familyId } = generateTokens(user);
     await tokenStore.registerToken({

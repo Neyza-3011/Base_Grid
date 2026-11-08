@@ -3179,6 +3179,35 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.body.detail).toMatch(/credenziali locali/i);
     });
 
+    it("rejects Google login for an existing user in a suspended tenant without issuing cookies", async () => {
+      const { user } = await db.createUser({
+        email: "existing.google.user@gmail.com",
+        fullName: "Existing Google Contractor",
+        password: "UnusedLocalPassword123!",
+        companyName: "Suspended Google Co",
+        emailConfirmed: true,
+        role: "owner",
+        provider: "google",
+      });
+      const platformCeo = (await db.findUserByEmail("jack.cardinali15@gmail.com"))!;
+      await db.setCompanyActiveWithAudit(user.companyId, false, {
+        actorUserId: platformCeo.id,
+        action: "tenant.suspended",
+        targetType: "company",
+        targetId: user.companyId,
+      });
+
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: { credential: "valid-existing-google-token" },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe("COMPANY_SUSPENDED");
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
+    });
+
     it("allows repeat login for existing Google provider account", async () => {
       // 1. First login/registration
       const res1 = await apiRequest("/api/v1/auth/google", {
