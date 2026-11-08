@@ -2044,8 +2044,6 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.status).toBe(200);
       expect(res.body.fullName).toBe("Valid Edit");
     });
-  });
-
     it.each(["POST", "PATCH", "DELETE"])(
       "rejects %s requests without a matching CSRF header before route handling",
       async (method) => {
