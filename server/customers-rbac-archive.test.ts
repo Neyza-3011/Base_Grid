@@ -137,6 +137,7 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
   });
 
   describe("Server-Side RBAC Matrix", () => {
+    // Platform superadmin is not a tenant-scoped role; its authority is tested at the authentication boundary.
     const writeRoles: UserRole[] = [
       "owner",
       "admin",
@@ -144,7 +145,6 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       "dispatcher",
       "commerciale",
       "amministrazione",
-      "superadmin",
     ];
 
     it.each(writeRoles)("allows write role '%s' to create, update, archive and reactivate customer", async (role) => {
