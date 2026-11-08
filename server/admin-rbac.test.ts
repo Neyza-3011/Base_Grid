@@ -221,6 +221,30 @@ describe("Platform admin endpoint authorization", () => {
     expect((await db.findCompanyById("comp-rossi-001"))?.name).toBe(before?.name);
   });
 
+  it("rejects out-of-range CEO hourly rates without partially updating the profile or emitting audit events", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    expect(before).toBeTruthy();
+
+    const negative = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { name: "Must Not Persist", default_hourly_rate: -1 },
+    );
+    const excessive = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { name: "Must Also Not Persist", default_hourly_rate: 10001 },
+    );
+
+    expect(negative.status).toBe(400);
+    expect(excessive.status).toBe(400);
+    const after = await db.findCompanyById("comp-rossi-001");
+    expect(after?.name).toBe(before?.name);
+    expect(after?.address).toBe(before?.address);
+    expect(after?.defaultHourlyRate).toBe(before?.defaultHourlyRate);
+    expect(await db.getAdminAuditEvents(10)).toHaveLength(0);
+  });
+
   it("rejects unsupported admin profile fields and malformed values without changing persisted data", async () => {
     const before = await db.findCompanyById("comp-rossi-001");
     const unsupported = await putWithUser(
