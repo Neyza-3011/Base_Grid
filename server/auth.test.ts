@@ -2193,6 +2193,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
     
     it("denies a tenant user with an untrusted persisted superadmin role without mutating company settings", async () => {
       const before = await db.findCompanyById(compA.id);
+      const originalName = before?.name;
       expect(before).not.toBeNull();
 
       try {
@@ -2213,7 +2214,7 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
         expect(response.status).toBe(403);
         expect(response.body.detail).toMatch(/identità CEO non valida/i);
         const after = await db.findCompanyById(compA.id);
-        expect(after?.name).toBe(before?.name);
+        expect(after?.name).toBe(originalName);
       } finally {
         await db.updateUser(adminA.id, { role: "admin", platformRole: null });
       }
