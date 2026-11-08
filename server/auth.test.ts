@@ -301,7 +301,13 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         emailConfirmed: true,
         role: "owner",
       });
-      await db.updateCompany(user.companyId, { isActive: false });
+      const platformCeo = (await db.findUserByEmail("jack.cardinali15@gmail.com"))!;
+      await db.setCompanyActiveWithAudit(user.companyId, false, {
+        actorUserId: platformCeo.id,
+        action: "tenant.suspended",
+        targetType: "company",
+        targetId: user.companyId,
+      });
 
       const res = await apiRequest("/api/v1/auth/login", {
         method: "POST",
