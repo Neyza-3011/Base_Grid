@@ -248,6 +248,73 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
       expect(res.data.detail).toContain("non trovato");
     });
 
+    it("rejects asset update to a location owned by another tenant without partial mutation", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customerA = await db.createCustomer(companyA, { displayName: "Cliente Asset A" });
+      const locationA = await db.createLocation(companyA, customerA.id, {
+        name: "Sede Asset A",
+        address: "Via A 1",
+        city: "Roma",
+      });
+      const customerB = await db.createCustomer(companyB, { displayName: "Cliente Asset B" });
+      const locationB = await db.createLocation(companyB, customerB.id, {
+        name: "Sede Asset B",
+        address: "Via B 1",
+        city: "Milano",
+      });
+      const asset = await db.createAsset(companyA, customerA.id, locationA.id, {
+        name: "Asset da proteggere",
+        assetType: "quadro",
+      });
+
+      const response = await apiRequest(`/api/v1/assets/${asset.id}`, {
+        method: "PUT",
+        body: { name: "Nome non deve persistere", locationId: locationB.id },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+
+      expect(response.status).toBe(404);
+      const persisted = await db.getAssetByIdAndCompany(asset.id, companyA);
+      expect(persisted?.name).toBe("Asset da proteggere");
+      expect(persisted?.customerId).toBe(customerA.id);
+      expect(persisted?.locationId).toBe(locationA.id);
+      expect(await db.getAssetByIdAndCompany(asset.id, companyB)).toBeNull();
+    });
+
+    it("rejects asset update when the target location belongs to a different customer without partial mutation", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customerA = await db.createCustomer(companyA, { displayName: "Cliente Asset Primario" });
+      const locationA = await db.createLocation(companyA, customerA.id, {
+        name: "Sede Asset Primaria",
+        address: "Via A 1",
+        city: "Roma",
+      });
+      const customerOther = await db.createCustomer(companyA, { displayName: "Cliente Asset Secondario" });
+      const locationOther = await db.createLocation(companyA, customerOther.id, {
+        name: "Sede Asset Secondaria",
+        address: "Via A 2",
+        city: "Roma",
+      });
+      const asset = await db.createAsset(companyA, customerA.id, locationA.id, {
+        name: "Asset relazione coerente",
+        assetType: "inverter",
+      });
+
+      const response = await apiRequest(`/api/v1/assets/${asset.id}`, {
+        method: "PUT",
+        body: { name: "Nome non deve persistere", locationId: locationOther.id },
+        cookies: auth.cookies,
+        headers: auth.headers,
+      });
+
+      expect(response.status).toBe(400);
+      const persisted = await db.getAssetByIdAndCompany(asset.id, companyA);
+      expect(persisted?.name).toBe("Asset relazione coerente");
+      expect(persisted?.customerId).toBe(customerA.id);
+      expect(persisted?.locationId).toBe(locationA.id);
+    });
+
     it("ignores any client-provided companyId and assigns authenticated user companyId", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const customer = await db.createCustomer(companyA, { displayName: "Alpha Corp" });
