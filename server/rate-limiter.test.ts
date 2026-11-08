@@ -113,6 +113,43 @@ describe("Rate Limiter Middleware", () => {
     expect(luaScript).toContain('redis.call("EXPIRE", KEYS[1], ARGV[1])');
   });
 
+  it("fails closed in production when a Redis rate-limit command throws", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: true });
+    app.get("/", limiter, (_req, res) => { res.status(200).send("OK"); });
+
+    const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    const mockRedis = {
+      status: "ready",
+      eval: vi.fn(async (..._args: any[]) => {
+        throw new Error("simulated Redis command failure");
+      }),
+    };
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    config.NODE_ENV = "production";
+    (rateLimiter as any).redisClient = mockRedis;
+
+    try {
+      const response = await request(app)
+        .get("/")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", "192.168.1.78");
+
+      expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+      expect(response.status).toBe(503);
+      expect(response.body.detail).toContain("Servizio temporaneamente non disponibile");
+      expect((rateLimiter as any).localFallback.size).toBe(0);
+    } finally {
+      if (originalMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalMode;
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
   it("should allow health endpoint without limit", async () => {
     // Import real app
     const { createApp } = await import("./app");
