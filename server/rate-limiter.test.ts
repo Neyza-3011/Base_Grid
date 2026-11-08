@@ -89,6 +89,30 @@ describe("Rate Limiter Middleware", () => {
     }
   });
 
+  it("repairs a Redis rate-limit counter that has no expiry", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 0, duration: 60, failClosed: true });
+    app.get("/", limiter, (_req, res) => { res.status(200).send("OK"); });
+
+    const mockRedis = {
+      status: "ready",
+      eval: vi.fn(async () => [1, -1]),
+    };
+    (rateLimiter as any).redisClient = mockRedis;
+
+    const response = await request(app)
+      .get("/")
+      .set("X-Test-RateLimit", "enable")
+      .set("X-Forwarded-For", "192.168.1.77");
+
+    expect(response.status).toBe(429);
+    expect(response.header["retry-after"]).toBe("60");
+    const luaScript = mockRedis.eval.mock.calls[0][0] as string;
+    expect(luaScript).toContain('if ttl < 0 then');
+    expect(luaScript).toContain('redis.call("EXPIRE", KEYS[1], ARGV[1])');
+  });
+
   it("should allow health endpoint without limit", async () => {
     // Import real app
     const { createApp } = await import("./app");
