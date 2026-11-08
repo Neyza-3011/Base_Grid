@@ -143,6 +143,13 @@ function mapReportRow(row: any): ReportRecord {
       ? rawMaterialsStatus
       : "unverified";
 
+  // A missing/invalid persisted status must not be silently promoted to
+  // "submitted", which could make an incomplete report appear billing-ready.
+  const reportStatus = row.status;
+  if (reportStatus !== "draft" && reportStatus !== "submitted" && reportStatus !== "approved") {
+    throw new Error("Invalid persisted report status");
+  }
+
   return {
     id: row.id,
     companyId: row.companyId,
@@ -153,7 +160,7 @@ function mapReportRow(row: any): ReportRecord {
     time: row.time || "",
     workHours: Number(row.workHours) || 0,
     travelHours: Number(row.travelHours) || 0,
-    status: row.status || "submitted",
+    status: reportStatus,
     client: client || { name: "" },
     technician: technician || { fullName: "" },
     materialsStatus,
