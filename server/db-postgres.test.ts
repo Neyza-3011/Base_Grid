@@ -432,6 +432,29 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(reports[0].materialsUsed[0].description).toBe("Pipe");
   });
 
+  it("rejects missing persisted report status instead of defaulting it to submitted", async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [{
+        id: "rep-missing-status",
+        companyId: "comp-123",
+        date: "2026-11-08",
+        time: "10:00",
+        workHours: "2",
+        travelHours: "0",
+        status: null,
+        client: { name: "Client A" },
+        technician: { fullName: "Tech A" },
+        materialsUsed: [],
+        notes: "",
+        createdAt: new Date("2026-11-08T10:00:00Z"),
+      }],
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(adapter.getReportsByCompany("comp-123", 50))
+      .rejects.toThrow("Invalid persisted report status");
+  });
+
   it("rejects malformed persisted materials JSON instead of treating it as an empty list", async () => {
     mockPool.query.mockResolvedValueOnce({
       rows: [{
