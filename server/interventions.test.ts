@@ -784,6 +784,116 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect(await db.getInterventionByIdAndCompany(created.id, companyB)).toBeNull();
     });
 
+    it("rejects changing only the customer when the existing location belongs to another customer without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Secondario",
+        email: "info+alpha-secondario@example.test",
+      });
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento relazione originale",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const response = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { customerId: otherCustomer.id, description: "Modifica non deve persistere" },
+      });
+
+      expect(response.status).toBe(400);
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.customerId).toBe(customerA.id);
+      expect(persisted?.locationId).toBe(locationA.id);
+      expect(persisted?.assetId).toBe(assetA.id);
+      expect(persisted?.description).toBe("Intervento relazione originale");
+      expect(persisted?.updatedBy).toBe(adminA.user.id);
+    });
+
+    it("rejects changing only the location when it belongs to another customer without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Terziario",
+        email: "info+alpha-terziario@example.test",
+      });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede Secondaria Alpha",
+        address: "Via Roma 99",
+        city: "Milano",
+      });
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento sede originale",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const response = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: { locationId: otherLocation.id, description: "Modifica non deve persistere" },
+      });
+
+      expect(response.status).toBe(400);
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.customerId).toBe(customerA.id);
+      expect(persisted?.locationId).toBe(locationA.id);
+      expect(persisted?.assetId).toBe(assetA.id);
+      expect(persisted?.description).toBe("Intervento sede originale");
+      expect(persisted?.updatedBy).toBe(adminA.user.id);
+    });
+
+    it("rejects moving an intervention with an attached asset to a different customer and location without partial mutation", async () => {
+      const otherCustomer = await db.createCustomer(companyA, {
+        displayName: "Condominio Alpha Quarto",
+        email: "info+alpha-quarto@example.test",
+      });
+      const otherLocation = await db.createLocation(companyA, otherCustomer.id, {
+        name: "Sede Quarta Alpha",
+        address: "Via Roma 100",
+        city: "Milano",
+      });
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        assetId: assetA.id,
+        description: "Intervento con asset collegato",
+        priority: "media",
+        status: "nuovo",
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const response = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          customerId: otherCustomer.id,
+          locationId: otherLocation.id,
+          description: "Modifica non deve persistere",
+        },
+      });
+
+      expect(response.status).toBe(400);
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.customerId).toBe(customerA.id);
+      expect(persisted?.locationId).toBe(locationA.id);
+      expect(persisted?.assetId).toBe(assetA.id);
+      expect(persisted?.description).toBe("Intervento con asset collegato");
+      expect(persisted?.updatedBy).toBe(adminA.user.id);
+    });
+
     it("rejects assignment of an inactive technician (returns 400)", async () => {
       const inactiveTech = await createTestUserAndLogin(
         companyA,
