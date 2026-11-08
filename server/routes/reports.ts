@@ -19,12 +19,13 @@ const READ_ROLES: UserRole[] = [
   "superadmin",
 ];
 
+// Technicians are read-only for reports. Report creation and draft edits are
+// reserved for roles with explicit operational write permissions.
 const CREATE_ROLES: UserRole[] = [
   "owner",
   "admin",
   "responsabile_tecnico",
   "dispatcher",
-  "technician",
   "commerciale",
   "amministrazione",
   "superadmin",
