@@ -291,6 +291,34 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       expect(res.status).toBe(401);
       expect(res.body.detail).toContain("disattivato");
     });
+
+    it("rejects login for a suspended tenant without issuing session cookies", async () => {
+      const { user } = await db.createUser({
+        email: "suspended.login@azienda.it",
+        fullName: "Suspended Tenant User",
+        password: "SecurePassword123!",
+        companyName: "Suspended Login Co",
+        emailConfirmed: true,
+        role: "owner",
+      });
+      const platformCeo = (await db.findUserByEmail("jack.cardinali15@gmail.com"))!;
+      await db.setCompanyActiveWithAudit(user.companyId, false, {
+        actorUserId: platformCeo.id,
+        action: "tenant.suspended",
+        targetType: "company",
+        targetId: user.companyId,
+      });
+
+      const res = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email: user.email, password: "SecurePassword123!" },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe("COMPANY_SUSPENDED");
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
+    });
   });
 
   describe("3. Server-Authoritative Session (/api/v1/auth/session)", async () => {
@@ -662,6 +690,35 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
 
       expect(refreshRes.status).toBe(401);
       expect(refreshRes.body.detail).toMatch(/motivi di sicurezza/i);
+    });
+
+    it("rejects refresh for a suspended tenant without rotating its session", async () => {
+      const { user } = await db.createUser({
+        email: "suspended.refresh@azienda.it",
+        fullName: "Suspended Refresh User",
+        password: "SecurePassword123!",
+        companyName: "Suspended Refresh Co",
+        emailConfirmed: true,
+        role: "owner",
+      });
+      const tokens = generateTokens(user);
+      await tokenStore.registerToken({
+        token: tokens.refreshToken,
+        jti: tokens.jti,
+        userId: user.id,
+        familyId: tokens.familyId,
+      });
+      await db.updateCompany(user.companyId, { isActive: false });
+
+      const res = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        cookies: { refresh_token: tokens.refreshToken },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe("COMPANY_SUSPENDED");
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
     });
 
     it("accepts refresh token when user authVersion matches payload authVersion", async () => {
@@ -3120,6 +3177,35 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
 
       expect(res.status).toBe(409);
       expect(res.body.detail).toMatch(/credenziali locali/i);
+    });
+
+    it("rejects Google login for an existing user in a suspended tenant without issuing cookies", async () => {
+      const { user } = await db.createUser({
+        email: "existing.google.user@gmail.com",
+        fullName: "Existing Google Contractor",
+        password: "UnusedLocalPassword123!",
+        companyName: "Suspended Google Co",
+        emailConfirmed: true,
+        role: "owner",
+        provider: "google",
+      });
+      const platformCeo = (await db.findUserByEmail("jack.cardinali15@gmail.com"))!;
+      await db.setCompanyActiveWithAudit(user.companyId, false, {
+        actorUserId: platformCeo.id,
+        action: "tenant.suspended",
+        targetType: "company",
+        targetId: user.companyId,
+      });
+
+      const res = await apiRequest("/api/v1/auth/google", {
+        method: "POST",
+        body: { credential: "valid-existing-google-token" },
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe("COMPANY_SUSPENDED");
+      expect(res.setCookieHeaders.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(res.setCookieHeaders.some((c) => c.startsWith("refresh_token="))).toBe(false);
     });
 
     it("allows repeat login for existing Google provider account", async () => {

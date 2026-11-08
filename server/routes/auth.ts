@@ -19,7 +19,7 @@ import { db } from "../db";
 import { tokenStore, StoreUnavailableError } from "../token-store";
 import { authenticate } from "../middleware/auth";
 import { emailService } from "../email-service";
-import { config } from "../config";
+import { config, PLATFORM_CEO_EMAIL } from "../config";
 import {
   loginLimiter,
   loginAccountLimiter,
@@ -445,6 +445,21 @@ authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(asyn
       return;
     }
 
+    const company = await db.findCompanyById(user.companyId);
+    if (!company) {
+      res.status(401).json({ detail: "Azienda associata non trovata." });
+      return;
+    }
+    const isCanonicalPlatformCeo =
+      user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+    if (company.isActive === false && !isCanonicalPlatformCeo) {
+      res.status(403).json({
+        code: "COMPANY_SUSPENDED",
+        detail: "L'accesso all'azienda è stato sospeso dalla piattaforma.",
+      });
+      return;
+    }
+
     if (config.EMAIL_VERIFICATION_ENABLED && !user.emailConfirmed) {
       res.status(403).json({ detail: "Conferma l'indirizzo email prima di accedere." });
       return;
@@ -524,6 +539,21 @@ authRouter.post("/refresh", refreshLimiter, asyncHandler(async (req: any, res: a
     const user = await db.findUserById(payload.sub);
     if (!user || !user.isActive) {
       res.status(401).json({ detail: "Utente non trovato o account disattivato." });
+      return;
+    }
+
+    const company = await db.findCompanyById(user.companyId);
+    if (!company) {
+      res.status(401).json({ detail: "Azienda associata non trovata." });
+      return;
+    }
+    const isCanonicalPlatformCeo =
+      user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+    if (company.isActive === false && !isCanonicalPlatformCeo) {
+      res.status(403).json({
+        code: "COMPANY_SUSPENDED",
+        detail: "L'accesso all'azienda è stato sospeso dalla piattaforma.",
+      });
       return;
     }
 
@@ -697,6 +727,21 @@ authRouter.post("/google", googleAuthLimiter, asyncHandler(async (req: any, res:
 
     if (!user.isActive) {
       res.status(401).json({ detail: "Account disattivato." });
+      return;
+    }
+
+    const company = await db.findCompanyById(user.companyId);
+    if (!company) {
+      res.status(401).json({ detail: "Azienda associata non trovata." });
+      return;
+    }
+    const isCanonicalPlatformCeo =
+      user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+    if (company.isActive === false && !isCanonicalPlatformCeo) {
+      res.status(403).json({
+        code: "COMPANY_SUSPENDED",
+        detail: "L'accesso all'azienda è stato sospeso dalla piattaforma.",
+      });
       return;
     }
 
