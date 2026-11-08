@@ -202,7 +202,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       try {
         await emailService.sendVerificationEmail(updates.email, rawVerificationToken, updatedUser.fullName);
       } catch (emailErr: any) {
-        console.error("[UsersRouter] Verification email delivery failed:", emailErr?.message || emailErr);
+        console.error("[UsersRouter] Verification email delivery failed.");
       }
 
       // Revoke active sessions & clear auth cookies so user must verify new email
@@ -215,7 +215,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
         try {
           await tokenStore.revokeAllUserTokens(req.user.id);
         } catch (revokeErr: any) {
-          console.error("[UsersRouter] Failed to revoke active sessions after email change:", revokeErr?.message || revokeErr);
+          console.error("[UsersRouter] Failed to revoke active sessions after email change.");
         }
       }
     }
