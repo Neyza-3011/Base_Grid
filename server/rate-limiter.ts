@@ -77,6 +77,12 @@ export class RateLimiter {
               redis.call("EXPIRE", KEYS[1], ARGV[1])
             end
             local ttl = redis.call("TTL", KEYS[1])
+            -- Repair counters created without an expiry instead of leaving them
+            -- permanently rate-limited after the current window should have elapsed.
+            if ttl < 0 then
+              redis.call("EXPIRE", KEYS[1], ARGV[1])
+              ttl = tonumber(ARGV[1])
+            end
             return {current, ttl}
           `;
           const result = (await this.redisClient.eval(luaScript, 1, key, duration)) as [number, number];
