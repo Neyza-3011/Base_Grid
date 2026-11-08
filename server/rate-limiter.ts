@@ -326,5 +326,5 @@ export const generalApiLimiter = rateLimiter.middleware({
   duration: 5 * 60, // 1000 requests per 5 minutes per IP
   keyPrefix: "rl:api",
   errorMessage: "Troppe richieste al sistema. Riprova più tardi.",
-  failClosed: false, // Don't block general API usage if Redis goes down, to allow health checks and degraded functionality
+  failClosed: true, // API requests fail closed when distributed rate limiting is unavailable; health/readiness routes remain outside /api.
 });
