@@ -57,13 +57,21 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
   }
 
 
+  const isCanonicalPlatformCeo =
+    user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
+
+  // The tenant-scoped "superadmin" role is not sufficient to establish platform authority.
+  // Only the canonical, server-persisted CEO identity may use routes that accept this role.
+  if (user.role === "superadmin" && !isCanonicalPlatformCeo) {
+    res.status(403).json({ detail: "Accesso negato: identità CEO non valida." });
+    return;
+  }
+
   const company = await db.findCompanyById(user.companyId);
   if (!company) {
     res.status(401).json({ detail: "Azienda associata non trovata." });
     return;
   }
-  const isCanonicalPlatformCeo =
-    user.platformRole === "ceo" && user.email.trim().toLowerCase() === PLATFORM_CEO_EMAIL;
 
   if (company.isActive === false && !isCanonicalPlatformCeo) {
     res.status(403).json({ code: "COMPANY_SUSPENDED", detail: "L'accesso all'azienda è stato sospeso dalla piattaforma." });
