@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
-import { rateLimiter } from "./rate-limiter";
+import { generalApiLimiter, rateLimiter } from "./rate-limiter";
 import { config } from "./config";
 
 describe("Rate Limiter Middleware", () => {
@@ -125,12 +125,12 @@ describe("Rate Limiter Middleware", () => {
     }
   });
 
-  it("6. general API fail-open - should fail open if Redis is offline in production", async () => {
+  it("6. general API fail-closed - rejects API requests when Redis is offline in production", async () => {
     const app = express();
     app.set("trust proxy", 1);
-    const limiter = rateLimiter.middleware({ points: 2, duration: 60, failClosed: false });
-    app.get("/api", limiter, (req, res) => { res.status(200).send("OK"); });
-    
+    app.use("/api", generalApiLimiter);
+    app.get("/api", (_req, res) => { res.status(200).send("OK"); });
+
     const origMode = process.env.BASEGRID_RUNTIME_MODE;
     const originalEnv = config.NODE_ENV;
     const originalRedis = (rateLimiter as any).redisClient;
@@ -138,14 +138,15 @@ describe("Rate Limiter Middleware", () => {
     config.NODE_ENV = "production";
     (rateLimiter as any).redisClient = null;
     (rateLimiter as any).localFallback.clear();
-    
+
     try {
-      // Send more requests than points (5 requests when points is 2)
-      for (let i = 0; i < 5; i++) {
-        const res = await request(app).get("/api").set("X-Test-RateLimit", "enable").set("X-Forwarded-For", "192.168.1.99");
-        expect(res.status).toBe(200);
-      }
-      // Memory fallback must NOT be used in production
+      const response = await request(app)
+        .get("/api")
+        .set("X-Test-RateLimit", "enable")
+        .set("X-Forwarded-For", "192.168.1.99");
+
+      expect(response.status).toBe(503);
+      expect(response.body.detail).toContain("Servizio temporaneamente non disponibile");
       expect((rateLimiter as any).localFallback.size).toBe(0);
     } finally {
       if (origMode) process.env.BASEGRID_RUNTIME_MODE = origMode;
