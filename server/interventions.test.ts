@@ -754,6 +754,36 @@ describe("Interventions Backend Module (P1.4)", () => {
       expect([400, 404]).toContain(res.status);
     });
 
+    it("rejects cross-tenant technician reassignment on update without partially changing the intervention", async () => {
+      const created = await db.createIntervention(companyA, {
+        customerId: customerA.id,
+        locationId: locationA.id,
+        description: "Intervento prima della modifica",
+        priority: "media",
+        status: "nuovo",
+        technicianId: techA.user.id,
+        createdBy: adminA.user.id,
+        updatedBy: adminA.user.id,
+      });
+
+      const response = await apiRequest(`/api/v1/interventions/${created.id}`, {
+        method: "PUT",
+        cookies: adminA.cookies,
+        headers: adminA.headers,
+        body: {
+          description: "Descrizione non deve persistere",
+          technicianId: (await createTestUserAndLogin(companyB, "technician")).user.id,
+        },
+      });
+
+      expect(response.status).toBe(404);
+      const persisted = await db.getInterventionByIdAndCompany(created.id, companyA);
+      expect(persisted?.description).toBe("Intervento prima della modifica");
+      expect(persisted?.technicianId).toBe(techA.user.id);
+      expect(persisted?.updatedBy).toBe(created.updatedBy);
+      expect(await db.getInterventionByIdAndCompany(created.id, companyB)).toBeNull();
+    });
+
     it("rejects assignment of an inactive technician (returns 400)", async () => {
       const inactiveTech = await createTestUserAndLogin(
         companyA,
