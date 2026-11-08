@@ -146,6 +146,29 @@ describe("Company settings HTTP authorization and tenant boundary", () => {
     expect(after?.defaultHourlyRate).toBe(before?.defaultHourlyRate);
   });
 
+  it("rejects a mixed valid/invalid settings payload without partially mutating the company", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    const accessToken = await tokenFor("admin@rossi.it");
+
+    const response = await apiRequest("/api/v1/company/settings", {
+      method: "PUT",
+      accessToken,
+      body: {
+        name: "Should Not Persist",
+        address: "Via Nuova 99",
+        default_hourly_rate: 10001,
+        report_footer_notes: "Must remain unchanged",
+      },
+    });
+
+    expect(response.status).toBe(400);
+    const after = await db.findCompanyById("comp-rossi-001");
+    expect(after?.name).toBe(before?.name);
+    expect(after?.address).toBe(before?.address);
+    expect(after?.defaultHourlyRate).toBe(before?.defaultHourlyRate);
+    expect(after?.reportFooterNotes).toBe(before?.reportFooterNotes);
+  });
+
   it("rejects repeated include_logo query parameters", async () => {
     const accessToken = await tokenFor("admin@rossi.it");
     const response = await apiRequest(
