@@ -221,6 +221,7 @@ export class InterventionService {
     let locationAddress: string | undefined;
     let locationCity: string | undefined;
     let assetName: string | undefined;
+    let assetRecord: Awaited<ReturnType<IDatabaseAdapter["getAssetByIdAndCompany"]>> = null;
     let technicianName: string | undefined;
 
     if (item.customerId) {
@@ -239,8 +240,8 @@ export class InterventionService {
       }
     }
     if (item.assetId) {
-      const ast = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
-      if (ast) assetName = ast.name;
+      assetRecord = await this.db.getAssetByIdAndCompany(item.assetId, companyId);
+      if (assetRecord) assetName = assetRecord.name;
     }
     if (item.technicianId) {
       const tech = await this.db.getUserByIdAndCompany(item.technicianId, companyId);
@@ -248,8 +249,9 @@ export class InterventionService {
     }
 
     const report = await this.db.getReportByInterventionId(companyId, interventionId);
-    const asset = item.assetId ? await this.db.getAssetByIdAndCompany(item.assetId, companyId) : null;
-    const jobCompleteScore = calculateJobCompleteScore(item, report, asset);
+    // Reuse the tenant-scoped asset read for both display data and the billing score.
+    // This avoids a duplicate query and prevents inconsistent results if the asset changes.
+    const jobCompleteScore = calculateJobCompleteScore(item, report, assetRecord);
 
     return {
       ...rest,
