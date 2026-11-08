@@ -473,7 +473,8 @@ describe("Reports RBAC & Multi-Tenant Authorization (server/routes/reports.ts)",
   });
 
   describe("5. Admin & Owner Roles (Full permissions: Read, Create, Delete)", () => {
-    const adminRoles: UserRole[] = ["owner", "admin", "superadmin"];
+    // Platform superadmin is not a tenant-scoped role; its authority is tested at the authentication boundary.
+    const adminRoles: UserRole[] = ["owner", "admin"];
 
     it("automatically derives customer_id from location when location_id is provided without customer_id", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
