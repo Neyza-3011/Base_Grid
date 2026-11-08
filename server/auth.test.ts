@@ -2044,6 +2044,28 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       expect(res.status).toBe(200);
       expect(res.body.fullName).toBe("Valid Edit");
     });
+    it.each(["POST", "PATCH", "DELETE"])(
+      "rejects %s requests without a matching CSRF header before route handling",
+      async (method) => {
+        const user = await db.findUserByEmail("admin@rossi.it");
+        if (!user) throw new Error("Seed admin fixture not found");
+        const { accessToken } = generateTokens(user);
+
+        const response = await apiRequest("/api/v1/users/me", {
+          method,
+          cookies: {
+            access_token: accessToken,
+            csrf_token: "method-coverage-csrf-cookie",
+          },
+          body: { full_name: "Must Not Be Applied" },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.body.detail).toMatch(/CSRF token mancante o non valido/);
+        const persisted = await db.findUserById(user.id);
+        expect(persisted?.fullName).not.toBe("Must Not Be Applied");
+      },
+    );
   });
 
   describe("16. Complete Authorization & Tenant Isolation Matrix (P0.4.2)", () => {
