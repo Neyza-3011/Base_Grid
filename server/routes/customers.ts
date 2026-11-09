@@ -137,7 +137,11 @@ customersRouter.get(
       res.status(400).json({ detail: "I parametri di filtro devono essere valori singoli." });
       return;
     }
-    const search = req.query.search as string;
+    const search = req.query.search as string | undefined;
+    if (search !== undefined && search.length > 255) {
+      res.status(400).json({ detail: "Il parametro search non può superare 255 caratteri." });
+      return;
+    }
     const activeOnlyRaw = req.query.activeOnly as string | undefined;
     if (activeOnlyRaw !== undefined && activeOnlyRaw !== "true" && activeOnlyRaw !== "false") {
       res.status(400).json({ detail: "Parametro activeOnly non valido: usare true o false." });
