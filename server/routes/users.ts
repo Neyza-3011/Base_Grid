@@ -199,9 +199,14 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
         expiresAt: verificationExpiresAt,
       });
 
+      let verificationEmailSent = false;
       try {
-        await emailService.sendVerificationEmail(updates.email, rawVerificationToken, updatedUser.fullName);
-      } catch (emailErr: any) {
+        const delivery = await emailService.sendVerificationEmail(updates.email, rawVerificationToken, updatedUser.fullName);
+        verificationEmailSent = delivery.success;
+        if (!verificationEmailSent) {
+          console.error("[UsersRouter] Verification email delivery failed.");
+        }
+      } catch {
         console.error("[UsersRouter] Verification email delivery failed.");
       }
 
@@ -214,9 +219,16 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       if (tokenStore.isAvailable()) {
         try {
           await tokenStore.revokeAllUserTokens(req.user.id);
-        } catch (revokeErr: any) {
+        } catch {
           console.error("[UsersRouter] Failed to revoke active sessions after email change.");
         }
+      }
+
+      if (!verificationEmailSent) {
+        res.status(503).json({
+          detail: "Email aggiornata, ma non è stato possibile inviare il link di verifica. Richiedi un nuovo invio della verifica.",
+        });
+        return;
       }
     }
 
