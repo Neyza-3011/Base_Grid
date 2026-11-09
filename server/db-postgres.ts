@@ -1095,17 +1095,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
     for (const [field, column] of columns) {
       if (Object.prototype.hasOwnProperty.call(updates, field)) {
         params.push(updates[field]);
-        setClauses.push(`${column} = ${params.length}`);
+        setClauses.push(`${column} = $${params.length}`);
       }
     }
 
     setClauses.push('"authVersion" = COALESCE("authVersion", 0) + 1');
     params.push(new Date().toISOString());
-    setClauses.push(`"updatedAt" = ${params.length}`);
+    setClauses.push(`"updatedAt" = $${params.length}`);
     params.push(id);
 
     const res = await this.pool.query(
-      `UPDATE users SET ${setClauses.join(", ")} WHERE id = ${params.length} RETURNING *`,
+      `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${params.length} RETURNING *`,
       params,
     );
     return res.rows[0] ? mapUserRow(res.rows[0]) : null;
