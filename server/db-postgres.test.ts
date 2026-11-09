@@ -360,6 +360,44 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(params).toEqual(["New Name", "+39 999", expect.any(String), "usr-123"]);
   });
 
+  it("updates email and increments authVersion atomically in one SQL statement", async () => {
+    const currentRow = {
+      id: "usr-123",
+      email: "new@example.com",
+      fullName: "Existing User",
+      role: "admin",
+      companyId: "comp-123",
+      companyName: "Acme",
+      passwordHash: "existing-hash",
+      salt: "existing-salt",
+      isActive: true,
+      provider: "local",
+      emailConfirmed: false,
+      phoneNumber: "",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-11-09T00:00:00Z",
+      authVersion: 8,
+      platformRole: null,
+    };
+    mockPool.query.mockResolvedValueOnce({ rows: [currentRow], rowCount: 1 });
+
+    const adapter = new PostgresAdapter(mockPool);
+    const updated = await adapter.updateUserAndIncrementAuthVersion("usr-123", {
+      email: "new@example.com",
+      emailConfirmed: false,
+    });
+
+    expect(updated?.email).toBe("new@example.com");
+    expect(updated?.authVersion).toBe(8);
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain("email = $1");
+    expect(sql).toContain('"emailConfirmed" = $2');
+    expect(sql).toContain('"authVersion" = COALESCE("authVersion", 0) + 1');
+    expect(sql).toContain('"updatedAt" = $3');
+    expect(sql).toContain("WHERE id = $4 RETURNING *");
+    expect(params).toEqual(["new@example.com", false, expect.any(String), "usr-123"]);
+  });
+
   it("createReport properly inserts report with JSONB strings and returns formatted ReportRecord", async () => {
     mockPool.query.mockResolvedValueOnce({ rows: [] });
 
