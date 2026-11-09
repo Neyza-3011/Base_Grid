@@ -110,7 +110,7 @@ export function normalizeEmail(email: string): string {
 export function isValidEmail(email: string): boolean {
   const normalized = normalizeEmail(email);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(normalized);
+  return normalized.length <= 254 && emailRegex.test(normalized);
 }
 
 /**

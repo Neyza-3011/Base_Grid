@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { getJwtSecret, assertValidJwtSecret } from "./security";
+import { getJwtSecret, assertValidJwtSecret, isValidEmail } from "./security";
+
+describe("Email Address Validation", () => {
+  it("accepts ordinary email addresses and rejects addresses longer than 254 characters", () => {
+    expect(isValidEmail("user@example.com")).toBe(true);
+    expect(isValidEmail(`${"a".repeat(250)}@b.co`)).toBe(false);
+  });
+});
 
 describe("JWT Secret Management & Security Hardening", () => {
   const validSecret = "secure-production-jwt-secret-key-at-least-32-chars-long!";
