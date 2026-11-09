@@ -797,7 +797,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         paramIndex++;
       }
       if (profileUpdates?.emailConfirmed !== undefined) {
-        setClauses.push(`"emailConfirmed" = ${paramIndex}`);
+        setClauses.push(`"emailConfirmed" = $${paramIndex}`);
         params.push(profileUpdates.emailConfirmed);
         paramIndex++;
       }
