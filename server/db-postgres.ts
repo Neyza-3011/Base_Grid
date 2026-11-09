@@ -802,7 +802,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         paramIndex++;
       }
       if (profileUpdates?.avatarDataUrl !== undefined) {
-        setClauses.push(`"avatarDataUrl" = ${paramIndex}`);
+        setClauses.push(`"avatarDataUrl" = $${paramIndex}`);
         params.push(profileUpdates.avatarDataUrl);
         paramIndex++;
       }
