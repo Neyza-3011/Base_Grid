@@ -37,6 +37,7 @@ import { TeamService } from "../services/team.service";
 import { getRuntimeMode } from "../runtime-mode";
 
 export const authRouter = Router();
+const MAX_AUTH_TOKEN_LENGTH = 256;
 const teamService = new TeamService(db);
 
 const isProduction = getRuntimeMode() === "production";
@@ -168,7 +169,7 @@ authRouter.post("/verify-email", verifyEmailLimiter, asyncHandler(async (req: an
   try {
     const { token } = req.body || {};
 
-    if (!token || typeof token !== "string") {
+    if (!token || typeof token !== "string" || token.length > MAX_AUTH_TOKEN_LENGTH) {
       res.status(400).json({ detail: "Token di verifica mancante o non valido." });
       return;
     }
@@ -329,7 +330,7 @@ authRouter.post("/reset-password", resetPasswordLimiter, asyncHandler(async (req
     const { token } = req.body || {};
     const newPassword = req.body?.new_password || req.body?.newPassword;
 
-    if (!token || typeof token !== "string" || !newPassword || typeof newPassword !== "string") {
+    if (!token || typeof token !== "string" || token.length > MAX_AUTH_TOKEN_LENGTH || !newPassword || typeof newPassword !== "string") {
       res.status(400).json({ detail: "Token e nuova password sono obbligatori." });
       return;
     }
@@ -796,8 +797,8 @@ authRouter.get("/csrf-token", asyncHandler(async (req: any, res: any): Promise<v
  */
 authRouter.get(["/invite", "/accept-invite"], asyncHandler(async (req: any, res: any): Promise<void> => {
   const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
-  if (!token) {
-    res.status(400).json({ detail: "Token di invito non fornito." });
+  if (!token || token.length > MAX_AUTH_TOKEN_LENGTH) {
+    res.status(400).json({ detail: "Token di invito mancante o non valido." });
     return;
   }
 
@@ -817,7 +818,7 @@ authRouter.get(["/invite", "/accept-invite"], asyncHandler(async (req: any, res:
  */
 authRouter.post(["/accept-invite", "/invite/accept"], resetPasswordLimiter, asyncHandler(async (req: any, res: any): Promise<void> => {
   const { token, password } = req.body || {};
-  if (!token || typeof token !== "string" || !token.trim()) {
+  if (!token || typeof token !== "string" || token.length > MAX_AUTH_TOKEN_LENGTH || !token.trim()) {
     res.status(400).json({ detail: "Token di invito non fornito." });
     return;
   }
