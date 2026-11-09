@@ -1146,6 +1146,44 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     });
   });
 
+  describe("Profile avatar persistence and validation", () => {
+    it("persists a valid PNG avatar and returns it from the authenticated profile endpoint", async () => {
+      const avatarDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
+      const update = await request(app)
+        .put("/api/v1/users/me")
+        .set("Cookie", adminCookies)
+        .set("x-csrf-token", csrfToken)
+        .send({ avatar_data_url: avatarDataUrl });
+
+      expect(update.status).toBe(200);
+      expect(update.body.avatarDataUrl).toBe(avatarDataUrl);
+
+      const profile = await request(app)
+        .get("/api/v1/users/me")
+        .set("Cookie", adminCookies);
+
+      expect(profile.status).toBe(200);
+      expect(profile.body.avatarDataUrl).toBe(avatarDataUrl);
+    });
+
+    it("rejects unsupported image data instead of persisting it", async () => {
+      const before = await request(app)
+        .get("/api/v1/users/me")
+        .set("Cookie", adminCookies);
+      const update = await request(app)
+        .put("/api/v1/users/me")
+        .set("Cookie", adminCookies)
+        .set("x-csrf-token", csrfToken)
+        .send({ avatar_data_url: "data:image/svg+xml;base64,PHN2Zy8+" });
+
+      expect(update.status).toBe(400);
+      const after = await request(app)
+        .get("/api/v1/users/me")
+        .set("Cookie", adminCookies);
+      expect(after.body.avatarDataUrl).toBe(before.body.avatarDataUrl ?? null);
+    });
+  });
+
   describe("Null / Non-object JSON Body Payload Validation", () => {
     it("should reject PUT /api/v1/users/me with null or non-object body as 400 Bad Request", async () => {
       const res = await request(app)

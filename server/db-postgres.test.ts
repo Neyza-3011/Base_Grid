@@ -275,6 +275,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       provider: "local",
       emailConfirmed: true,
       phoneNumber: "+39 123",
+      avatarDataUrl: null,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-02T00:00:00Z"),
     };
@@ -291,6 +292,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(user).not.toBeNull();
     expect(user?.email).toBe("test@example.com");
     expect(user?.fullName).toBe("Test User");
+    expect(user?.avatarDataUrl).toBeNull();
     expect(user?.createdAt).toBe("2026-01-01T00:00:00.000Z");
   });
 

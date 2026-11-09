@@ -171,7 +171,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">>,
   ): Promise<UserRecord | null> {
     const user = this.users.get(userId);
     if (!user) return null;
@@ -185,6 +185,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     if (profileUpdates?.email !== undefined) user.email = profileUpdates.email;
     if (profileUpdates?.phoneNumber !== undefined) user.phoneNumber = profileUpdates.phoneNumber;
     if (profileUpdates?.emailConfirmed !== undefined) user.emailConfirmed = profileUpdates.emailConfirmed;
+    if (profileUpdates?.avatarDataUrl !== undefined) user.avatarDataUrl = profileUpdates.avatarDataUrl;
 
     this.users.set(userId, user);
     return { ...user };

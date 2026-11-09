@@ -1,6 +1,6 @@
 import { appendCsrfHeaders } from "../../lib/auth";
 import { buildProfileUpdatePayload } from "../../lib/profile-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserSession, logoutUser } from "@/lib/auth";
 import { User, Mail, Shield, Save, LogOut, Phone, Bell, Camera, CheckCircle } from "lucide-react";
@@ -20,6 +20,7 @@ export function ProfileSettings({
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarChanged, setAvatarChanged] = useState(false);
   const [formData, setFormData] = useState({
     fullName: currentUser.fullName || "",
     email: currentUser.email || "",
@@ -28,6 +29,25 @@ export function ProfileSettings({
     newPassword: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/v1/users/me", {
+      credentials: "include",
+      headers: appendCsrfHeaders({ Accept: "application/json" }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((user) => {
+        if (active && typeof user?.avatarDataUrl === "string") setAvatarPreview(user.avatarDataUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const getInitials = (name: string) => {
     return name
@@ -61,14 +81,29 @@ export function ProfileSettings({
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-        toast.info("Anteprima temporanea: la foto profilo non viene salvata sul server.");
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      toast.error("Seleziona un'immagine PNG o JPEG.");
+      e.target.value = "";
+      return;
     }
+    if (file.size === 0 || file.size > 256 * 1024) {
+      toast.error("La foto deve avere dimensioni massime di 256 KB.");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") {
+        toast.error("Impossibile leggere il file selezionato.");
+        return;
+      }
+      setAvatarPreview(reader.result);
+      setAvatarChanged(true);
+      toast.info("Foto pronta. Salva il profilo per renderla permanente.");
+    };
+    reader.onerror = () => toast.error("Impossibile leggere il file selezionato.");
+    reader.readAsDataURL(file);
   };
 
   const handleLogout = async () => {
@@ -92,7 +127,10 @@ export function ProfileSettings({
         headers: appendCsrfHeaders({
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify(buildProfileUpdatePayload(formData)),
+        body: JSON.stringify({
+          ...buildProfileUpdatePayload(formData),
+          ...(avatarChanged ? { avatar_data_url: avatarPreview } : {}),
+        }),
       });
 
       if (!res.ok) {
@@ -126,6 +164,12 @@ export function ProfileSettings({
       };
 
       onUpdate(updatedSession);
+      if (avatarChanged) {
+        setAvatarChanged(false);
+        setAvatarPreview(
+          typeof savedUser.avatarDataUrl === "string" ? savedUser.avatarDataUrl : null,
+        );
+      }
       toast.success("Modifiche salvate con successo!");
 
       if (onClose) {
@@ -157,7 +201,7 @@ export function ProfileSettings({
               <Camera className="h-3.5 w-3.5" />
               <input
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg"
                 className="hidden"
                 onChange={handleAvatarChange}
               />

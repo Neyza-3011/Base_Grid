@@ -8,6 +8,43 @@ import { TeamService } from "../services/team.service";
 import { TEAM_ADMIN_ROLES } from "../types";
 import { config, PLATFORM_CEO_EMAIL } from "../config";
 import { emailService } from "../email-service";
+import { PDFDocument } from "pdf-lib";
+import { hasSafeImageDimensions } from "../validation";
+
+const MAX_AVATAR_BYTES = 256 * 1024;
+const MAX_AVATAR_DATA_URL_LENGTH = 350_000;
+
+async function validateAvatarDataUrl(value: unknown): Promise<string> {
+  if (typeof value !== "string" || value.length > MAX_AVATAR_DATA_URL_LENGTH) {
+    throw new Error("La foto deve essere un PNG o JPEG di massimo 256 KB.");
+  }
+  const match = value.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/i);
+  if (!match) throw new Error("La foto deve essere un'immagine PNG o JPEG valida.");
+  const mime = match[1].toLowerCase();
+  const payload = match[2];
+  const bytes = Buffer.from(payload, "base64");
+  if (bytes.length === 0 || bytes.length > MAX_AVATAR_BYTES || bytes.toString("base64") !== payload) {
+    throw new Error("La foto deve essere un PNG o JPEG di massimo 256 KB.");
+  }
+  if (mime === "png") {
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (bytes.length < 24 || !bytes.subarray(0, 8).equals(signature)) throw new Error("Il contenuto PNG non è valido.");
+  } else if (bytes.length < 3 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+    throw new Error("Il contenuto JPEG non è valido.");
+  }
+  const contentType = mime === "png" ? "image/png" : "image/jpeg";
+  if (!hasSafeImageDimensions(bytes, contentType)) throw new Error("Le dimensioni della foto non sono valide o superano 2048 × 2048 pixel.");
+  try {
+    const pdf = await PDFDocument.create();
+    const image = mime === "png" ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    if (!image.width || !image.height || image.width > 2048 || image.height > 2048 || image.width * image.height > 4_194_304) {
+      throw new Error("invalid dimensions");
+    }
+  } catch {
+    throw new Error("Il file non è un PNG o JPEG valido o supera le dimensioni consentite.");
+  }
+  return value;
+}
 
 export const usersRouter = Router();
 const teamService = new TeamService(db);
@@ -21,7 +58,7 @@ usersRouter.get("/me", authenticate, (req: any, res: any): void => {
     res.status(401).json({ detail: "Non autenticato." });
     return;
   }
-  res.status(200).json(toSafeUserSession(req.user));
+  res.status(200).json({ ...toSafeUserSession(req.user), avatarDataUrl: req.user.avatarDataUrl ?? null });
 });
 
 /**
@@ -39,7 +76,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     return;
   }
 
-  const { full_name, email, password, current_password, phone_number } = req.body;
+  const { full_name, email, password, current_password, phone_number, avatar_data_url } = req.body;
   const updates: any = {};
 
   if (full_name !== undefined) {
@@ -139,6 +176,17 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     updates.phoneNumber = phone_number.trim();
   }
 
+  if (avatar_data_url !== undefined) {
+    try {
+      updates.avatarDataUrl = avatar_data_url === null || avatar_data_url === ""
+        ? null
+        : await validateAvatarDataUrl(avatar_data_url);
+    } catch (error) {
+      res.status(400).json({ detail: error instanceof Error ? error.message : "Foto profilo non valida." });
+      return;
+    }
+  }
+
   if (emailChanged && config.EMAIL_VERIFICATION_ENABLED) {
     if (!tokenStore.isAvailable()) {
       res.status(503).json({ detail: "Servizio di sicurezza temporaneamente non disponibile per la revoca delle sessioni." });
@@ -151,11 +199,12 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
 
     if (password && typeof password === "string") {
       // Atomic: password + authVersion + any profile fields in a single DB operation
-      const profileUpdates: Partial<Pick<import("../types").UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">> = {};
+      const profileUpdates: Partial<Pick<import("../types").UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">> = {};
       if (updates.fullName !== undefined) profileUpdates.fullName = updates.fullName;
       if (updates.email !== undefined) profileUpdates.email = updates.email;
       if (updates.phoneNumber !== undefined) profileUpdates.phoneNumber = updates.phoneNumber;
       if (updates.emailConfirmed !== undefined) profileUpdates.emailConfirmed = updates.emailConfirmed;
+      if (updates.avatarDataUrl !== undefined) profileUpdates.avatarDataUrl = updates.avatarDataUrl;
 
       updatedUser = await db.updatePasswordAndIncrementAuthVersion(
         req.user.id,
@@ -174,7 +223,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     } else {
       // Profile-only update: no password change
       if (Object.keys(updates).length === 0) {
-        res.status(200).json(toSafeUserSession(req.user));
+        res.status(200).json({ ...toSafeUserSession(req.user), avatarDataUrl: req.user.avatarDataUrl ?? null });
         return;
       }
       updatedUser = emailChanged && config.EMAIL_VERIFICATION_ENABLED
@@ -246,7 +295,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
       }
     }
 
-    res.status(200).json(toSafeUserSession(updatedUser));
+    res.status(200).json({ ...toSafeUserSession(updatedUser), avatarDataUrl: updatedUser.avatarDataUrl ?? null });
   } catch (err: any) {
     if (err.code === "23505" || err.message?.includes("already in use") || err.message?.includes("already registered")) {
       res.status(409).json({ detail: "Questa email è già in uso da un altro utente." });

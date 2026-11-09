@@ -75,6 +75,7 @@ function mapUserRow(row: any): UserRecord {
     provider: row.provider as "local" | "google",
     emailConfirmed: Boolean(row.emailConfirmed),
     phoneNumber: row.phoneNumber || "",
+    avatarDataUrl: typeof row.avatarDataUrl === "string" && row.avatarDataUrl ? row.avatarDataUrl : null,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
     authVersion: Number(row.authVersion) || 0,
@@ -335,7 +336,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">>,
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
@@ -767,7 +768,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">>,
   ): Promise<UserRecord | null> {
     try {
       const now = new Date().toISOString();
@@ -798,6 +799,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
       if (profileUpdates?.emailConfirmed !== undefined) {
         setClauses.push(`"emailConfirmed" = $${paramIndex}`);
         params.push(profileUpdates.emailConfirmed);
+        paramIndex++;
+      }
+      if (profileUpdates?.avatarDataUrl !== undefined) {
+        setClauses.push(`"avatarDataUrl" = $${paramIndex}`);
+        params.push(profileUpdates.avatarDataUrl);
         paramIndex++;
       }
 
@@ -1052,6 +1058,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ["isActive", '"isActive"'],
       ["emailConfirmed", '"emailConfirmed"'],
       ["phoneNumber", '"phoneNumber"'],
+      ["avatarDataUrl", '"avatarDataUrl"'],
     ];
     const setClauses: string[] = [];
     const params: unknown[] = [];
@@ -1102,6 +1109,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         ["isActive", '"isActive"'],
         ["emailConfirmed", '"emailConfirmed"'],
         ["phoneNumber", '"phoneNumber"'],
+        ["avatarDataUrl", '"avatarDataUrl"'],
       ];
       const setClauses: string[] = [];
       const params: unknown[] = [];
