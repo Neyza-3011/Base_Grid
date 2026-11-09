@@ -175,7 +175,14 @@ function BillingPage() {
 
               </ul>
             </div>
-<button type="button" disabled title="Checkout non configurato" className="w-full py-2.5 rounded-xl bg-white/5 text-white/50 font-medium text-sm cursor-not-allowed">Attivazione non disponibile</button>
+<button
+              type="button"
+              disabled
+              title="Checkout non configurato"
+              className="w-full py-2.5 rounded-xl bg-white/5 text-white/50 font-medium text-sm cursor-not-allowed"
+            >
+              Attivazione non disponibile
+            </button>
           </div>
         </div>
       </div>
