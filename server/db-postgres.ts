@@ -768,7 +768,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">>,
   ): Promise<UserRecord | null> {
     try {
       const now = new Date().toISOString();
