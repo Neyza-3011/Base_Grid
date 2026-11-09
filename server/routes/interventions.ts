@@ -78,6 +78,20 @@ interventionsRouter.get(
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
     const priority = req.query.priority as string | undefined;
+    const boundedFilters = [
+      ["search", search, 255],
+      ["technicianId", req.query.technicianId as string | undefined, 100],
+      ["customerId", req.query.customerId as string | undefined, 100],
+      ["locationId", req.query.locationId as string | undefined, 100],
+      ["assetId", req.query.assetId as string | undefined, 100],
+      ["scheduledStartFrom", (req.query.scheduledStartFrom || req.query.scheduledStart) as string | undefined, 40],
+      ["scheduledStartTo", (req.query.scheduledStartTo || req.query.scheduledEnd) as string | undefined, 40],
+    ] as const;
+    const oversizedFilter = boundedFilters.find(([key, value, max]) => value !== undefined && value.length > max);
+    if (oversizedFilter) {
+      res.status(400).json({ detail: `Il filtro ${oversizedFilter[0]} supera la lunghezza massima consentita.` });
+      return;
+    }
     if (status !== undefined && !VALID_INTERVENTION_STATUSES.includes(status as any)) {
       res.status(400).json({ detail: "Stato intervento non valido." });
       return;
