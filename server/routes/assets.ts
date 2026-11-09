@@ -68,6 +68,14 @@ assetsRouter.get(
     const search = req.query.search as string | undefined;
     const customerId = req.query.customerId as string | undefined;
     const locationId = req.query.locationId as string | undefined;
+    if (search !== undefined && search.length > 255) {
+      res.status(400).json({ detail: "Il parametro search non può superare 255 caratteri." });
+      return;
+    }
+    if ([customerId, locationId].some((value) => value !== undefined && value.length > 100)) {
+      res.status(400).json({ detail: "Gli identificativi dei filtri non possono superare 100 caratteri." });
+      return;
+    }
     const assetType = req.query.assetType as AssetType | undefined;
     const status = req.query.status as AssetStatus | undefined;
     const activeOnlyRaw = req.query.activeOnly as string | undefined;
