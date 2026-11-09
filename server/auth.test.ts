@@ -2045,6 +2045,33 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
     });
     expect(loginRes.status).toBe(200);
   });
+  
+  describe("Bounded authentication token inputs", () => {
+    it("rejects overlong verification, reset, and invitation tokens before database work", async () => {
+      const token = "x".repeat(257);
+      const verification = await apiRequest("/api/v1/auth/verify-email", {
+        method: "POST",
+        body: { token },
+      });
+      expect(verification.status).toBe(400);
+
+      const reset = await apiRequest("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: { token, new_password: "SecurePassword123!" },
+      });
+      expect(reset.status).toBe(400);
+
+      const inviteLookup = await apiRequest(`/api/v1/auth/invite?token=${token}`);
+      expect(inviteLookup.status).toBe(400);
+
+      const inviteAccept = await apiRequest("/api/v1/auth/accept-invite", {
+        method: "POST",
+        body: { token, password: "SecurePassword123!" },
+      });
+      expect(inviteAccept.status).toBe(400);
+    });
+  });
+
 });
 
   describe("15. CSRF Protection Security Suite (P0.4.1)", () => {
