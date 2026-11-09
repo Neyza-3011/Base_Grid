@@ -512,4 +512,15 @@ describe("Platform admin endpoint authorization", () => {
     expect(Array.isArray(tenants.body)).toBe(true);
     expect(tenants.body.some((tenant: { id: string }) => tenant.id === "comp-rossi-001")).toBe(true);
   });
+
+  it("rejects overlong tenant company IDs before attempting a profile update", async () => {
+    const response = await putWithUser(
+      `/api/v1/admin/tenants/${"x".repeat(101)}/profile`,
+      "jack.cardinali15@gmail.com",
+      { name: "Should not update" },
+    );
+    expect(response.status).toBe(400);
+    expect(response.body.detail).toMatch(/ID azienda non valido/i);
+  });
+
 });
