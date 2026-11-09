@@ -137,6 +137,15 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
   });
 
   describe("Server-Side RBAC Matrix", () => {
+    it("rejects overlong customer search filters before querying the database", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const res = await apiRequest(`/api/v1/customers?search=${"x".repeat(256)}`, {
+        cookies: auth.cookies,
+      });
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toContain("255");
+    });
+
     // Platform superadmin is not a tenant-scoped role; its authority is tested at the authentication boundary.
     const writeRoles: UserRole[] = [
       "owner",
