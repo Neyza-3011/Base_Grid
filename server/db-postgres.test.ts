@@ -376,7 +376,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       phoneNumber: "",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-11-09T00:00:00Z",
-      authVersion: 10,
+      authVersion: 11,
       platformRole: null,
     };
     mockClient.query
@@ -392,7 +392,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
 
     expect(updated?.email).toBe("new@example.com");
-    expect(updated?.authVersion).toBe(10);
+    expect(updated?.authVersion).toBe(11);
     expect(mockClient.query).toHaveBeenCalledTimes(4);
     const revokeCall = mockClient.query.mock.calls[1];
     expect(revokeCall[0]).toContain("UPDATE auth_tokens");
