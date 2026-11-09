@@ -9,10 +9,12 @@ import { useNavigate } from "@tanstack/react-router";
 export function ProfileSettings({
   currentUser,
   onUpdate,
+  onSessionInvalidated,
   onClose,
 }: {
   currentUser: UserSession;
   onUpdate: (user: UserSession) => void;
+  onSessionInvalidated: () => void;
   onClose?: () => void;
 }) {
   const navigate = useNavigate();
@@ -98,10 +100,23 @@ export function ProfileSettings({
           .json()
           .catch(() => ({ detail: "Errore durante il salvataggio." }));
         toast.error(errData.detail || "Impossibile aggiornare il profilo.");
+        if (
+          res.status === 503 &&
+          typeof errData.detail === "string" &&
+          errData.detail.startsWith("Email aggiornata, ma non è stato possibile inviare")
+        ) {
+          onSessionInvalidated();
+        }
         return;
       }
 
       const savedUser = await res.json();
+      if (typeof savedUser.email === "string" && savedUser.email !== currentUser.email) {
+        toast.info("Email aggiornata. Accedi di nuovo e completa la verifica del nuovo indirizzo.");
+        onSessionInvalidated();
+        return;
+      }
+
       const updatedSession: UserSession = {
         ...currentUser,
         fullName: savedUser.fullName || formData.fullName,
