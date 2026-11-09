@@ -185,6 +185,7 @@ export class DatabaseStore implements IDatabaseAdapter {
     if (profileUpdates?.email !== undefined) user.email = profileUpdates.email;
     if (profileUpdates?.phoneNumber !== undefined) user.phoneNumber = profileUpdates.phoneNumber;
     if (profileUpdates?.emailConfirmed !== undefined) user.emailConfirmed = profileUpdates.emailConfirmed;
+    if (profileUpdates?.avatarDataUrl !== undefined) user.avatarDataUrl = profileUpdates.avatarDataUrl;
 
     this.users.set(userId, user);
     return { ...user };
