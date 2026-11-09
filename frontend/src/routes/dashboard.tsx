@@ -145,6 +145,11 @@ function Dashboard() {
     setTourOpen(false);
   };
 
+  const handleSessionInvalidated = () => {
+    setUser(null);
+    navigate({ to: "/" });
+  };
+
   const handleLogout = async () => {
     const loggedOut = await logoutUser();
     if (!loggedOut) {
@@ -536,6 +541,7 @@ function Dashboard() {
             <ProfileSettings
               currentUser={currentUser}
               onUpdate={setUser}
+              onSessionInvalidated={handleSessionInvalidated}
               onClose={() => setActiveView("dashboard")}
             />
           )}

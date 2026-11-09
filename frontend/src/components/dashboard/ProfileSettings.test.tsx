@@ -24,6 +24,7 @@ describe("ProfileSettings notification preferences", () => {
       React.createElement(ProfileSettings, {
         currentUser,
         onUpdate: () => undefined,
+        onSessionInvalidated: () => undefined,
       }),
     );
 
