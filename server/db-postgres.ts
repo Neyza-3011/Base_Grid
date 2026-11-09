@@ -75,6 +75,7 @@ function mapUserRow(row: any): UserRecord {
     provider: row.provider as "local" | "google",
     emailConfirmed: Boolean(row.emailConfirmed),
     phoneNumber: row.phoneNumber || "",
+    avatarDataUrl: typeof row.avatarDataUrl === "string" && row.avatarDataUrl ? row.avatarDataUrl : null,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt || ""),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt || ""),
     authVersion: Number(row.authVersion) || 0,
@@ -1052,6 +1053,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ["isActive", '"isActive"'],
       ["emailConfirmed", '"emailConfirmed"'],
       ["phoneNumber", '"phoneNumber"'],
+      ["avatarDataUrl", '"avatarDataUrl"'],
     ];
     const setClauses: string[] = [];
     const params: unknown[] = [];
