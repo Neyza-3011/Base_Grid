@@ -18,7 +18,7 @@ describePostgres("PostgreSQL team last-admin invariant under concurrency", () =>
     if (!testDatabaseUrl) return;
 
     const parsedUrl = new URL(testDatabaseUrl);
-    const databaseName = parsedUrl.pathname.replace(/^\\//, "");
+    const databaseName = parsedUrl.pathname.replace(/^\//, "");
     if (
       !["localhost", "127.0.0.1", "::1"].includes(parsedUrl.hostname) ||
       !databaseName.endsWith("_test")
