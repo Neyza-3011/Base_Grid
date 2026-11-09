@@ -177,7 +177,9 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
         res.status(200).json(toSafeUserSession(req.user));
         return;
       }
-      updatedUser = await db.updateUser(req.user.id, updates);
+      updatedUser = emailChanged && config.EMAIL_VERIFICATION_ENABLED
+        ? await db.updateUserAndIncrementAuthVersion(req.user.id, updates)
+        : await db.updateUser(req.user.id, updates);
       if (!updatedUser) {
         res.status(500).json({ detail: "Impossibile aggiornare il profilo." });
         return;
@@ -185,46 +187,60 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
     }
 
     if (emailChanged && config.EMAIL_VERIFICATION_ENABLED && updates.email) {
-      // Revoke old active email verification tokens
-      await db.revokeActiveAuthTokens(req.user.id, "email_verification");
-
-      const rawVerificationToken = generateSecureToken();
-      const verificationTokenHash = hashToken(rawVerificationToken);
-      const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-      await db.createAuthToken({
-        userId: req.user.id,
-        tokenHash: verificationTokenHash,
-        type: "email_verification",
-        expiresAt: verificationExpiresAt,
-      });
-
-      let verificationEmailSent = false;
-      try {
-        const delivery = await emailService.sendVerificationEmail(updates.email, rawVerificationToken, updatedUser.fullName);
-        verificationEmailSent = delivery.success;
-        if (!verificationEmailSent) {
-          console.error("[UsersRouter] Verification email delivery failed.");
-        }
-      } catch {
-        console.error("[UsersRouter] Verification email delivery failed.");
-      }
-
-      // Revoke active sessions & clear auth cookies so user must verify new email
+      // The email update above atomically incremented authVersion. Clear browser cookies
+      // before any fallible verification-token/database/provider operations.
       res.clearCookie("access_token", { path: "/" });
       res.clearCookie("refresh_token", { path: "/api/v1/auth" });
       res.clearCookie("csrf_token", { path: "/" });
 
-      await db.incrementUserAuthVersion(req.user.id);
-      if (tokenStore.isAvailable()) {
+      try {
         try {
           await tokenStore.revokeAllUserTokens(req.user.id);
         } catch {
+          // The persisted authVersion increment already invalidates existing access JWTs.
+          // Keep the log generic; never expose provider or token-store error details.
           console.error("[UsersRouter] Failed to revoke active sessions after email change.");
         }
-      }
 
-      if (!verificationEmailSent) {
+        // Revoke old verification tokens before issuing the token for the new address.
+        await db.revokeActiveAuthTokens(req.user.id, "email_verification");
+
+        const rawVerificationToken = generateSecureToken();
+        const verificationTokenHash = hashToken(rawVerificationToken);
+        const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        await db.createAuthToken({
+          userId: req.user.id,
+          tokenHash: verificationTokenHash,
+          type: "email_verification",
+          expiresAt: verificationExpiresAt,
+        });
+
+        let verificationEmailSent = false;
+        try {
+          const delivery = await emailService.sendVerificationEmail(
+            updates.email,
+            rawVerificationToken,
+            updatedUser.fullName,
+          );
+          verificationEmailSent = delivery.success;
+          if (!verificationEmailSent) {
+            console.error("[UsersRouter] Verification email delivery failed.");
+          }
+        } catch {
+          console.error("[UsersRouter] Verification email delivery failed.");
+        }
+
+        if (!verificationEmailSent) {
+          res.status(503).json({
+            detail: "Email aggiornata, ma non è stato possibile inviare il link di verifica. Richiedi un nuovo invio della verifica.",
+          });
+          return;
+        }
+      } catch {
+        // The email has already been persisted and the old session invalidated.
+        // Report this partial outcome explicitly instead of a generic profile-update error.
+        console.error("[UsersRouter] Failed to prepare verification after email change.");
         res.status(503).json({
           detail: "Email aggiornata, ma non è stato possibile inviare il link di verifica. Richiedi un nuovo invio della verifica.",
         });
