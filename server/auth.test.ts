@@ -3462,6 +3462,8 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
 
     it("invalidates the old session when verification-token persistence fails after an email change", async () => {
       const { config } = await import("./config");
+      // This suite normally disables verification; explicitly exercise the enabled production path.
+      config.EMAIL_VERIFICATION_ENABLED = true;
       const { emailService } = await import("./email-service");
       const sendSpy = vi.spyOn(emailService, "sendVerificationEmail").mockResolvedValue({ success: true });
       const createTokenSpy = vi.spyOn(db, "createAuthToken").mockRejectedValue(
