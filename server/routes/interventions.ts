@@ -84,6 +84,7 @@ interventionsRouter.get(
       ["customerId", req.query.customerId as string | undefined, 100],
       ["locationId", req.query.locationId as string | undefined, 100],
       ["assetId", req.query.assetId as string | undefined, 100],
+      ["cursor", req.query.cursor as string | undefined, 512],
       ["scheduledStartFrom", (req.query.scheduledStartFrom || req.query.scheduledStart) as string | undefined, 40],
       ["scheduledStartTo", (req.query.scheduledStartTo || req.query.scheduledEnd) as string | undefined, 40],
     ] as const;

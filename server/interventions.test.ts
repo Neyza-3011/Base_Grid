@@ -1286,6 +1286,15 @@ describe("Interventions Backend Module (P1.4)", () => {
   });
 
   describe("6. Pagination and Query Filters", () => {
+    it("rejects pagination cursors longer than 512 characters before querying the database", async () => {
+      const res = await apiRequest(`/api/v1/interventions?cursor=${"a".repeat(513)}`, {
+        method: "GET",
+        cookies: adminA.cookies,
+      });
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toMatch(/filtro cursor supera/i);
+    });
+
     it.each([
       "/api/v1/interventions?cursor=not-a-valid-cursor",
       "/api/v1/interventions?cursor=aW52YWxpZDo6aWQ=",
