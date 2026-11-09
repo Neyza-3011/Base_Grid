@@ -158,6 +158,19 @@ describe("P1.3 Assets / Site Equipment Suite", () => {
   });
 
   describe("Relational Consistency (Customer -> Location -> Asset)", () => {
+    it("rejects overlong search and relationship filter values", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const longSearch = await apiRequest(`/api/v1/assets?search=${"x".repeat(256)}`, {
+        cookies: auth.cookies,
+      });
+      expect(longSearch.status).toBe(400);
+
+      const longCustomerId = await apiRequest(`/api/v1/assets?customerId=${"x".repeat(101)}`, {
+        cookies: auth.cookies,
+      });
+      expect(longCustomerId.status).toBe(400);
+    });
+
     it("successfully creates an asset when Customer and Location belong together", async () => {
       const auth = await createTestUserAndLogin(companyA, "admin");
       const customer = await db.createCustomer(companyA, { displayName: "Alpha Corp" });
