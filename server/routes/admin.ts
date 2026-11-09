@@ -82,7 +82,7 @@ adminRouter.get("/tenants", asyncHandler(async (_req: any, res: any): Promise<vo
  */
 adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res: any): Promise<void> => {
   const companyId = typeof req.params.companyId === "string" ? req.params.companyId.trim() : "";
-  if (!companyId) {
+  if (!companyId || companyId.length > 100) {
     res.status(400).json({ detail: "ID azienda non valido." });
     return;
   }
