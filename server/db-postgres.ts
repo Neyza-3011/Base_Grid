@@ -1074,41 +1074,55 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   /**
-   * Updates profile fields and invalidates existing access tokens in one SQL statement.
-   * Used for email changes so a failed verification-token operation cannot leave the
-   * old authenticated session valid after the persisted email has changed.
+   * Atomically invalidates existing email-verification tokens and updates the email
+   * while incrementing authVersion. Lock order matches verifyEmailWithToken
+   * (auth_tokens before users), preventing stale tokens from confirming a new address.
    */
   async updateUserAndIncrementAuthVersion(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null> {
-    const columns: Array<[keyof UserRecord, string]> = [
-      ["email", "email"],
-      ["fullName", '"fullName"'],
-      ["role", "role"],
-      ["companyName", '"companyName"'],
-      ["passwordHash", '"passwordHash"'],
-      ["salt", "salt"],
-      ["isActive", '"isActive"'],
-      ["emailConfirmed", '"emailConfirmed"'],
-      ["phoneNumber", '"phoneNumber"'],
-    ];
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
-    for (const [field, column] of columns) {
-      if (Object.prototype.hasOwnProperty.call(updates, field)) {
-        params.push(updates[field]);
-        setClauses.push(`${column} = $${params.length}`);
+    return this.withTransaction(async (client) => {
+      const now = new Date().toISOString();
+
+      // Revoke first: verifyEmailWithToken locks the token row before updating users.
+      // Keeping the same lock order avoids a token/user deadlock and closes the race
+      // where an old token could confirm the newly changed email.
+      await client.query(
+        `UPDATE auth_tokens
+         SET consumed = true, "consumedAt" = $1
+         WHERE "userId" = $2 AND type = 'email_verification' AND consumed = false`,
+        [now, id],
+      );
+
+      const columns: Array<[keyof UserRecord, string]> = [
+        ["email", "email"],
+        ["fullName", '"fullName"'],
+        ["role", "role"],
+        ["companyName", '"companyName"'],
+        ["passwordHash", '"passwordHash"'],
+        ["salt", "salt"],
+        ["isActive", '"isActive"'],
+        ["emailConfirmed", '"emailConfirmed"'],
+        ["phoneNumber", '"phoneNumber"'],
+      ];
+      const setClauses: string[] = [];
+      const params: unknown[] = [];
+      for (const [field, column] of columns) {
+        if (Object.prototype.hasOwnProperty.call(updates, field)) {
+          params.push(updates[field]);
+          setClauses.push(`${column} = $${params.length}`);
+        }
       }
-    }
 
-    setClauses.push('"authVersion" = COALESCE("authVersion", 0) + 1');
-    params.push(new Date().toISOString());
-    setClauses.push(`"updatedAt" = $${params.length}`);
-    params.push(id);
+      setClauses.push('"authVersion" = COALESCE("authVersion", 0) + 1');
+      params.push(now);
+      setClauses.push(`"updatedAt" = $${params.length}`);
+      params.push(id);
 
-    const res = await this.pool.query(
-      `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${params.length} RETURNING *`,
-      params,
-    );
-    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
+      const res = await client.query(
+        `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${params.length} RETURNING *`,
+        params,
+      );
+      return res.rows[0] ? mapUserRow(res.rows[0]) : null;
+    });
   }
 
   // --- Company Operations ---
