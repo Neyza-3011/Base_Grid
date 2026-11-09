@@ -376,7 +376,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       phoneNumber: "",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-11-09T00:00:00Z",
-      authVersion: 8,
+      authVersion: 9,
       platformRole: null,
     };
     mockPool.query.mockResolvedValueOnce({ rows: [currentRow], rowCount: 1 });
@@ -388,7 +388,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
 
     expect(updated?.email).toBe("new@example.com");
-    expect(updated?.authVersion).toBe(8);
+    expect(updated?.authVersion).toBe(9);
     const [sql, params] = mockPool.query.mock.calls[0];
     expect(sql).toContain("email = $1");
     expect(sql).toContain('"emailConfirmed" = $2');
