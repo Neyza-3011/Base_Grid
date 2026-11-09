@@ -44,7 +44,9 @@ export function ProfileSettings({
         if (active && typeof user?.avatarDataUrl === "string") setAvatarPreview(user.avatarDataUrl);
       })
       .catch(() => undefined);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const getInitials = (name: string) => {
@@ -164,7 +166,9 @@ export function ProfileSettings({
       onUpdate(updatedSession);
       if (avatarChanged) {
         setAvatarChanged(false);
-        setAvatarPreview(typeof savedUser.avatarDataUrl === "string" ? savedUser.avatarDataUrl : null);
+        setAvatarPreview(
+          typeof savedUser.avatarDataUrl === "string" ? savedUser.avatarDataUrl : null,
+        );
       }
       toast.success("Modifiche salvate con successo!");
 
