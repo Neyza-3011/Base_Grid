@@ -68,7 +68,8 @@ function BillingPage() {
             Scegli il piano per la tua squadra
           </h2>
           <p className="mt-2 text-white/70 text-sm">
-            Prezzi e piani indicativi. Il checkout non è configurato: questa pagina non può avviare pagamenti né attivare un piano.
+            Prezzi e piani indicativi. Il checkout non è configurato: questa pagina non può
+            avviare pagamenti né attivare un piano.
           </p>
         </div>
 
@@ -98,7 +99,14 @@ function BillingPage() {
                 </li>
               </ul>
             </div>
-<button type="button" disabled title="Checkout non configurato" className="w-full py-2.5 rounded-xl bg-white/5 text-white/50 font-medium text-sm cursor-not-allowed">Attivazione non disponibile</button>
+<button
+              type="button"
+              disabled
+              title="Checkout non configurato"
+              className="w-full py-2.5 rounded-xl bg-white/5 text-white/50 font-medium text-sm cursor-not-allowed"
+            >
+              Attivazione non disponibile
+            </button>
           </div>
 
           {/* Pro Enterprise - Featured */}
@@ -129,14 +137,21 @@ function BillingPage() {
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Gestione Materiali &
                   Magazzino
                 </li>
-                
+
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Multi-utente con permessi
                   personalizzati
                 </li>
               </ul>
             </div>
-<button type="button" disabled title="Checkout non configurato" className="w-full py-3 rounded-xl bg-white/5 text-white/50 font-bold text-sm cursor-not-allowed">Attivazione non disponibile</button>
+<button
+              type="button"
+              disabled
+              title="Checkout non configurato"
+              className="w-full py-3 rounded-xl bg-white/5 text-white/50 font-bold text-sm cursor-not-allowed"
+            >
+              Attivazione non disponibile
+            </button>
           </div>
 
           {/* Unlimited Enterprise */}
@@ -155,9 +170,9 @@ function BillingPage() {
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Tecnici ed Utenti
                   Illimitati
                 </li>
+
                 
-                
-                
+
               </ul>
             </div>
 <button type="button" disabled title="Checkout non configurato" className="w-full py-2.5 rounded-xl bg-white/5 text-white/50 font-medium text-sm cursor-not-allowed">Attivazione non disponibile</button>
