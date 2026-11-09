@@ -190,6 +190,18 @@ describe("Interventions Backend Module (P1.4)", () => {
   });
 
   describe("1. CRUD Base & Server-Authoritative Fields", () => {
+    it("rejects oversized list search and identifier filters", async () => {
+      const longSearch = await apiRequest(`/api/v1/interventions?search=${"x".repeat(256)}`, {
+        cookies: adminA.cookies,
+      });
+      expect(longSearch.status).toBe(400);
+
+      const longAssetId = await apiRequest(`/api/v1/interventions?assetId=${"x".repeat(101)}`, {
+        cookies: adminA.cookies,
+      });
+      expect(longAssetId.status).toBe(400);
+    });
+
     it("creates an intervention in status 'nuovo' with server-derived companyId and createdBy", async () => {
       const res = await apiRequest("/api/v1/interventions", {
         method: "POST",
