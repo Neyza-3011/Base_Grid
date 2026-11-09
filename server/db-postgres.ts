@@ -336,7 +336,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
     userId: string,
     passwordHash: string,
     salt: string,
-    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed">>,
+    profileUpdates?: Partial<Pick<UserRecord, "fullName" | "email" | "phoneNumber" | "emailConfirmed" | "avatarDataUrl">>,
   ): Promise<UserRecord | null>;
   createGoogleUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   findCompanyById(id: string): Promise<CompanyRecord | null>;
@@ -797,8 +797,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
         paramIndex++;
       }
       if (profileUpdates?.emailConfirmed !== undefined) {
-        setClauses.push(`"emailConfirmed" = $${paramIndex}`);
+        setClauses.push(`"emailConfirmed" = ${paramIndex}`);
         params.push(profileUpdates.emailConfirmed);
+        paramIndex++;
+      }
+      if (profileUpdates?.avatarDataUrl !== undefined) {
+        setClauses.push(`"avatarDataUrl" = ${paramIndex}`);
+        params.push(profileUpdates.avatarDataUrl);
         paramIndex++;
       }
 
@@ -1104,6 +1109,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         ["isActive", '"isActive"'],
         ["emailConfirmed", '"emailConfirmed"'],
         ["phoneNumber", '"phoneNumber"'],
+        ["avatarDataUrl", '"avatarDataUrl"'],
       ];
       const setClauses: string[] = [];
       const params: unknown[] = [];
