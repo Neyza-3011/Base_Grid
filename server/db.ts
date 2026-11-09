@@ -339,6 +339,25 @@ export class DatabaseStore implements IDatabaseAdapter {
     return updated;
   }
 
+  public async updateUserAndIncrementAuthVersion(
+    id: string,
+    updates: Partial<UserRecord>,
+  ): Promise<UserRecord | null> {
+    const user = this.users.get(id);
+    if (!user) return null;
+
+    const updated: UserRecord = {
+      ...user,
+      ...updates,
+      // Platform authority can only be set by trusted bootstrap/migration paths.
+      platformRole: user.platformRole ?? null,
+      authVersion: (user.authVersion || 0) + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    this.users.set(id, updated);
+    return { ...updated };
+  }
+
   public async findCompanyById(id: string): Promise<CompanyRecord | null> {
     const company = this.companies.get(id);
     if (!company) return null;

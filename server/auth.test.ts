@@ -3460,6 +3460,61 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       }
     });
 
+    it("invalidates the old session when verification-token persistence fails after an email change", async () => {
+      const { config } = await import("./config");
+      // This suite normally disables verification; explicitly exercise the enabled production path.
+      config.EMAIL_VERIFICATION_ENABLED = true;
+      const { emailService } = await import("./email-service");
+      const sendSpy = vi.spyOn(emailService, "sendVerificationEmail").mockResolvedValue({ success: true });
+      const createTokenSpy = vi.spyOn(db, "createAuthToken").mockRejectedValue(
+        new Error("simulated verification-token persistence failure"),
+      );
+
+      try {
+        const loginRes = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "admin@rossi.it", password: "Password123!" },
+        });
+        expect(loginRes.status).toBe(200);
+
+        const token = loginRes.setCookieHeaders.find((c) => c.startsWith("access_token="))!.split(";")[0].split("=")[1];
+        const csrf = loginRes.setCookieHeaders.find((c) => c.startsWith("csrf_token="))!.split(";")[0].split("=")[1];
+        const originalUser = await db.findUserByEmail("admin@rossi.it");
+        expect(originalUser).not.toBeNull();
+        const originalAuthVersion = originalUser!.authVersion || 0;
+
+        const updateRes = await apiRequest("/api/v1/users/me", {
+          method: "PUT",
+          headers: { "x-csrf-token": csrf },
+          cookies: { access_token: token, csrf_token: csrf },
+          body: { email: "verification.token.failure@rossi.it" },
+        });
+
+        expect(updateRes.status).toBe(503);
+        expect(updateRes.body.detail).toMatch(/email aggiornata.*non è stato possibile inviare/i);
+        expect(updateRes.setCookieHeaders.some((c) => c.startsWith("access_token=;"))).toBe(true);
+
+        const userInDb = await db.findUserByEmail("verification.token.failure@rossi.it");
+        expect(userInDb).not.toBeNull();
+        expect(userInDb?.emailConfirmed).toBe(false);
+        expect(userInDb?.authVersion).toBe(originalAuthVersion + 1);
+        expect(createTokenSpy).toHaveBeenCalledOnce();
+        expect(sendSpy).not.toHaveBeenCalled();
+
+        // Disable the email-verification gate to prove the persisted authVersion alone
+        // rejects the previously issued access token.
+        config.EMAIL_VERIFICATION_ENABLED = false;
+        const oldSessionRes = await apiRequest("/api/v1/users/me", {
+          cookies: { access_token: token, csrf_token: csrf },
+        });
+        expect(oldSessionRes.status).toBe(401);
+        expect(oldSessionRes.body.detail).toMatch(/sessione invalidata/i);
+      } finally {
+        createTokenSpy.mockRestore();
+        sendSpy.mockRestore();
+      }
+    });
+
     it("rejects changing the canonical platform CEO email through the self-profile route", async () => {
       const { PLATFORM_CEO_EMAIL } = await import("./config");
       const ceo = await db.findUserByEmail(PLATFORM_CEO_EMAIL);

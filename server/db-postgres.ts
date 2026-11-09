@@ -329,6 +329,7 @@ export interface IDatabaseAdapter extends DeleteReportAtomicOperation {
   findUserByEmail(email: string): Promise<UserRecord | null>;
   createUser(params: any): Promise<{ user: UserRecord; company: CompanyRecord }>;
   updateUser(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null>;
+  updateUserAndIncrementAuthVersion(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null>;
   incrementUserAuthVersion(userId: string): Promise<number | null>;
   updatePasswordAndIncrementAuthVersion(
     userId: string,
@@ -1061,6 +1062,44 @@ export class PostgresAdapter implements IDatabaseAdapter {
       }
     }
 
+    params.push(new Date().toISOString());
+    setClauses.push(`"updatedAt" = $${params.length}`);
+    params.push(id);
+
+    const res = await this.pool.query(
+      `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${params.length} RETURNING *`,
+      params,
+    );
+    return res.rows[0] ? mapUserRow(res.rows[0]) : null;
+  }
+
+  /**
+   * Updates profile fields and invalidates existing access tokens in one SQL statement.
+   * Used for email changes so a failed verification-token operation cannot leave the
+   * old authenticated session valid after the persisted email has changed.
+   */
+  async updateUserAndIncrementAuthVersion(id: string, updates: Partial<UserRecord>): Promise<UserRecord | null> {
+    const columns: Array<[keyof UserRecord, string]> = [
+      ["email", "email"],
+      ["fullName", '"fullName"'],
+      ["role", "role"],
+      ["companyName", '"companyName"'],
+      ["passwordHash", '"passwordHash"'],
+      ["salt", "salt"],
+      ["isActive", '"isActive"'],
+      ["emailConfirmed", '"emailConfirmed"'],
+      ["phoneNumber", '"phoneNumber"'],
+    ];
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    for (const [field, column] of columns) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        params.push(updates[field]);
+        setClauses.push(`${column} = $${params.length}`);
+      }
+    }
+
+    setClauses.push('"authVersion" = COALESCE("authVersion", 0) + 1');
     params.push(new Date().toISOString());
     setClauses.push(`"updatedAt" = $${params.length}`);
     params.push(id);
