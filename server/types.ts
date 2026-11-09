@@ -45,6 +45,8 @@ export interface UserRecord {
   provider: "local" | "google";
   emailConfirmed: boolean;
   phoneNumber?: string;
+  /** Validated PNG/JPEG data URL for the authenticated user profile. */
+  avatarDataUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   authVersion: number;
