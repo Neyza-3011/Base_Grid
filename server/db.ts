@@ -346,6 +346,15 @@ export class DatabaseStore implements IDatabaseAdapter {
     const user = this.users.get(id);
     if (!user) return null;
 
+    // Match the PostgreSQL adapter: stale verification links must be invalidated
+    // before the changed email can become the user's pending verification target.
+    for (const token of this.authTokens.values()) {
+      if (token.userId === id && token.type === "email_verification" && !token.consumed) {
+        token.consumed = true;
+        token.consumedAt = new Date().toISOString();
+      }
+    }
+
     const updated: UserRecord = {
       ...user,
       ...updates,

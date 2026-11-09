@@ -360,7 +360,7 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(params).toEqual(["New Name", "+39 999", expect.any(String), "usr-123"]);
   });
 
-  it("updates email and increments authVersion atomically in one SQL statement", async () => {
+  it("atomically revokes prior email verification tokens before updating email and authVersion", async () => {
     const currentRow = {
       id: "usr-123",
       email: "new@example.com",
@@ -376,10 +376,14 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
       phoneNumber: "",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-11-09T00:00:00Z",
-      authVersion: 9,
+      authVersion: 11,
       platformRole: null,
     };
-    mockPool.query.mockResolvedValueOnce({ rows: [currentRow], rowCount: 1 });
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // BEGIN
+      .mockResolvedValueOnce({ rows: [], rowCount: 2 }) // Revoke old verification tokens
+      .mockResolvedValueOnce({ rows: [currentRow], rowCount: 1 }) // Update user
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // COMMIT
 
     const adapter = new PostgresAdapter(mockPool);
     const updated = await adapter.updateUserAndIncrementAuthVersion("usr-123", {
@@ -388,14 +392,21 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     });
 
     expect(updated?.email).toBe("new@example.com");
-    expect(updated?.authVersion).toBe(9);
-    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(updated?.authVersion).toBe(11);
+    expect(mockClient.query).toHaveBeenCalledTimes(4);
+    const revokeCall = mockClient.query.mock.calls[1];
+    expect(revokeCall[0]).toContain("UPDATE auth_tokens");
+    expect(revokeCall[0]).toContain('WHERE "userId" = $2 AND type = \'email_verification\' AND consumed = false');
+    expect(revokeCall[1]).toEqual([expect.any(String), "usr-123"]);
+
+    const [sql, params] = mockClient.query.mock.calls[2];
     expect(sql).toContain("email = $1");
     expect(sql).toContain('"emailConfirmed" = $2');
     expect(sql).toContain('"authVersion" = COALESCE("authVersion", 0) + 1');
     expect(sql).toContain('"updatedAt" = $3');
     expect(sql).toContain("WHERE id = $4 RETURNING *");
     expect(params).toEqual(["new@example.com", false, expect.any(String), "usr-123"]);
+    expect(mockPool.query).not.toHaveBeenCalled();
   });
 
   it("createReport properly inserts report with JSONB strings and returns formatted ReportRecord", async () => {

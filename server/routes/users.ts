@@ -202,9 +202,7 @@ usersRouter.put("/me", authenticate, asyncHandler(async (req: any, res: any): Pr
           console.error("[UsersRouter] Failed to revoke active sessions after email change.");
         }
 
-        // Revoke old verification tokens before issuing the token for the new address.
-        await db.revokeActiveAuthTokens(req.user.id, "email_verification");
-
+        // Existing verification tokens were revoked atomically with the email update.
         const rawVerificationToken = generateSecureToken();
         const verificationTokenHash = hashToken(rawVerificationToken);
         const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
