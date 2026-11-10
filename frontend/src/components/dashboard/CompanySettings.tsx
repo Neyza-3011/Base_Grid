@@ -170,7 +170,8 @@ export function CompanySettings() {
       >
         <h2 className="text-base font-semibold">Impossibile caricare le impostazioni aziendali</h2>
         <p className="mt-2 text-sm text-white/70">
-          I dati non sono stati caricati. Per evitare di sovrascriverli con valori vuoti, il modulo è disabilitato. Ricarica la pagina e riprova.
+          I dati non sono stati caricati. Per evitare di sovrascriverli con valori vuoti, il modulo è
+          disabilitato. Ricarica la pagina e riprova.
         </p>
       </div>
     );
