@@ -109,17 +109,31 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
         setCustomers(custs);
 
         // Fetch locations for all retrieved customers to build resolution map
-        const locPromises = custs.map((c) =>
-          fetchLocations(c.id, undefined, false).catch(() => []),
+        const locResults = await Promise.all(
+          custs.map(async (customer) => {
+            try {
+              return await fetchLocations(customer.id, undefined, false);
+            } catch {
+              return null;
+            }
+          }),
         );
-        const locResults = await Promise.all(locPromises);
         const newLocMap = new Map<string, Location>();
-        locResults.flat().forEach((loc) => {
-          newLocMap.set(loc.id, loc);
-        });
+        locResults
+          .filter((locations): locations is Location[] => locations !== null)
+          .flat()
+          .forEach((loc) => {
+            newLocMap.set(loc.id, loc);
+          });
         setLocationsMap(newLocMap);
+        if (locResults.some((locations) => locations === null)) {
+          toast.error(
+            "Alcune sedi non sono state caricate. I dettagli degli impianti potrebbero essere incompleti.",
+          );
+        }
       } catch (err) {
         console.error("Error loading reference data for assets:", err);
+        toast.error("Impossibile caricare clienti e sedi per gli impianti. Riprova.");
       }
     }
     loadInitialRefData();
@@ -130,7 +144,10 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
     if (filterCustomer) {
       fetchLocations(filterCustomer, undefined, false)
         .then(setFilterLocations)
-        .catch(() => setFilterLocations([]));
+        .catch(() => {
+          setFilterLocations([]);
+          toast.error("Impossibile caricare le sedi del cliente selezionato.");
+        });
     } else {
       setFilterLocations([]);
       setFilterLocation("");
