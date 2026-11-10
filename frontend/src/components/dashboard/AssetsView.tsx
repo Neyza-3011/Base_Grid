@@ -119,12 +119,17 @@ export function AssetsView({ currentUser }: AssetsViewProps) {
           }),
         );
         const newLocMap = new Map<string, Location>();
-        locResults.filter((locations): locations is Location[] => locations !== null).flat().forEach((loc) => {
-          newLocMap.set(loc.id, loc);
-        });
+        locResults
+          .filter((locations): locations is Location[] => locations !== null)
+          .flat()
+          .forEach((loc) => {
+            newLocMap.set(loc.id, loc);
+          });
         setLocationsMap(newLocMap);
         if (locResults.some((locations) => locations === null)) {
-          toast.error("Alcune sedi non sono state caricate. I dettagli degli impianti potrebbero essere incompleti.");
+          toast.error(
+            "Alcune sedi non sono state caricate. I dettagli degli impianti potrebbero essere incompleti.",
+          );
         }
       } catch (err) {
         console.error("Error loading reference data for assets:", err);
