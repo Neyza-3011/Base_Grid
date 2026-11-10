@@ -32,7 +32,6 @@ Le funzionalità elencate sotto sono individuate nel codice. Devono comunque ess
 - `/reset-password` — reset password.
 - `/billing` — route di fatturazione; non prova che Stripe sia configurato.
 - `/admin/super-dashboard` — amministrazione piattaforma.
-- `/about` — pagina informativa, se inclusa nel route tree generato.
 
 Il routing è file-based con TanStack Router/Start. Non modificare manualmente il route tree generato.
 
