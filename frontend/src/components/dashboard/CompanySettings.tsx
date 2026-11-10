@@ -32,6 +32,7 @@ export function CompanySettings() {
   >("azienda");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState<CompanyData>({
@@ -63,18 +64,20 @@ export function CompanySettings() {
           credentials: "include",
           headers: {},
         });
-        if (res.ok) {
-          const data = await res.json();
-          setFormData({
-            name: data.name || "",
-            vat_number: data.vat_number || "",
-            address: data.address || "",
-            default_hourly_rate: data.default_hourly_rate || 0,
-            report_footer_notes: data.report_footer_notes || "",
-            logo_data_url: data.logo_data_url || null,
-          });
+        if (!res.ok) {
+          throw new Error("Errore nel caricamento dei dati aziendali.");
         }
+        const data = await res.json();
+        setFormData({
+          name: data.name || "",
+          vat_number: data.vat_number || "",
+          address: data.address || "",
+          default_hourly_rate: data.default_hourly_rate || 0,
+          report_footer_notes: data.report_footer_notes || "",
+          logo_data_url: data.logo_data_url || null,
+        });
       } catch {
+        setLoadError(true);
         toast.error("Errore nel caricamento dei dati aziendali.");
       } finally {
         setFetching(false);
@@ -157,6 +160,18 @@ export function CompanySettings() {
 
   if (fetching) {
     return <div className="p-8 text-center text-white/50">Caricamento impostazioni...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="max-w-4xl w-full mx-auto rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-white">
+        <h2 className="text-base font-semibold">Impossibile caricare le impostazioni aziendali</h2>
+        <p className="mt-2 text-sm text-white/70">
+          I dati non sono stati caricati. Per evitare di sovrascriverli con valori vuoti, il modulo è disabilitato.
+          Ricarica la pagina e riprova.
+        </p>
+      </div>
+    );
   }
 
   return (
