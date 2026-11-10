@@ -208,7 +208,7 @@ authRouter.post("/verify-email", verifyEmailLimiter, asyncHandler(async (req: an
 authRouter.post("/resend-verification", [resendVerificationLimiter, resendVerificationAccountLimiter], asyncHandler(async (req: any, res: any): Promise<void> => {
   try {
     const { email } = req.body || {};
-    if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED) {
+    if (email && typeof email === "string" && config.EMAIL_VERIFICATION_ENABLED && isValidEmail(normalizeEmail(email))) {
       const normalized = normalizeEmail(email);
       const user = await db.findUserByEmail(normalized);
 
@@ -269,6 +269,12 @@ authRouter.post("/forgot-password", [forgotPasswordLimiter, forgotPasswordAccoun
     }
 
     const normalized = normalizeEmail(email);
+    if (!isValidEmail(normalized)) {
+      res.status(200).json({
+        message: "Se l'indirizzo email è registrato nel sistema, riceverai a breve le istruzioni per reimpostare la password.",
+      });
+      return;
+    }
     const user = await db.findUserByEmail(normalized);
 
     if (user && user.isActive && config.EMAIL_VERIFICATION_ENABLED) {
@@ -427,6 +433,10 @@ authRouter.post("/login", [loginLimiter, loginAccountLimiter], asyncHandler(asyn
     }
 
     const normalizedEmail = normalizeEmail(email);
+    if (!isValidEmail(normalizedEmail)) {
+      res.status(400).json({ detail: "Formato email non valido." });
+      return;
+    }
     const user = await db.findUserByEmail(normalizedEmail);
 
     if (!user) {
