@@ -243,6 +243,26 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
       expect(res.body.detail).toBe("Email o password non corretti.");
     });
 
+    it("rejects malformed or oversized email before querying the database", async () => {
+      const findUserSpy = vi.spyOn(db, "findUserByEmail");
+      try {
+        const malformed = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: "not-an-email", password: "Password123!" },
+        });
+        expect(malformed.status).toBe(400);
+
+        const oversized = await apiRequest("/api/v1/auth/login", {
+          method: "POST",
+          body: { email: `${"a".repeat(250)}@example.com`, password: "Password123!" },
+        });
+        expect(oversized.status).toBe(400);
+        expect(findUserSpy).not.toHaveBeenCalled();
+      } finally {
+        findUserSpy.mockRestore();
+      }
+    });
+
     it("rejects nonexistent user emails with 401 Unauthorized", async () => {
       const res = await apiRequest("/api/v1/auth/login", {
         method: "POST",
@@ -1395,6 +1415,20 @@ describe("Production-Grade Server-Authoritative Auth Suite (server/*)", async ()
         else process.env.EMAIL_API_KEY = origKey;
         if (origFrom === undefined) delete process.env.EMAIL_FROM;
         else process.env.EMAIL_FROM = origFrom;
+      }
+    });
+
+    it("does not query the database for malformed password-reset email input", async () => {
+      const findUserSpy = vi.spyOn(db, "findUserByEmail");
+      try {
+        const res = await apiRequest("/api/v1/auth/forgot-password", {
+          method: "POST",
+          body: { email: `${"a".repeat(300)}@example.com` },
+        });
+        expect(res.status).toBe(200);
+        expect(findUserSpy).not.toHaveBeenCalled();
+      } finally {
+        findUserSpy.mockRestore();
       }
     });
 
