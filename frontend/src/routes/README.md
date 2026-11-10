@@ -15,7 +15,6 @@ Il frontend usa routing file-based con TanStack Router/Start. I file route sono 
 | `reset-password.tsx` | `/reset-password` — reset password |
 | `billing.tsx` | `/billing` — schermata/route di fatturazione; non prova che Stripe sia configurato |
 | `admin/super-dashboard.tsx` | `/admin/super-dashboard` — amministrazione piattaforma |
-| `about.tsx` | `/about` — pagina informativa, se presente nel route tree generato |
 | `__root.tsx` | Root layout dell'applicazione; deve preservare `<Outlet />` |
 
 Le viste dashboard comprendono componenti per rapportini, interventi, clienti/sedi, asset, team, impostazioni aziendali e analytics. La presenza di un componente non garantisce che il relativo workflow sia verificato in produzione.
