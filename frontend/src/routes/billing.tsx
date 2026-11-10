@@ -68,8 +68,8 @@ function BillingPage() {
             Scegli il piano per la tua squadra
           </h2>
           <p className="mt-2 text-white/70 text-sm">
-            Prezzi e piani indicativi. Il checkout non è configurato: questa pagina non può
-            avviare pagamenti né attivare un piano.
+            Prezzi e piani indicativi. Il checkout non è configurato: questa pagina non può avviare
+            pagamenti né attivare un piano.
           </p>
         </div>
 
@@ -99,7 +99,7 @@ function BillingPage() {
                 </li>
               </ul>
             </div>
-<button
+            <button
               type="button"
               disabled
               title="Checkout non configurato"
@@ -137,7 +137,6 @@ function BillingPage() {
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Gestione Materiali &
                   Magazzino
                 </li>
-
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Multi-utente con permessi
                   personalizzati
@@ -170,9 +169,6 @@ function BillingPage() {
                   <Check className="h-4 w-4 text-emerald-400 shrink-0" /> Tecnici ed Utenti
                   Illimitati
                 </li>
-
-                
-
               </ul>
             </div>
 <button
@@ -188,7 +184,8 @@ function BillingPage() {
       </div>
 
       <div className="text-center text-xs text-white/40 py-4 border-t border-white/10">
-        BaseGrid · Pagamenti online non attivi. Nessun addebito o cambio piano viene eseguito da questa pagina.
+        BaseGrid · Pagamenti online non attivi. Nessun addebito o cambio piano viene eseguito da
+        questa pagina.
       </div>
     </div>
   );
