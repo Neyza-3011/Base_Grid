@@ -143,7 +143,7 @@ function BillingPage() {
                 </li>
               </ul>
             </div>
-<button
+            <button
               type="button"
               disabled
               title="Checkout non configurato"
@@ -171,7 +171,7 @@ function BillingPage() {
                 </li>
               </ul>
             </div>
-<button
+            <button
               type="button"
               disabled
               title="Checkout non configurato"
