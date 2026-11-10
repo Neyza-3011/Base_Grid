@@ -28,7 +28,6 @@ interface CompanyData {
   address: string;
   default_hourly_rate: number;
   report_footer_notes: string;
-  stripe_subscription_status: string;
   logo_data_url: string | null;
 }
 
@@ -46,7 +45,6 @@ export function CompanySettings() {
     address: "",
     default_hourly_rate: 0,
     report_footer_notes: "",
-    stripe_subscription_status: "Attivo",
     logo_data_url: null,
   });
 
@@ -79,8 +77,6 @@ export function CompanySettings() {
             default_hourly_rate: data.default_hourly_rate || 0,
             report_footer_notes: data.report_footer_notes || "",
             logo_data_url: data.logo_data_url || null,
-            stripe_subscription_status:
-              data.stripe_subscription_status || "Attivo (Piano Team Pro)",
           });
         }
       } catch {
@@ -184,13 +180,7 @@ export function CompanySettings() {
           </div>
           <div className="bg-slate-950/50 border border-white/10 px-4 py-2 rounded-xl flex items-center gap-3">
             <div className="flex flex-col">
-              <span className="text-[10px] text-white/50 uppercase tracking-wider font-semibold">
-                Piano Attivo
-              </span>
-              <span className="text-sm font-medium text-emerald-400 flex items-center gap-1">
-                <CheckCircle className="h-3.5 w-3.5" />{" "}
-                {formData.stripe_subscription_status || "Team Pro"}
-              </span>
+              <span className="text-sm font-medium text-amber-300">Fatturazione non configurata</span>
             </div>
           </div>
         </div>
@@ -515,77 +505,21 @@ export function CompanySettings() {
 
       {/* Tab 4: Fatturazione & Stripe */}
       {activeTab === "fatturazione" && (
-        <div className="p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] space-y-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 rounded-2xl bg-gradient-to-r from-primary/20 via-blue-900/20 to-slate-950 border border-primary/30 gap-6">
+        <div className="p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 p-5">
+            <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
             <div>
-              <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary border border-primary/30 mb-2">
-                <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Abbonamento SaaS Attivo
-              </div>
-              <h3 className="text-2xl font-bold text-white">Piano Team Pro</h3>
-              <p className="text-white/70 text-sm mt-1 max-w-xl">
-                Include rapportini illimitati, firme digitali touch su cantiere, export PDF con logo
-                personalizzato e supporto multi-tecnico.
+              <h3 className="font-semibold text-white">Fatturazione non disponibile</h3>
+              <p className="mt-1 text-sm text-white/70">
+                L'integrazione con Stripe non è ancora configurata. Non ci sono abbonamenti,
+                rinnovi o fatture consultabili da questa schermata e nessun pagamento viene
+                avviato da qui.
               </p>
-              <div className="flex items-center gap-4 mt-4 text-xs text-white/60">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5 text-emerald-400" /> Prossimo rinnovo: 27/08/2026
-                </span>
-                <span>•</span>
-                <span>39,00 € / mese</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => window.open("/billing", "_self")}
-              className="h-11 px-6 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-semibold transition-all active:scale-95 btn-glow flex items-center gap-2 shrink-0"
-            >
-              <CreditCard className="h-4 w-4" /> Gestisci Abbonamento Stripe{" "}
-              <ExternalLink className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Storico Fatture Recent */}
-          <div className="space-y-4 pt-4 border-t border-white/10">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-primary" /> Ultime Fatture Emesse
-            </h3>
-            <div className="bg-slate-950/50 rounded-xl border border-white/10 overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white/5 text-white/60 text-xs">
-                  <tr>
-                    <th className="p-3">Data</th>
-                    <th className="p-3">Descrizione</th>
-                    <th className="p-3">Importo</th>
-                    <th className="p-3 text-right">Stato</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-white/80">
-                  <tr>
-                    <td className="p-3 font-mono text-xs text-white/60">27/07/2026</td>
-                    <td className="p-3 font-medium">BaseGrid - Piano Team Pro (Mensile)</td>
-                    <td className="p-3">39,00 €</td>
-                    <td className="p-3 text-right">
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Pagato
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="p-3 font-mono text-xs text-white/60">27/06/2026</td>
-                    <td className="p-3 font-medium">BaseGrid - Piano Team Pro (Mensile)</td>
-                    <td className="p-3">39,00 €</td>
-                    <td className="p-3 text-right">
-                      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Pagato
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
