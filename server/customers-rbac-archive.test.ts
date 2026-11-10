@@ -146,6 +146,16 @@ describe("Customers & Locations Server-Side RBAC, Archive/Reactivate & Tenant Is
       expect(res.data.detail).toContain("255");
     });
 
+    it("rejects overlong location search filters before querying the database", async () => {
+      const auth = await createTestUserAndLogin(companyA, "admin");
+      const customer = await db.createCustomer(companyA, { displayName: "Location Search Test Customer" });
+      const res = await apiRequest(`/api/v1/customers/${customer.id}/locations?search=${"x".repeat(256)}`, {
+        cookies: auth.cookies,
+      });
+      expect(res.status).toBe(400);
+      expect(res.data.detail).toContain("255");
+    });
+
     // Platform superadmin is not a tenant-scoped role; its authority is tested at the authentication boundary.
     const writeRoles: UserRole[] = [
       "owner",
