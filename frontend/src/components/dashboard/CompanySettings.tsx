@@ -190,7 +190,9 @@ export function CompanySettings() {
           </div>
           <div className="bg-slate-950/50 border border-white/10 px-4 py-2 rounded-xl flex items-center gap-3">
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-amber-300">Fatturazione non configurata</span>
+              <span className="text-sm font-medium text-amber-300">
+                Fatturazione non configurata
+              </span>
             </div>
           </div>
         </div>
@@ -521,15 +523,13 @@ export function CompanySettings() {
             <div>
               <h3 className="font-semibold text-white">Fatturazione non disponibile</h3>
               <p className="mt-1 text-sm text-white/70">
-                L'integrazione con Stripe non è ancora configurata. Non ci sono abbonamenti,
-                rinnovi o fatture consultabili da questa schermata e nessun pagamento viene
-                avviato da qui.
+                L'integrazione con Stripe non è ancora configurata. Non ci sono abbonamenti, rinnovi
+                o fatture consultabili da questa schermata e nessun pagamento viene avviato da qui.
               </p>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
