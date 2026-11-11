@@ -7,6 +7,7 @@ import { companyService } from "../services";
 import { TeamService } from "../services/team.service";
 import { tokenStore } from "../token-store";
 import { ADMIN_OWNER_ROLES, ASSIGNABLE_ROLES } from "../types";
+import { isCompanySetupComplete } from "../company-setup";
 
 export const adminRouter = Router();
 const teamService = new TeamService(db);
@@ -70,17 +71,7 @@ adminRouter.get("/tenants", asyncHandler(async (_req: any, res: any): Promise<vo
     created_at: company.createdAt,
     max_users: company.maxUsers,
     is_active: company.isActive ?? true,
-    setup_complete: Boolean(
-      company.name?.trim() &&
-        company.address?.trim() &&
-        company.contactEmail?.trim() &&
-        company.contactPhone?.trim() &&
-        company.serviceArea?.trim() &&
-        Array.isArray(company.serviceCategories) &&
-        company.serviceCategories.length > 0 &&
-        company.locale === "it-IT" &&
-        (company.timeZone === "Europe/Rome" || company.timeZone === "UTC"),
-    ),
+    setup_complete: isCompanySetupComplete(company),
   }));
   res.status(200).json(tenants);
 }));
@@ -398,17 +389,7 @@ adminRouter.get("/tenants/:companyId", asyncHandler(async (req: any, res: any): 
       is_active: company.isActive ?? true,
       created_at: company.createdAt,
       updated_at: company.updatedAt,
-      setup_complete: Boolean(
-        company.name?.trim() &&
-          company.address?.trim() &&
-          company.contactEmail?.trim() &&
-          company.contactPhone?.trim() &&
-          company.serviceArea?.trim() &&
-          Array.isArray(company.serviceCategories) &&
-          company.serviceCategories.length > 0 &&
-          company.locale === "it-IT" &&
-          (company.timeZone === "Europe/Rome" || company.timeZone === "UTC"),
-      ),
+      setup_complete: isCompanySetupComplete(company),
     },
     users: safeUsers,
     user_count: safeUsers.length,
