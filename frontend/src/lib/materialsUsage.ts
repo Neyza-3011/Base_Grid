@@ -46,18 +46,11 @@ export function buildMaterialUsageRows(reports: Report[]): MaterialUsageRow[] {
     });
   }
 
-  return rows.sort(
-    (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
-  );
+  return rows.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
 }
 
-export function summarizeMaterials(
-  reports: Report[],
-  rows: MaterialUsageRow[],
-): MaterialsSummary {
-  const distinctMaterials = new Set(
-    rows.map((row) => row.name.trim().toLocaleLowerCase("it")),
-  );
+export function summarizeMaterials(reports: Report[], rows: MaterialUsageRow[]): MaterialsSummary {
+  const distinctMaterials = new Set(rows.map((row) => row.name.trim().toLocaleLowerCase("it")));
 
   return {
     distinctMaterials: distinctMaterials.size,
