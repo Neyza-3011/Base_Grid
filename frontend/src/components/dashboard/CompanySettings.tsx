@@ -145,7 +145,8 @@ export function CompanySettings() {
           name: formData.name,
           vat_number: formData.vat_number,
           address: formData.address,
-          default_hourly_rate: formData.default_hourly_rate === "" ? 0 : formData.default_hourly_rate,
+          default_hourly_rate:
+            formData.default_hourly_rate === "" ? 0 : formData.default_hourly_rate,
           report_footer_notes: formData.report_footer_notes,
           logo_data_url: formData.logo_data_url,
         }),
