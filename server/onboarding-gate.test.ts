@@ -14,7 +14,13 @@ beforeEach(async () => {
   config.EMAIL_VERIFICATION_ENABLED = false;
   config.SUPERADMIN_EMAIL = PLATFORM_CEO_EMAIL;
   db.seedInitialData();
-  await db.updateCompany("comp-rossi-001", { address: "" });
+  await db.updateCompany("comp-rossi-001", {
+    address: "",
+    contactEmail: "",
+    contactPhone: "",
+    serviceArea: "",
+    serviceCategories: [],
+  });
   const owner = await db.findUserByEmail("admin@rossi.it");
   if (!owner) throw new Error("Seed owner fixture not found");
   await db.updateUser(owner.id, { role: "owner" });
@@ -73,8 +79,16 @@ describe("mandatory company setup gate", () => {
     expect(blocked.body.detail).toMatch(/titolare/i);
   });
 
-  it("unblocks tenant workflows after the persisted company address is set", async () => {
-    await db.updateCompany("comp-rossi-001", { address: "Via Demo 10, Roma" });
+  it("unblocks tenant workflows only after the full company profile is persisted", async () => {
+    await db.updateCompany("comp-rossi-001", {
+      address: "Via Demo 10, Roma",
+      contactEmail: "ufficio@example.test",
+      contactPhone: "+39 06 1234567",
+      serviceArea: "Roma e provincia",
+      serviceCategories: ["installazione", "manutenzione"],
+      locale: "it-IT",
+      timeZone: "Europe/Rome",
+    });
     const allowed = await request("/api/v1/users/me", "admin@rossi.it");
     expect(allowed.response.status).toBe(200);
   });
@@ -102,7 +116,8 @@ describe("mandatory company setup gate", () => {
     });
 
     const workflow = await request("/api/v1/users/me", "admin@rossi.it");
-    expect(workflow.response.status).toBe(200);
+    expect(workflow.response.status).toBe(403);
+    expect(workflow.body.code).toBe("COMPANY_SETUP_REQUIRED");
   });
 
   it("persists setup through the real company settings HTTP route and then unlocks workflows", async () => {
@@ -112,6 +127,12 @@ describe("mandatory company setup gate", () => {
         name: "Impianti Rossi Srl",
         address: "Via Demo 10, Roma",
         vat_number: "IT12345678901",
+        contact_email: "ufficio@example.test",
+        contact_phone: "+39 06 1234567",
+        service_area: "Roma e provincia",
+        service_categories: ["installazione", "manutenzione"],
+        locale: "it-IT",
+        time_zone: "Europe/Rome",
         default_hourly_rate: 45,
         report_footer_notes: "Interventi verificati",
       },
@@ -123,6 +144,12 @@ describe("mandatory company setup gate", () => {
       name: "Impianti Rossi Srl",
       address: "Via Demo 10, Roma",
       vatNumber: "IT12345678901",
+      contactEmail: "ufficio@example.test",
+      contactPhone: "+39 06 1234567",
+      serviceArea: "Roma e provincia",
+      serviceCategories: ["installazione", "manutenzione"],
+      locale: "it-IT",
+      timeZone: "Europe/Rome",
       defaultHourlyRate: 45,
       reportFooterNotes: "Interventi verificati",
     });
