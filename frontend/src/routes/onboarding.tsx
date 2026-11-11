@@ -184,7 +184,7 @@ function CompanyOnboarding() {
     };
   }, [navigate, loadAttempt]);
 
-  const updateField = (field: keyof CompanySettings, value: string | number | string[]) => {
+  const updateField = <K extends keyof CompanySettings,>(field: K, value: CompanySettings[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
