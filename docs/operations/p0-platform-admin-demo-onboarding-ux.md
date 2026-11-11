@@ -6,7 +6,16 @@ This roadmap tracks verified evidence, not claims of completion. Every implement
 
 Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNVERIFIED`.
 
-## Latest verified baseline
+## Current checkpoint — 2026-11-11 (verified 07:53 Europe/Rome)
+
+- **Verified main:** [`fb30cb15e25516134bedef560f6cca090bada2d6`](https://github.com/Neyza-3011/Base_Grid/commit/fb30cb15e25516134bedef560f6cca090bada2d6); commit `fix(billing): remove simulated subscription and invoice claims`, merged via [PR #249](https://github.com/Neyza-3011/Base_Grid/pull/249) on 2026-11-10.
+- **Recent merged changes:** [PR #252](https://github.com/Neyza-3011/Base_Grid/pull/252) updates the product/API/route inventory; [PR #251](https://github.com/Neyza-3011/Base_Grid/pull/251) surfaces incomplete asset-location loads; [PR #250](https://github.com/Neyza-3011/Base_Grid/pull/250) uses the local calendar date for new reports. These merges do not establish full release readiness.
+- **Open PRs:** 0 returned by the repository Pull Requests API at this checkpoint. Existing remote branches may remain after their PRs are closed or merged.
+- **CI on this exact main SHA:** [run #42865084482](https://github.com/Neyza-3011/Base_Grid/actions/runs/42865084482) ended with `startup_failure` on 2026-11-10; the run has zero jobs, so no lint, type-check, test or build steps ran and no job logs are available. Individual controls are therefore `NOT_RUN`, not `PASS`. A prior CI run on older SHA `3f93cc7d8ecad6d14e0620c4e88d81feb13684f4` failed, but its job logs could not be retrieved during this checkpoint; its cause remains unresolved and must not be projected onto the current SHA.
+- **Live Render smoke:** [run #42971353890](https://github.com/Neyza-3011/Base_Grid/actions/runs/42971353890) passed on 2026-11-11 at 06:17 UTC. The workflow checks `/health` and `/ready` against the configured Render URL. This proves those endpoints passed at that time; it does not identify the deployed revision or prove end-to-end product readiness.
+- **Roadmap discipline:** The detailed evidence and task-status notes below originated from the 2026-11-01 snapshot. Treat them as historical unless revalidated against current code, PRs and CI. No task is promoted to `DONE_VERIFIED` by this checkpoint alone.
+
+## Historical baseline snapshot — 2026-11-01
 
 Baseline: `main` at `ccd83c4699e490d8072851017f5c68504e840082` (2026-11-01, merge of PR #132). Main CI run [41328081643](https://github.com/Neyza-3011/Base_Grid/actions/runs/41328081643) completed successfully on this exact SHA, including lint, backend/frontend type-check, Vitest, build and the PostgreSQL + Redis runtime smoke test.
 
@@ -41,7 +50,7 @@ Baseline: `main` at `ccd83c4699e490d8072851017f5c68504e840082` (2026-11-01, merg
 - PR #127 adds a skippable product tour; PR #130 adds the guided company setup wizard. The tour and onboarding code exist, but persisted progress, browser E2E and full first-run setup requirements are not yet fully verified.
 - PR #129 improves responsive dashboard layouts; PR #131 improves the CEO panel's mobile layout; PR #132 improves responsive authentication screens.
 - Direct source inspection confirms the CEO UI includes tenant search, tenant details, profile editing and user information. The route does not currently call the company suspend/reactivate endpoints or render an audit-event viewer; lifecycle UI, deletion safeguards and browser verification remain incomplete.
-- Pull requests [#133](https://github.com/Neyza-3011/Base_Grid/pull/133) and [#134](https://github.com/Neyza-3011/Base_Grid/pull/134) are open and are not included in the `main` baseline. Their CI must be assessed on their own head SHAs. Vercel preview skips/rate limits are not source-code failures and are not to be worked around.
+- At the 2026-11-01 snapshot, PRs [#133](https://github.com/Neyza-3011/Base_Grid/pull/133) and [#134](https://github.com/Neyza-3011/Base_Grid/pull/134) were open and excluded from that baseline. Both were merged on 2026-11-01: #133 adds retry handling for onboarding settings-load failures, and #134 confirms server logout in CEO/company dashboards. These merges do not establish full onboarding or browser-level logout validation. Vercel preview skips/rate limits are not source-code failures and are not to be worked around.
 
 ## Ordered checkpoints
 
@@ -57,7 +66,7 @@ Baseline: `main` at `ccd83c4699e490d8072851017f5c68504e840082` (2026-11-01, merg
 
 Status: `IN_PROGRESS`
 
-Evidence: the current `main` baseline `ccd83c4699e490d8072851017f5c68504e840082` passes CI run `41328081643`. Existing tests cover canonical CEO/platform authority, client-supplied role/platformRole rejection, cross-tenant access and no-side-effect assertions for multiple entity mutations, plus fail-closed session revocation paths. This remains a focused set of protections, not a complete route-by-route authorization audit.
+Evidence recorded at the 2026-11-01 snapshot: `main` at `ccd83c4699e490d8072851017f5c68504e840082` passed CI run `41328081643`. Existing tests covered canonical CEO/platform authority, client-supplied role/platformRole rejection, cross-tenant access and no-side-effect assertions for multiple entity mutations, plus fail-closed session revocation paths. This remains a focused set of protections, not a complete route-by-route authorization audit.
 
 Acceptance criteria:
 - Keep company roles scoped to their own company and platform CEO authority separate from company administration.
@@ -71,7 +80,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-The required gate and `/onboarding` route exist on current `main`; PR #130 adds a guided two-step company setup form. The server gate is covered by `server/onboarding-gate.test.ts`. The current form persists name, address, VAT number, hourly-rate default and report-footer notes. It is not the full setup profile: contact details, service area/categories, locale/time zone and browser E2E remain outstanding. PR #133 adds explicit retry handling for settings-load failures but is still open; do not count it as integrated.
+The required gate and `/onboarding` route existed at the 2026-11-01 snapshot; PR #130 added a guided two-step company setup form. The server gate is covered by `server/onboarding-gate.test.ts`. The form persists name, address, VAT number, hourly-rate default and report-footer notes. It is not the full setup profile: contact details, service area/categories, locale/time zone and browser E2E remain outstanding. PR #133 added explicit retry handling for settings-load failures and was merged on 2026-11-01; this does not complete the broader setup acceptance criteria.
 
 Acceptance criteria:
 - After registration and first authentication, route a new owner through a required, resumable company setup before exposing normal operational workflows. The report/rapportino `/wizard` is not company onboarding.
