@@ -138,8 +138,15 @@ export class CompanyService {
         throw new ValidationError("Il telefono aziendale deve essere una stringa.");
       }
       const phone = input.contactPhone.trim();
-      if (phone.length < 7 || phone.length > 40 || !/^[+0-9().\s/-]+$/.test(phone)) {
-        throw new ValidationError("Inserisci un numero di telefono valido (7–40 caratteri).");
+      const digitCount = phone.replace(/\D/g, "").length;
+      if (
+        phone.length < 7 ||
+        phone.length > 40 ||
+        digitCount < 7 ||
+        digitCount > 15 ||
+        !/^[+0-9().\s/-]+$/.test(phone)
+      ) {
+        throw new ValidationError("Inserisci un numero di telefono valido con 7–15 cifre.");
       }
       updates.contactPhone = phone;
     }
