@@ -78,7 +78,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
 
   if (!READ_ROLES.includes(currentUser.role)) {
     return (
-      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center text-white">
+      <section
+        className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center text-white"
+      >
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-400" aria-hidden="true" />
         <h2 className="text-lg font-semibold">Accesso riservato</h2>
         <p className="mt-2 text-sm text-white/60">
@@ -138,7 +140,10 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
           { label: "Rapportini senza materiali", value: summary.reportsWithNoMaterials },
           { label: "Rapportini da verificare", value: summary.reportsUnverified },
         ].map((metric) => (
-          <div key={metric.label} className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+          <div
+            key={metric.label}
+            className="rounded-2xl border border-white/10 bg-slate-900/60 p-4"
+          >
             <p className="text-xs font-medium text-white/50">{metric.label}</p>
             <p className="mt-2 text-2xl font-semibold text-white">{metric.value}</p>
           </div>
@@ -162,7 +167,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3"
+        >
           <h3 className="text-sm font-semibold">Utilizzo registrato</h3>
           <span className="text-xs text-white/50">{filteredRows.length} righe</span>
         </div>
@@ -211,7 +218,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
                       <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs">
                         {formatStatus(row.reportStatus)}
                       </span>
-                      <span className="mt-1 block font-mono text-[10px] text-white/40">{row.reportId}</span>
+                      <span className="mt-1 block font-mono text-[10px] text-white/40">
+                        {row.reportId}
+                      </span>
                     </td>
                   </tr>
                 ))}
