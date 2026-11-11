@@ -34,6 +34,7 @@ import { TeamManagementView } from "@/components/dashboard/TeamManagementView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
 import { AssetsView } from "@/components/dashboard/AssetsView";
 import { InterventionsView } from "@/components/dashboard/InterventionsView";
+import { MaterialsView } from "@/components/dashboard/MaterialsView";
 import { Intervention } from "@/lib/api/interventions";
 import { BaseGridLogo } from "@/components/common/BaseGridLogo";
 
@@ -62,6 +63,7 @@ const VIEW_TITLES: Record<string, string> = {
   interventions: "Gestione Interventi",
   customers: "Clienti & Cantieri",
   assets: "Impianti & Asset",
+  materials: "Materiali",
   team: "Collaboratori & Team",
   company_settings: "Impostazioni Aziendali",
   profile: "Profilo Utente",
@@ -325,16 +327,22 @@ function Dashboard() {
           </button>
         )}
 
-        <button
-          onClick={() => {
-            setSidebarOpen(false);
-            toast.info("Sezione Materiali in fase di sviluppo.");
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <Package className="h-4 w-4" />
-          <span>Materiali</span>
-        </button>
+        {currentUser.role !== "cliente" && (
+          <button
+            onClick={() => {
+              setActiveView("materials");
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
+              activeView === "materials"
+                ? "bg-primary text-white shadow-lg shadow-primary/25 font-semibold"
+                : "text-white/70 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            <span>Materiali</span>
+          </button>
+        )}
 
         {(currentUser.role === "admin" ||
           currentUser.role === "superadmin" ||
@@ -556,6 +564,9 @@ function Dashboard() {
           {activeView === "team" && <TeamManagementView currentUser={currentUser} />}
           {activeView === "customers" && <CustomersView />}
           {activeView === "assets" && <AssetsView currentUser={currentUser} />}
+          {activeView === "materials" && (
+            <MaterialsView currentUser={currentUser} onOpenReports={() => setActiveView("reports")} />
+          )}
           {activeView === "interventions" && (
             <InterventionsView
               currentUser={currentUser}
