@@ -94,7 +94,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
         });
       });
     }
-    return result.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+    return result.sort(
+      (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
+    );
   }, [reports]);
 
   const filteredRows = useMemo(() => {
@@ -122,9 +124,14 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
     return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
   }, [rows]);
 
-  const reportsWithNoMaterials = reports.filter((report) => report.materials_status === "none").length;
+  const reportsWithNoMaterials = reports.filter(
+    (report) => report.materials_status === "none",
+  ).length;
   const reportsUnverified = reports.filter(
-    (report) => !report.materials_status || report.materials_status === "unverified",
+    (report) =>
+      !report.materials_status ||
+      report.materials_status === "unverified" ||
+      (report.materials_status === "used" && report.materials_used.length === 0),
   ).length;
   const totalQuantity = rows.reduce((total, row) => total + row.quantity, 0);
 
@@ -161,7 +168,10 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
       </div>
 
       {error && (
-        <div role="alert" className="flex flex-col justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 sm:flex-row sm:items-center">
+        <div
+          role="alert"
+          className="flex flex-col justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200 sm:flex-row sm:items-center"
+        >
           <div className="flex min-w-0 items-center gap-2">
             <AlertCircle className="h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
             <span className="break-words text-sm">{error}</span>
@@ -215,12 +225,16 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
         {loading ? (
           <div className="p-10 text-center text-sm text-white/50">Caricamento materiali dal server...</div>
         ) : error ? (
-          <div className="p-10 text-center text-sm text-white/50">Dati non disponibili finché il caricamento non riesce.</div>
+          <div className="p-10 text-center text-sm text-white/50">
+            Dati non disponibili finché il caricamento non riesce.
+          </div>
         ) : filteredRows.length === 0 ? (
           <div className="p-10 text-center">
             <Package className="mx-auto mb-3 h-8 w-8 text-white/30" aria-hidden="true" />
             <p className="text-sm font-medium text-white/80">
-              {rows.length === 0 ? "Nessun materiale dichiarato nei rapportini." : "Nessun risultato per questa ricerca."}
+              {rows.length === 0
+                ? "Nessun materiale dichiarato nei rapportini."
+                : "Nessun risultato per questa ricerca."}
             </p>
             <p className="mt-1 text-xs text-white/50">
               I materiali vengono registrati nel rapportino dell'intervento.
