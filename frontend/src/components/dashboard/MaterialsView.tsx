@@ -109,15 +109,14 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
   }, [query, rows]);
 
   const materialTotals = useMemo(() => {
-    const totals = new Map<string, { name: string; quantity: number; reportIds: Set<string> }>();
+    const totals = new Map<string, { name: string; quantity: number }>();
     for (const row of rows) {
       const key = row.name.toLocaleLowerCase("it");
       const existing = totals.get(key);
       if (existing) {
         existing.quantity += row.quantity;
-        existing.reportIds.add(row.reportId);
       } else {
-        totals.set(key, { name: row.name, quantity: row.quantity, reportIds: new Set([row.reportId]) });
+        totals.set(key, { name: row.name, quantity: row.quantity });
       }
     }
     return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
