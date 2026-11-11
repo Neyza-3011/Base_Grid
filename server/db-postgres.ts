@@ -1086,7 +1086,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     for (const [field, column] of columns) {
       if (Object.prototype.hasOwnProperty.call(updates, field)) {
         params.push(updates[field]);
-        setClauses.push(`${column} = ${params.length}`);
+        setClauses.push(`${column} = $${params.length}`);
       }
     }
 
