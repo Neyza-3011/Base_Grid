@@ -4,6 +4,18 @@ import { NotFoundError, ValidationError } from "../errors";
 import { PDFDocument } from "pdf-lib";
 import { hasSafeImageDimensions } from "../validation";
 
+const SUPPORTED_SERVICE_CATEGORIES = new Set([
+  "installazione",
+  "manutenzione",
+  "pronto-intervento",
+  "verifiche-collaudi",
+  "domotica-automazione",
+  "fotovoltaico",
+  "ricarica-veicoli-elettrici",
+]);
+const SUPPORTED_LOCALES = new Set(["it-IT"]);
+const SUPPORTED_TIME_ZONES = new Set(["Europe/Rome", "UTC"]);
+
 const MAX_COMPANY_LOGO_BYTES = 256 * 1024;
 const MAX_COMPANY_LOGO_DATA_URL_LENGTH = 350_000;
 
@@ -108,6 +120,68 @@ export class CompanyService {
         throw new ValidationError("Address exceeds maximum length of 255 characters");
       }
       updates.address = addr;
+    }
+
+    if (input.contactEmail !== undefined) {
+      if (typeof input.contactEmail !== "string") {
+        throw new ValidationError("L'email aziendale deve essere una stringa.");
+      }
+      const email = input.contactEmail.trim().toLowerCase();
+      if (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new ValidationError("Inserisci un indirizzo email aziendale valido.");
+      }
+      updates.contactEmail = email;
+    }
+
+    if (input.contactPhone !== undefined) {
+      if (typeof input.contactPhone !== "string") {
+        throw new ValidationError("Il telefono aziendale deve essere una stringa.");
+      }
+      const phone = input.contactPhone.trim();
+      if (phone.length < 7 || phone.length > 40 || !/^[+0-9().\s/-]+$/.test(phone)) {
+        throw new ValidationError("Inserisci un numero di telefono valido (7–40 caratteri).");
+      }
+      updates.contactPhone = phone;
+    }
+
+    if (input.serviceArea !== undefined) {
+      if (typeof input.serviceArea !== "string") {
+        throw new ValidationError("L'area di servizio deve essere una stringa.");
+      }
+      const serviceArea = input.serviceArea.trim();
+      if (serviceArea.length < 2 || serviceArea.length > 255) {
+        throw new ValidationError("L'area di servizio deve contenere 2–255 caratteri.");
+      }
+      updates.serviceArea = serviceArea;
+    }
+
+    if (input.serviceCategories !== undefined) {
+      if (
+        !Array.isArray(input.serviceCategories) ||
+        input.serviceCategories.length < 1 ||
+        input.serviceCategories.length > SUPPORTED_SERVICE_CATEGORIES.size ||
+        input.serviceCategories.some(
+          (category) => typeof category !== "string" || !SUPPORTED_SERVICE_CATEGORIES.has(category),
+        ) ||
+        new Set(input.serviceCategories).size !== input.serviceCategories.length
+      ) {
+        throw new ValidationError("Seleziona almeno una categoria di servizio valida.");
+      }
+      updates.serviceCategories = [...input.serviceCategories];
+    }
+
+    if (input.locale !== undefined) {
+      if (typeof input.locale !== "string" || !SUPPORTED_LOCALES.has(input.locale)) {
+        throw new ValidationError("La lingua selezionata non è supportata.");
+      }
+      updates.locale = input.locale;
+    }
+
+    if (input.timeZone !== undefined) {
+      if (typeof input.timeZone !== "string" || !SUPPORTED_TIME_ZONES.has(input.timeZone)) {
+        throw new ValidationError("Il fuso orario selezionato non è supportato.");
+      }
+      updates.timeZone = input.timeZone;
     }
 
     if (input.defaultHourlyRate !== undefined) {
