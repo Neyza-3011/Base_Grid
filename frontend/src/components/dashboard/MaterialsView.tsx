@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, FileText, Package, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { getReports } from "@/lib/reportsStorage";
+import type { Report } from "@/lib/api/reports";
 import { buildMaterialUsageRows, summarizeMaterials } from "@/lib/materialsUsage";
-import { UserSession } from "@/lib/auth";
+import type { UserSession } from "@/lib/auth";
 
 const READ_ROLES: readonly string[] = [
   "owner",
@@ -80,7 +81,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
       <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center text-white">
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-400" aria-hidden="true" />
         <h2 className="text-lg font-semibold">Accesso riservato</h2>
-        <p className="mt-2 text-sm text-white/60">Non disponi dei permessi per consultare i materiali dei rapportini.</p>
+        <p className="mt-2 text-sm text-white/60">
+          Non disponi dei permessi per consultare i materiali dei rapportini.
+        </p>
       </section>
     );
   }
@@ -94,7 +97,8 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
             <h2 className="text-2xl font-bold tracking-tight">Materiali</h2>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-white/60">
-            Riepilogo dei materiali dichiarati negli ultimi 1.000 rapportini recuperati. Questa vista non rappresenta le giacenze di magazzino.
+            Riepilogo dei materiali dichiarati negli ultimi 1.000 rapportini recuperati. Questa
+            vista non rappresenta le giacenze di magazzino.
           </p>
         </div>
         <button
@@ -163,7 +167,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
           <span className="text-xs text-white/50">{filteredRows.length} righe</span>
         </div>
         {loading ? (
-          <div className="p-10 text-center text-sm text-white/50">Caricamento materiali dal server...</div>
+          <div className="p-10 text-center text-sm text-white/50">
+          Caricamento materiali dal server...
+        </div>
         ) : error ? (
           <div className="p-10 text-center text-sm text-white/50">
             Dati non disponibili finché il caricamento non riesce.
@@ -205,7 +211,9 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
                       <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs">
                         {formatStatus(row.reportStatus)}
                       </span>
-                      <span className="mt-1 block font-mono text-[10px] text-white/40">{row.reportId}</span>
+                      <span className="mt-1 block font-mono text-[10px] text-white/40">
+              {row.reportId}
+            </span>
                     </td>
                   </tr>
                 ))}
