@@ -29,9 +29,25 @@ type CompanySettings = {
   name: string;
   vat_number: string;
   address: string;
+  contact_email: string;
+  contact_phone: string;
+  service_area: string;
+  service_categories: string[];
+  locale: string;
+  time_zone: string;
   default_hourly_rate: number;
   report_footer_notes: string;
 };
+
+const SERVICE_CATEGORIES = [
+  { value: "installazione", label: "Installazione impianti elettrici" },
+  { value: "manutenzione", label: "Manutenzione" },
+  { value: "pronto-intervento", label: "Pronto intervento" },
+  { value: "verifiche-collaudi", label: "Verifiche e collaudi" },
+  { value: "domotica-automazione", label: "Domotica e automazione" },
+  { value: "fotovoltaico", label: "Fotovoltaico" },
+  { value: "ricarica-veicoli-elettrici", label: "Ricarica veicoli elettrici" },
+] as const;
 
 export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promise<CompanySettings> {
   const response = await fetcher("/api/v1/company/settings?include_logo=false", {
@@ -61,10 +77,23 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
     }
   }
 
+  if (
+    !Array.isArray(data.service_categories) ||
+    data.service_categories.some((item: unknown) => typeof item !== "string")
+  ) {
+    throw new Error("Le categorie di servizio ricevute non sono valide.");
+  }
+
   return {
     name: String(data.name || ""),
     vat_number: String(data.vat_number || ""),
     address: String(data.address || ""),
+    contact_email: String(data.contact_email || ""),
+    contact_phone: String(data.contact_phone || ""),
+    service_area: String(data.service_area || ""),
+    service_categories: data.service_categories as string[],
+    locale: String(data.locale || "it-IT"),
+    time_zone: String(data.time_zone || "Europe/Rome"),
     default_hourly_rate: defaultHourlyRate,
     report_footer_notes: String(data.report_footer_notes || ""),
   };
@@ -82,6 +111,12 @@ function CompanyOnboarding() {
     name: "",
     vat_number: "",
     address: "",
+    contact_email: "",
+    contact_phone: "",
+    service_area: "",
+    service_categories: [],
+    locale: "it-IT",
+    time_zone: "Europe/Rome",
     default_hourly_rate: 0,
     report_footer_notes: "",
   });
@@ -110,9 +145,22 @@ function CompanyOnboarding() {
 
           setLoadError(null);
           setForm(current);
-          if (current.name.trim() && current.address.trim()) {
+          const profileComplete = Boolean(
+            current.name.trim() &&
+              current.address.trim() &&
+              current.contact_email.trim() &&
+              current.contact_phone.trim() &&
+              current.service_area.trim() &&
+              current.service_categories.length > 0 &&
+              current.locale === "it-IT" &&
+              (current.time_zone === "Europe/Rome" || current.time_zone === "UTC"),
+          );
+          if (profileComplete) {
             navigate({ to: "/dashboard" });
             return;
+          }
+          if (current.name.trim() && current.address.trim()) {
+            setStep(1);
           }
         } catch (error) {
           if (!cancelled) {
@@ -136,7 +184,7 @@ function CompanyOnboarding() {
     };
   }, [navigate, loadAttempt]);
 
-  const updateField = (field: keyof CompanySettings, value: string | number) => {
+  const updateField = (field: keyof CompanySettings, value: string | number | string[]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -192,6 +240,34 @@ function CompanyOnboarding() {
       toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())) {
+      toast.error("Inserisci un indirizzo email aziendale valido.");
+      return;
+    }
+    if (!/^[+0-9().\s/-]{7,40}$/.test(form.contact_phone.trim())) {
+      toast.error("Inserisci un numero di telefono valido.");
+      return;
+    }
+    if (form.service_area.trim().length < 2 || form.service_area.trim().length > 255) {
+      toast.error("Indica un'area di servizio di 2–255 caratteri.");
+      return;
+    }
+    if (
+      form.service_categories.length < 1 ||
+      form.service_categories.some(
+        (category) => !SERVICE_CATEGORIES.some((option) => option.value === category),
+      )
+    ) {
+      toast.error("Seleziona almeno una categoria di servizio.");
+      return;
+    }
+    if (
+      form.locale !== "it-IT" ||
+      (form.time_zone !== "Europe/Rome" && form.time_zone !== "UTC")
+    ) {
+      toast.error("Lingua o fuso orario non supportati.");
+      return;
+    }
     if (
       !Number.isFinite(form.default_hourly_rate) ||
       form.default_hourly_rate < 0 ||
@@ -214,6 +290,12 @@ function CompanyOnboarding() {
           name,
           address,
           vat_number: form.vat_number.trim(),
+          contact_email: form.contact_email.trim(),
+          contact_phone: form.contact_phone.trim(),
+          service_area: form.service_area.trim(),
+          service_categories: form.service_categories,
+          locale: form.locale,
+          time_zone: form.time_zone,
           default_hourly_rate: form.default_hourly_rate,
           report_footer_notes: form.report_footer_notes.trim(),
         }),
@@ -317,7 +399,7 @@ function CompanyOnboarding() {
                   Passaggio {step + 1} di 2
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
-                  {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
+                  {step === 0 ? "Identità aziendale" : "Profilo operativo e rapportini"}
                 </h2>
               </div>
               <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
