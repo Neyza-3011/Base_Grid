@@ -108,6 +108,7 @@ export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const activeStep = TOUR_STEPS[stepIndex];
   const StepIcon = activeStep.icon;
@@ -118,6 +119,8 @@ export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
 
   useEffect(() => {
     if (!open) return;
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setStepIndex(0);
     closeButtonRef.current?.focus();
 
@@ -147,7 +150,12 @@ export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      const previous = previouslyFocusedElementRef.current;
+      previouslyFocusedElementRef.current = null;
+      if (previous?.isConnected) previous.focus();
+    };
   }, [open]);
 
   if (!open) return null;
