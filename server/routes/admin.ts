@@ -399,16 +399,16 @@ adminRouter.get("/tenants/:companyId", asyncHandler(async (req: any, res: any): 
       created_at: company.createdAt,
       updated_at: company.updatedAt,
       setup_complete: Boolean(
-      company.name?.trim() &&
-        company.address?.trim() &&
-        company.contactEmail?.trim() &&
-        company.contactPhone?.trim() &&
-        company.serviceArea?.trim() &&
-        Array.isArray(company.serviceCategories) &&
-        company.serviceCategories.length > 0 &&
-        company.locale === "it-IT" &&
-        (company.timeZone === "Europe/Rome" || company.timeZone === "UTC"),
-    ),
+        company.name?.trim() &&
+          company.address?.trim() &&
+          company.contactEmail?.trim() &&
+          company.contactPhone?.trim() &&
+          company.serviceArea?.trim() &&
+          Array.isArray(company.serviceCategories) &&
+          company.serviceCategories.length > 0 &&
+          company.locale === "it-IT" &&
+          (company.timeZone === "Europe/Rome" || company.timeZone === "UTC"),
+      ),
     },
     users: safeUsers,
     user_count: safeUsers.length,
