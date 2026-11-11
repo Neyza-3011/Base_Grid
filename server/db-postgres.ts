@@ -1085,8 +1085,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const params: unknown[] = [];
     for (const [field, column] of columns) {
       if (Object.prototype.hasOwnProperty.call(updates, field)) {
-        const value = field === "serviceCategories" ? JSON.stringify(updates[field]) : updates[field];
-        params.push(value);
+        params.push(updates[field]);
         setClauses.push(`${column} = ${params.length}`);
       }
     }
