@@ -79,6 +79,32 @@ describe("mandatory company setup gate", () => {
     expect(allowed.response.status).toBe(200);
   });
 
+  it("persists the first onboarding step without overwriting settings from later steps", async () => {
+    const before = await db.findCompanyById("comp-rossi-001");
+    if (!before) throw new Error("Seed company fixture not found");
+
+    const saved = await request("/api/v1/company/settings", "admin@rossi.it", "csrf-step-one", {
+      method: "PUT",
+      body: {
+        name: "Impianti Rossi Srl",
+        address: "Via Demo 10, Roma",
+      },
+    });
+
+    expect(saved.response.status).toBe(200);
+    const persisted = await db.findCompanyById("comp-rossi-001");
+    expect(persisted).toMatchObject({
+      name: "Impianti Rossi Srl",
+      address: "Via Demo 10, Roma",
+      defaultHourlyRate: before.defaultHourlyRate,
+      reportFooterNotes: before.reportFooterNotes,
+      vatNumber: before.vatNumber,
+    });
+
+    const workflow = await request("/api/v1/users/me", "admin@rossi.it");
+    expect(workflow.response.status).toBe(200);
+  });
+
   it("persists setup through the real company settings HTTP route and then unlocks workflows", async () => {
     const saved = await request("/api/v1/company/settings", "admin@rossi.it", "csrf-save", {
       method: "PUT",

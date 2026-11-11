@@ -155,7 +155,33 @@ function CompanyOnboarding() {
         toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
         return;
       }
-      setStep(1);
+
+      // Persist the identity step before advancing so a refresh or re-login does not lose progress.
+      setSaving(true);
+      try {
+        const response = await fetch("/api/v1/company/settings", {
+          method: "PUT",
+          credentials: "include",
+          headers: appendCsrfHeaders({
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          }),
+          body: JSON.stringify({ name, address }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(result.detail || "Impossibile salvare l'identità aziendale.");
+        }
+        setStep(1);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Errore di rete durante il salvataggio dell'identità aziendale.",
+        );
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     if (name.length < 2 || name.length > 100) {
