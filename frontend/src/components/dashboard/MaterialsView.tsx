@@ -211,9 +211,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
                       <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs">
                         {formatStatus(row.reportStatus)}
                       </span>
-                      <span className="mt-1 block font-mono text-[10px] text-white/40">
-              {row.reportId}
-            </span>
+                      <span className="mt-1 block font-mono text-[10px] text-white/40">{row.reportId}</span>
                     </td>
                   </tr>
                 ))}
