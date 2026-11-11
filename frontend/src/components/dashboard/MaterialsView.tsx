@@ -78,9 +78,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
 
   if (!READ_ROLES.includes(currentUser.role)) {
     return (
-      <section
-        className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center text-white"
-      >
+      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center text-white">
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-400" aria-hidden="true" />
         <h2 className="text-lg font-semibold">Accesso riservato</h2>
         <p className="mt-2 text-sm text-white/60">
@@ -160,7 +158,11 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/40"
         />
         {query && (
-          <button type="button" onClick={() => setQuery("")} className="text-xs text-white/60 hover:text-white">
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="text-xs text-white/60 hover:text-white"
+          >
             Cancella
           </button>
         )}
@@ -175,8 +177,8 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
         </div>
         {loading ? (
           <div className="p-10 text-center text-sm text-white/50">
-          Caricamento materiali dal server...
-        </div>
+            Caricamento materiali dal server...
+          </div>
         ) : error ? (
           <div className="p-10 text-center text-sm text-white/50">
             Dati non disponibili finché il caricamento non riesce.
