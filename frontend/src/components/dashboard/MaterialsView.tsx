@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, FileText, Package, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
-import { getReports, Report } from "@/lib/reportsStorage";
+import { getReports } from "@/lib/reportsStorage";
+import { buildMaterialUsageRows, summarizeMaterials } from "@/lib/materialsUsage";
 import { UserSession } from "@/lib/auth";
 
 const READ_ROLES: readonly string[] = [
@@ -15,24 +16,12 @@ const READ_ROLES: readonly string[] = [
   "superadmin",
 ];
 
-type MaterialUsageRow = {
-  key: string;
-  name: string;
-  quantity: number;
-  reportId: string;
-  clientName: string;
-  technicianName: string;
-  date: string;
-  createdAt: string;
-  reportStatus: Report["status"];
-};
-
 type MaterialsViewProps = {
   currentUser: UserSession;
   onOpenReports: () => void;
 };
 
-function formatStatus(status: Report["status"]): string {
+function formatStatus(status: "draft" | "submitted" | "approved"): string {
   if (status === "draft") return "Bozza";
   if (status === "approved") return "Approvato";
   return "Inviato";
@@ -71,33 +60,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
     void loadReports();
   }, [currentUser.role, loadReports]);
 
-  const rows = useMemo<MaterialUsageRow[]>(() => {
-    const result: MaterialUsageRow[] = [];
-    for (const report of reports) {
-      if (report.materials_status !== "used" || !Array.isArray(report.materials_used)) {
-        continue;
-      }
-      report.materials_used.forEach((material, index) => {
-        const name = typeof material.name === "string" ? material.name.trim() : "";
-        const quantity = material.quantity;
-        if (!name || !Number.isFinite(quantity) || quantity <= 0) return;
-        result.push({
-          key: `${report.id}:${index}`,
-          name,
-          quantity,
-          reportId: report.id,
-          clientName: report.client?.name || "Cliente non indicato",
-          technicianName: report.technician?.full_name || "Tecnico non indicato",
-          date: report.dateTimeFormatted || `${report.date} ${report.time}`,
-          createdAt: report.created_at || "",
-          reportStatus: report.status,
-        });
-      });
-    }
-    return result.sort(
-      (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
-    );
-  }, [reports]);
+  const rows = useMemo(() => buildMaterialUsageRows(reports), [reports]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("it");
@@ -110,30 +73,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
     );
   }, [query, rows]);
 
-  const materialTotals = useMemo(() => {
-    const totals = new Map<string, { name: string; quantity: number }>();
-    for (const row of rows) {
-      const key = row.name.toLocaleLowerCase("it");
-      const existing = totals.get(key);
-      if (existing) {
-        existing.quantity += row.quantity;
-      } else {
-        totals.set(key, { name: row.name, quantity: row.quantity });
-      }
-    }
-    return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
-  }, [rows]);
-
-  const reportsWithNoMaterials = reports.filter(
-    (report) => report.materials_status === "none",
-  ).length;
-  const reportsUnverified = reports.filter(
-    (report) =>
-      !report.materials_status ||
-      report.materials_status === "unverified" ||
-      (report.materials_status === "used" && report.materials_used.length === 0),
-  ).length;
-  const totalQuantity = rows.reduce((total, row) => total + row.quantity, 0);
+  const summary = useMemo(() => summarizeMaterials(reports, rows), [reports, rows]);
 
   if (!READ_ROLES.includes(currentUser.role)) {
     return (
@@ -189,10 +129,10 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Articoli distinti", value: materialTotals.length },
-          { label: "Quantità dichiarate", value: totalQuantity },
-          { label: "Rapportini senza materiali", value: reportsWithNoMaterials },
-          { label: "Rapportini da verificare", value: reportsUnverified },
+          { label: "Articoli distinti", value: summary.distinctMaterials },
+          { label: "Quantità dichiarate", value: summary.totalQuantity },
+          { label: "Rapportini senza materiali", value: summary.reportsWithNoMaterials },
+          { label: "Rapportini da verificare", value: summary.reportsUnverified },
         ].map((metric) => (
           <div key={metric.label} className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
             <p className="text-xs font-medium text-white/50">{metric.label}</p>
