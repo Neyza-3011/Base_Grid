@@ -83,11 +83,32 @@ function mapUserRow(row: any): UserRecord {
 }
 
 function mapCompanyRow(row: any): CompanyRecord {
+  let serviceCategories = row.serviceCategories;
+  if (typeof serviceCategories === "string") {
+    try {
+      serviceCategories = JSON.parse(serviceCategories);
+    } catch {
+      throw new Error("Invalid persisted company service categories JSON");
+    }
+  }
+  if (serviceCategories === null || serviceCategories === undefined) {
+    serviceCategories = [];
+  }
+  if (!Array.isArray(serviceCategories) || serviceCategories.some((item) => typeof item !== "string")) {
+    throw new Error("Invalid persisted company service categories shape");
+  }
+
   return {
     id: row.id,
     name: row.name,
     vatNumber: row.vatNumber || "",
     address: row.address || "",
+    contactEmail: row.contactEmail || "",
+    contactPhone: row.contactPhone || "",
+    serviceArea: row.serviceArea || "",
+    serviceCategories,
+    locale: row.locale || "it-IT",
+    timeZone: row.timeZone || "Europe/Rome",
     defaultHourlyRate: Number(row.defaultHourlyRate) || 0,
     reportFooterNotes: row.reportFooterNotes || "",
     stripeSubscriptionStatus: row.stripeSubscriptionStatus || "",
@@ -1064,8 +1085,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const params: unknown[] = [];
     for (const [field, column] of columns) {
       if (Object.prototype.hasOwnProperty.call(updates, field)) {
-        params.push(updates[field]);
-        setClauses.push(`${column} = $${params.length}`);
+        const value = field === "serviceCategories" ? JSON.stringify(updates[field]) : updates[field];
+        params.push(value);
+        setClauses.push(`${column} = ${params.length}`);
       }
     }
 
@@ -1157,6 +1179,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ["name", "name"],
       ["vatNumber", '"vatNumber"'],
       ["address", "address"],
+      ["contactEmail", '"contactEmail"'],
+      ["contactPhone", '"contactPhone"'],
+      ["serviceArea", '"serviceArea"'],
+      ["serviceCategories", '"serviceCategories"'],
+      ["locale", "locale"],
+      ["timeZone", '"timeZone"'],
       ["defaultHourlyRate", '"defaultHourlyRate"'],
       ["reportFooterNotes", '"reportFooterNotes"'],
       ["stripeSubscriptionStatus", '"stripeSubscriptionStatus"'],
