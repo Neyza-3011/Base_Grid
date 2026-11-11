@@ -23,6 +23,7 @@ type MaterialUsageRow = {
   clientName: string;
   technicianName: string;
   date: string;
+  createdAt: string;
   reportStatus: Report["status"];
 };
 
@@ -88,11 +89,12 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
           clientName: report.client?.name || "Cliente non indicato",
           technicianName: report.technician?.full_name || "Tecnico non indicato",
           date: report.dateTimeFormatted || `${report.date} ${report.time}`,
+          createdAt: report.created_at || "",
           reportStatus: report.status,
         });
       });
     }
-    return result.sort((a, b) => b.date.localeCompare(a.date));
+    return result.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
   }, [reports]);
 
   const filteredRows = useMemo(() => {
@@ -146,7 +148,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
             <h2 className="text-2xl font-bold tracking-tight">Materiali</h2>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-white/60">
-            Riepilogo dei materiali dichiarati nei rapportini salvati. Questa vista non rappresenta le giacenze di magazzino.
+            Riepilogo dei materiali dichiarati negli ultimi 1.000 rapportini recuperati. Questa vista non rappresenta le giacenze di magazzino.
           </p>
         </div>
         <button
