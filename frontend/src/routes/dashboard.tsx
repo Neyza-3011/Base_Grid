@@ -565,7 +565,10 @@ function Dashboard() {
           {activeView === "customers" && <CustomersView />}
           {activeView === "assets" && <AssetsView currentUser={currentUser} />}
           {activeView === "materials" && (
-            <MaterialsView currentUser={currentUser} onOpenReports={() => setActiveView("reports")} />
+            <MaterialsView
+              currentUser={currentUser}
+              onOpenReports={() => setActiveView("reports")}
+            />
           )}
           {activeView === "interventions" && (
             <InterventionsView
