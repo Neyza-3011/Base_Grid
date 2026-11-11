@@ -85,7 +85,17 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
   // Keep session introspection available so the frontend can route the owner to onboarding.
   // The company identity and completion state are derived exclusively from persisted server data.
   const requestPath = `${req.baseUrl}${req.path}`;
-  const setupComplete = Boolean(company.name?.trim() && company.address?.trim());
+  const setupComplete = Boolean(
+    company.name?.trim() &&
+      company.address?.trim() &&
+      company.contactEmail?.trim() &&
+      company.contactPhone?.trim() &&
+      company.serviceArea?.trim() &&
+      Array.isArray(company.serviceCategories) &&
+      company.serviceCategories.length > 0 &&
+      company.locale === "it-IT" &&
+      (company.timeZone === "Europe/Rome" || company.timeZone === "UTC"),
+  );
   if (!setupComplete && !isCanonicalPlatformCeo) {
     const isSessionEndpoint = requestPath === "/api/v1/auth/session";
     const isCompanySettingsEndpoint = requestPath === "/api/v1/company/settings";
