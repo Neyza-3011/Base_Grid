@@ -181,11 +181,7 @@ export function ProductTour({ open, onClose, onNavigate }: ProductTourProps) {
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-300">
                 Guida rapida
               </p>
-              <p
-                className="mt-0.5 text-sm text-white/60"
-                aria-live="polite"
-                aria-atomic="true"
-              >
+              <p className="mt-0.5 text-sm text-white/60" aria-live="polite" aria-atomic="true">
                 Passaggio {stepIndex + 1} di {TOUR_STEPS.length}
               </p>
             </div>
