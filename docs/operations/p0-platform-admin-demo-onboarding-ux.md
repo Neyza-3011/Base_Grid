@@ -6,14 +6,14 @@ This roadmap tracks verified evidence, not claims of completion. Every implement
 
 Allowed statuses: `DONE_VERIFIED`, `IN_PROGRESS`, `BLOCKED`, `NOT_STARTED`, `UNVERIFIED`.
 
-## Current checkpoint — 2026-11-11 (verified 07:53 Europe/Rome)
+## Current checkpoint — 2026-11-11 (rechecked after PR #253 merge)
 
-- **Verified main:** [`fb30cb15e25516134bedef560f6cca090bada2d6`](https://github.com/Neyza-3011/Base_Grid/commit/fb30cb15e25516134bedef560f6cca090bada2d6); commit `fix(billing): remove simulated subscription and invoice claims`, merged via [PR #249](https://github.com/Neyza-3011/Base_Grid/pull/249) on 2026-11-10.
-- **Recent merged changes:** [PR #252](https://github.com/Neyza-3011/Base_Grid/pull/252) updates the product/API/route inventory; [PR #251](https://github.com/Neyza-3011/Base_Grid/pull/251) surfaces incomplete asset-location loads; [PR #250](https://github.com/Neyza-3011/Base_Grid/pull/250) uses the local calendar date for new reports. These merges do not establish full release readiness.
-- **Open PRs:** 0 returned by the repository Pull Requests API at this checkpoint. Existing remote branches may remain after their PRs are closed or merged.
-- **CI on this exact main SHA:** [run #42865084482](https://github.com/Neyza-3011/Base_Grid/actions/runs/42865084482) ended with `startup_failure` on 2026-11-10; the run has zero jobs, so no lint, type-check, test or build steps ran and no job logs are available. Individual controls are therefore `NOT_RUN`, not `PASS`. A prior CI run on older SHA `3f93cc7d8ecad6d14e0620c4e88d81feb13684f4` failed, but its job logs could not be retrieved during this checkpoint; its cause remains unresolved and must not be projected onto the current SHA.
-- **Live Render smoke:** [run #42971353890](https://github.com/Neyza-3011/Base_Grid/actions/runs/42971353890) passed on 2026-11-11 at 06:17 UTC. The workflow checks `/health` and `/ready` against the configured Render URL. This proves those endpoints passed at that time; it does not identify the deployed revision or prove end-to-end product readiness.
-- **Roadmap discipline:** The detailed evidence and task-status notes below originated from the 2026-11-01 snapshot. Treat them as historical unless revalidated against current code, PRs and CI. No task is promoted to `DONE_VERIFIED` by this checkpoint alone.
+- **Current `main`:** [`c6c6efa22d66a469e13ee33c39aaca869dccdc05`](https://github.com/Neyza-3011/Base_Grid/commit/c6c6efa22d66a469e13ee33c39aaca869dccdc05), merge of [PR #253](https://github.com/Neyza-3011/Base_Grid/pull/253), which refreshed the roadmap checkpoint.
+- **Recent merged changes:** [PR #252](https://github.com/Neyza-3011/Base_Grid/pull/252) updates the product/API/route inventory; [PR #251](https://github.com/Neyza-3011/Base_Grid/pull/251) surfaces incomplete asset-location loads; [PR #250](https://github.com/Neyza-3011/Base_Grid/pull/250) uses the local calendar date for new reports; [PR #249](https://github.com/Neyza-3011/Base_Grid/pull/249) removes simulated subscription and invoice claims. Merges alone do not establish full release readiness.
+- **Open PRs:** 0 returned by the repository Pull Requests API at this recheck. Remote branches may remain after their PRs are closed or merged.
+- **CI on current `main`:** [run #42993925385](https://github.com/Neyza-3011/Base_Grid/actions/runs/42993925385) ended with `startup_failure` and zero jobs. No lint, backend/frontend type-check, tests or build steps ran; no job logs are available. The current combined commit status exposes a successful Vercel check only, which is not a substitute for required CI. Until a new run executes these jobs on the relevant SHA, the individual controls remain `NOT_RUN`, not `PASS`.
+- **Live Render smoke:** [run #42971353890](https://github.com/Neyza-3011/Base_Grid/actions/runs/42971353890) passed on 2026-11-11 at 06:17 UTC on an older SHA (`fb30cb15e25516134bedef560f6cca090bada2d6`). It confirms `/health` and `/ready` passed at that time, but does not identify the currently deployed revision or prove end-to-end product readiness.
+- **Roadmap discipline:** Detailed task evidence below originated from the 2026-11-01 snapshot and remains historical unless revalidated against current code, PRs and CI. No task is promoted to `DONE_VERIFIED` by this checkpoint alone.
 
 ## Historical baseline snapshot — 2026-11-01
 
@@ -105,7 +105,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: the current backend exposes CEO-protected stats, tenant list/detail/profile endpoints, tenant-user profile/role and activate/deactivate operations, tenant suspend/reactivate operations, and bounded persisted audit-event reads. `server/migrations/012_admin_audit_events.sql` defines the durable audit table. The UI provides tenant search, detail inspection, profile editing and user summaries, but direct inspection found no calls from this route to suspend/reactivate endpoints and no audit-event viewer. Permanent deletion is not implemented; browser/E2E lifecycle verification remains outstanding. Do not infer completion from API presence alone.
+Evidence from direct inspection of current `main` (`c6c6efa22d66a469e13ee33c39aaca869dccdc05`): `frontend/src/routes/admin/super-dashboard.tsx` contains tenant search/detail/profile editing, calls `/api/v1/admin/tenants/:id/suspend` and `/reactivate`, and loads/displays up to 50 events from `/api/v1/admin/audit-events?limit=50`. The status mutation uses a confirmation prompt and `appendCsrfHeaders`; the audit panel has loading, error/retry and empty states. `server/migrations/012_admin_audit_events.sql` defines the durable audit table. Therefore the earlier statement that the UI lacked these call sites and the audit viewer was stale. Permanent deletion is not implemented, and browser/E2E lifecycle behavior, persisted audit assertions for all relevant paths, and production behavior remain unverified. Do not infer `DONE_VERIFIED` from source presence alone.
 
 Acceptance criteria:
 - Finalize the CEO-only control panel as the central platform administration interface, with searchable/filterable company and user lists, detail views, status/usage summaries, linked records and clear empty/loading/error states.
@@ -134,7 +134,7 @@ Acceptance criteria:
 
 Status: `IN_PROGRESS`
 
-Evidence: current `main` contains `/onboarding`, the server-side company setup gate and `server/onboarding-gate.test.ts`; PR #130 adds the guided setup wizard. The form currently persists company name, address, VAT number, hourly rate and report-footer notes. PR #133 proposes explicit recovery/retry UI for a settings-load failure but is not merged and has not yet passed its current CI.
+Evidence from the historical implementation snapshot: `main` contains `/onboarding`, the server-side company setup gate and `server/onboarding-gate.test.ts`; PR #130 added the guided setup wizard. The form persists company name, address, VAT number, hourly rate and report-footer notes. PR #133, which adds retry handling for settings-load failures, was merged on 2026-11-01; this does not complete the broader setup acceptance criteria. Recheck current code and browser behavior before treating the full onboarding flow as verified.
 
 Acceptance criteria:
 - Require minimal company setup after account creation/authentication before exposing normal operational workflows.
