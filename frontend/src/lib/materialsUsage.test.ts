@@ -35,9 +35,9 @@ describe("materials usage view model", () => {
       report({ id: "report-unverified", materials_status: "unverified", materials_used: [] }),
     ];
 
-    expect(buildMaterialUsageRows(reports).map(({ name, quantity }) => ({ name, quantity }))).toEqual([
-      { name: "Cavo FG16", quantity: 2 },
-    ]);
+    expect(
+      buildMaterialUsageRows(reports).map(({ name, quantity }) => ({ name, quantity })),
+    ).toEqual([{ name: "Cavo FG16", quantity: 2 }]);
   });
 
   it("keeps explicit no-material reports distinct from unverified or inconsistent reports", () => {
