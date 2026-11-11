@@ -79,24 +79,6 @@ function Index() {
             </div>
           </div>
 
-          {/* Logos strip */}
-          <div className="mt-20 border-t border-white/5 pt-8">
-            <div className="text-center text-[11px] uppercase tracking-[0.25em] text-white/40">
-              Usato da oltre 2.000 aziende in Italia
-            </div>
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-5 gap-6 items-center opacity-60">
-              {["Elettro Rossi", "Impianti Verdi", "Idro Bianchi", "Termo SpA", "Cantiere+"].map(
-                (n) => (
-                  <div
-                    key={n}
-                    className="text-center text-sm text-white/50 font-medium tracking-tight"
-                  >
-                    {n}
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
         </div>
       </section>
 
