@@ -147,13 +147,13 @@ function CompanyOnboarding() {
           setForm(current);
           const profileComplete = Boolean(
             current.name.trim() &&
-              current.address.trim() &&
-              current.contact_email.trim() &&
-              current.contact_phone.trim() &&
-              current.service_area.trim() &&
-              current.service_categories.length > 0 &&
-              current.locale === "it-IT" &&
-              (current.time_zone === "Europe/Rome" || current.time_zone === "UTC"),
+            current.address.trim() &&
+            current.contact_email.trim() &&
+            current.contact_phone.trim() &&
+            current.service_area.trim() &&
+            current.service_categories.length > 0 &&
+            current.locale === "it-IT" &&
+            (current.time_zone === "Europe/Rome" || current.time_zone === "UTC"),
           );
           if (profileComplete) {
             navigate({ to: "/dashboard" });
@@ -184,7 +184,7 @@ function CompanyOnboarding() {
     };
   }, [navigate, loadAttempt]);
 
-  const updateField = <K extends keyof CompanySettings,>(field: K, value: CompanySettings[K]) => {
+  const updateField = <K extends keyof CompanySettings>(field: K, value: CompanySettings[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -267,10 +267,7 @@ function CompanyOnboarding() {
       toast.error("Seleziona almeno una categoria di servizio.");
       return;
     }
-    if (
-      form.locale !== "it-IT" ||
-      (form.time_zone !== "Europe/Rome" && form.time_zone !== "UTC")
-    ) {
+    if (form.locale !== "it-IT" || (form.time_zone !== "Europe/Rome" && form.time_zone !== "UTC")) {
       toast.error("Lingua o fuso orario non supportati.");
       return;
     }
@@ -514,10 +511,15 @@ function CompanyOnboarding() {
               />
             </div>
             <fieldset className="space-y-3">
-              <legend className="text-sm font-medium">Servizi offerti * (seleziona almeno uno)</legend>
+              <legend className="text-sm font-medium">
+                Servizi offerti * (seleziona almeno uno)
+              </legend>
               <div className="grid gap-3 sm:grid-cols-2">
                 {SERVICE_CATEGORIES.map((category) => (
-                  <label key={category.value} className="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm">
+                  <label
+                    key={category.value}
+                    className="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm"
+                  >
                     <input
                       type="checkbox"
                       checked={form.service_categories.includes(category.value)}
@@ -601,8 +603,12 @@ function CompanyOnboarding() {
                   <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
                   <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
                   <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
-                  <p className="mt-1 break-words text-xs text-white/50">{form.contact_email.trim()}</p>
-                  <p className="mt-1 break-words text-xs text-white/50">{form.service_area.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">
+                    {form.contact_email.trim()}
+                  </p>
+                  <p className="mt-1 break-words text-xs text-white/50">
+                    {form.service_area.trim()}
+                  </p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
                     Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o
                     riaprire in seguito.
