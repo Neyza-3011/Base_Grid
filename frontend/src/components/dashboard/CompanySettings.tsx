@@ -33,6 +33,7 @@ export function CompanySettings() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Form states
   const [formData, setFormData] = useState<CompanyData>({
@@ -58,6 +59,8 @@ export function CompanySettings() {
   });
 
   useEffect(() => {
+    setLoadError(false);
+    setFetching(true);
     const fetchCompanyData = async () => {
       try {
         const res = await fetch("/api/v1/company/settings", {
@@ -83,8 +86,8 @@ export function CompanySettings() {
         setFetching(false);
       }
     };
-    fetchCompanyData();
-  }, []);
+    void fetchCompanyData();
+  }, [loadAttempt]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -171,8 +174,19 @@ export function CompanySettings() {
         <h2 className="text-base font-semibold">Impossibile caricare le impostazioni aziendali</h2>
         <p className="mt-2 text-sm text-white/70">
           I dati non sono stati caricati. Per evitare di sovrascriverli con valori vuoti, il modulo
-          è disabilitato. Ricarica la pagina e riprova.
+          è disabilitato finché il caricamento non riesce.
         </p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadError(false);
+            setFetching(true);
+            setLoadAttempt((attempt) => attempt + 1);
+          }}
+          className="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/5"
+        >
+          Riprova
+        </button>
       </div>
     );
   }
