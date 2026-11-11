@@ -55,11 +55,11 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
 
     expect(mockPool.query).toHaveBeenCalledTimes(1);
     const [sql, params] = mockPool.query.mock.calls[0];
-    expect(sql).toContain('"serviceCategories" = $1');
-    expect(sql).toContain('"serviceArea" = $2');
+    expect(sql).toContain('"serviceArea" = $1');
+    expect(sql).toContain('"serviceCategories" = $2');
     expect(params).toEqual([
-      JSON.stringify(["installazione", "manutenzione"]),
       "Roma e provincia",
+      JSON.stringify(["installazione", "manutenzione"]),
       expect.any(String),
       "company-alpha",
     ]);
