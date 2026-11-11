@@ -244,8 +244,14 @@ function CompanyOnboarding() {
       toast.error("Inserisci un indirizzo email aziendale valido.");
       return;
     }
-    if (!/^[+0-9().\s/-]{7,40}$/.test(form.contact_phone.trim())) {
-      toast.error("Inserisci un numero di telefono valido.");
+    const phoneDigits = form.contact_phone.replace(/\D/g, "").length;
+    if (
+      form.contact_phone.trim().length > 40 ||
+      phoneDigits < 7 ||
+      phoneDigits > 15 ||
+      !/^[+0-9().\s/-]+$/.test(form.contact_phone.trim())
+    ) {
+      toast.error("Inserisci un numero di telefono valido con 7–15 cifre.");
       return;
     }
     if (form.service_area.trim().length < 2 || form.service_area.trim().length > 255) {
