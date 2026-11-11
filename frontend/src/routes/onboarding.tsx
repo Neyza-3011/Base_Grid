@@ -462,6 +462,102 @@ function CompanyOnboarding() {
 
           <div className={step === 1 ? "space-y-5" : "hidden"}>
             <div>
+              <label htmlFor="contact-email" className="mb-2 block text-sm font-medium">
+                Email aziendale *
+              </label>
+              <input
+                id="contact-email"
+                type="email"
+                required
+                maxLength={255}
+                autoComplete="email"
+                value={form.contact_email}
+                onChange={(e) => updateField("contact_email", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="contact-phone" className="mb-2 block text-sm font-medium">
+                Telefono aziendale *
+              </label>
+              <input
+                id="contact-phone"
+                type="tel"
+                required
+                minLength={7}
+                maxLength={40}
+                autoComplete="tel"
+                value={form.contact_phone}
+                onChange={(e) => updateField("contact_phone", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="service-area" className="mb-2 block text-sm font-medium">
+                Area geografica servita *
+              </label>
+              <input
+                id="service-area"
+                required
+                minLength={2}
+                maxLength={255}
+                placeholder="Es. Roma e provincia"
+                value={form.service_area}
+                onChange={(e) => updateField("service_area", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium">Servizi offerti * (seleziona almeno uno)</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {SERVICE_CATEGORIES.map((category) => (
+                  <label key={category.value} className="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.service_categories.includes(category.value)}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                          ? [...form.service_categories, category.value]
+                          : form.service_categories.filter((item) => item !== category.value);
+                        updateField("service_categories", next);
+                      }}
+                      className="mt-0.5 accent-emerald-400"
+                    />
+                    <span>{category.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="company-locale" className="mb-2 block text-sm font-medium">
+                  Lingua dell'azienda
+                </label>
+                <select
+                  id="company-locale"
+                  value={form.locale}
+                  onChange={(e) => updateField("locale", e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                >
+                  <option value="it-IT">Italiano (it-IT)</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="company-time-zone" className="mb-2 block text-sm font-medium">
+                  Fuso orario
+                </label>
+                <select
+                  id="company-time-zone"
+                  value={form.time_zone}
+                  onChange={(e) => updateField("time_zone", e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                >
+                  <option value="Europe/Rome">Italia — Europe/Rome</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </div>
+            </div>
+            <div>
               <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
                 Tariffa oraria predefinita (€)
               </label>
@@ -499,6 +595,8 @@ function CompanyOnboarding() {
                   <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
                   <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
                   <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">{form.contact_email.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">{form.service_area.trim()}</p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
                     Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o
                     riaprire in seguito.
