@@ -3,18 +3,7 @@ import { CompanyRecord, CreateAdminAuditEventInput, UpdateCompanyInput } from ".
 import { NotFoundError, ValidationError } from "../errors";
 import { PDFDocument } from "pdf-lib";
 import { hasSafeImageDimensions } from "../validation";
-
-const SUPPORTED_SERVICE_CATEGORIES = new Set([
-  "installazione",
-  "manutenzione",
-  "pronto-intervento",
-  "verifiche-collaudi",
-  "domotica-automazione",
-  "fotovoltaico",
-  "ricarica-veicoli-elettrici",
-]);
-const SUPPORTED_LOCALES = new Set(["it-IT"]);
-const SUPPORTED_TIME_ZONES = new Set(["Europe/Rome", "UTC"]);
+import { SUPPORTED_LOCALES, SUPPORTED_SERVICE_CATEGORIES, SUPPORTED_TIME_ZONES } from "../company-profile";
 
 const MAX_COMPANY_LOGO_BYTES = 256 * 1024;
 const MAX_COMPANY_LOGO_DATA_URL_LENGTH = 350_000;
