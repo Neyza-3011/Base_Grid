@@ -78,7 +78,6 @@ function Index() {
               <FloatingMockups />
             </div>
           </div>
-
         </div>
       </section>
 
