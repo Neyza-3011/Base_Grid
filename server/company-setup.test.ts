@@ -33,7 +33,7 @@ describe("isCompanySetupComplete", () => {
   it.each([
     ["unsupported category", ["unsupported-service"]],
     ["duplicate categories", ["installazione", "installazione"]],
-    ["too many categories", [...completeProfile.serviceCategories, "pronto-intervento", "verifiche-collaudi", "domotica-automazione", "fotovoltaico", "ricarica-veicoli-elettrici"]],
+    ["non-string category", ["installazione", 7] as any],
   ])("rejects invalid service categories (%s)", (_description, serviceCategories) => {
     expect(isCompanySetupComplete({ ...completeProfile, serviceCategories })).toBe(false);
   });
