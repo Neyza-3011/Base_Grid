@@ -11,7 +11,6 @@ describe("loadCompanySettings", () => {
         address: "Via Roma 10",
         default_hourly_rate: "42.5",
         report_footer_notes: "Note",
-      service_categories: ["installazione"],
         service_categories: ["installazione"],
       }),
     } as unknown as Response);
@@ -22,6 +21,7 @@ describe("loadCompanySettings", () => {
       address: "Via Roma 10",
       default_hourly_rate: 42.5,
       report_footer_notes: "Note",
+      service_categories: ["installazione"],
     });
     expect(fetcher).toHaveBeenCalledWith(
       "/api/v1/company/settings?include_logo=false",
