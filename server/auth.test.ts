@@ -2202,7 +2202,15 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       });
       adminA = resA.user;
       compA = resA.company;
-      await db.updateCompany(compA.id, { address: "Via Test 1, Roma" });
+      await db.updateCompany(compA.id, {
+        address: "Via Test 1, Roma",
+        contactEmail: "ufficio-a@example.test",
+        contactPhone: "+39 06 1234567",
+        serviceArea: "Roma e provincia",
+        serviceCategories: ["installazione", "manutenzione"],
+        locale: "it-IT",
+        timeZone: "Europe/Rome",
+      });
       tokenAdminA = generateTokens(adminA).accessToken;
 
       const resTechA = await db.createUser({
@@ -2223,7 +2231,15 @@ describe("14. Temporary Email-Independent Mode (EMAIL_VERIFICATION_ENABLED = fal
       });
       adminB = resB.user;
       compB = resB.company;
-      await db.updateCompany(compB.id, { address: "Via Test 2, Roma" });
+      await db.updateCompany(compB.id, {
+        address: "Via Test 2, Roma",
+        contactEmail: "ufficio-b@example.test",
+        contactPhone: "+39 06 7654321",
+        serviceArea: "Roma e provincia",
+        serviceCategories: ["installazione", "manutenzione"],
+        locale: "it-IT",
+        timeZone: "Europe/Rome",
+      });
       tokenAdminB = generateTokens(adminB).accessToken;
 
       const resTechB = await db.createUser({
