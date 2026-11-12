@@ -49,8 +49,8 @@ jobs:
 
       - name: Install PDF validation tools
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes poppler-utils
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install --yes poppler-utils
 
       - name: Install dependencies (clean install)
         run: npm ci
