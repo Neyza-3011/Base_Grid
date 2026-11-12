@@ -30,6 +30,14 @@ describe("isCompanySetupComplete", () => {
     expect(isCompanySetupComplete({ ...completeProfile, ...override })).toBe(false);
   });
 
+  it.each([
+    ["unsupported category", ["unsupported-service"]],
+    ["duplicate categories", ["installazione", "installazione"]],
+    ["too many categories", [...completeProfile.serviceCategories, "pronto-intervento", "verifiche-collaudi", "domotica-automazione", "fotovoltaico", "ricarica-veicoli-elettrici"]],
+  ])("rejects invalid service categories (%s)", (_description, serviceCategories) => {
+    expect(isCompanySetupComplete({ ...completeProfile, serviceCategories })).toBe(false);
+  });
+
   it("accepts UTC as the explicitly supported alternative time zone", () => {
     expect(isCompanySetupComplete({ ...completeProfile, timeZone: "UTC" })).toBe(true);
   });
