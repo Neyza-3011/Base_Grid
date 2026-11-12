@@ -95,7 +95,15 @@ describe("P0.4.4-E - API Input Validation & Server-Owned Fields Hardening", () =
     }
     adminCompanyId = resLogin.body.companyId;
     adminUserId = resLogin.body.id;
-    await db.updateCompany(adminCompanyId, { address: "Via Test 1, Roma" });
+    await db.updateCompany(adminCompanyId, {
+      address: "Via Test 1, Roma",
+      contactEmail: adminEmail,
+      contactPhone: "+39 06 1234567",
+      serviceArea: "Roma e provincia",
+      serviceCategories: ["installazione", "manutenzione"],
+      locale: "it-IT",
+      timeZone: "Europe/Rome",
+    });
 
     // 2. Setup a test technician in the same company
     const testTech = {
