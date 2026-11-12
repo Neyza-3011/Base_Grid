@@ -21,7 +21,7 @@ interface CompanyData {
   name: string;
   vat_number: string;
   address: string;
-  default_hourly_rate: number;
+  default_hourly_rate: number | "";
   report_footer_notes: string;
   logo_data_url: string | null;
 }
@@ -92,7 +92,12 @@ export function CompanySettings() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
-    const value = e.target.type === "number" ? parseFloat(e.target.value) : e.target.value;
+    const value =
+      e.target.type === "number"
+        ? e.target.value === ""
+          ? ""
+          : Number(e.target.value)
+        : e.target.value;
     setFormData((prev) => ({ ...prev, [e.target.name]: value }));
   };
 
@@ -143,7 +148,8 @@ export function CompanySettings() {
           name: formData.name,
           vat_number: formData.vat_number,
           address: formData.address,
-          default_hourly_rate: formData.default_hourly_rate,
+          default_hourly_rate:
+            formData.default_hourly_rate === "" ? 0 : formData.default_hourly_rate,
           report_footer_notes: formData.report_footer_notes,
           logo_data_url: formData.logo_data_url,
         }),
