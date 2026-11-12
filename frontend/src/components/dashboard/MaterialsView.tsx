@@ -169,9 +169,7 @@ export function MaterialsView({ currentUser, onOpenReports }: MaterialsViewProps
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60">
-        <div
-          className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3"
-        >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
           <h3 className="text-sm font-semibold">Utilizzo registrato</h3>
           <span className="text-xs text-white/50">{filteredRows.length} righe</span>
         </div>
