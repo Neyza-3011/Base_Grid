@@ -30,6 +30,14 @@ describe("isCompanySetupComplete", () => {
     expect(isCompanySetupComplete({ ...completeProfile, ...override })).toBe(false);
   });
 
+  it.each([
+    ["unsupported category", ["unsupported-service"]],
+    ["duplicate categories", ["installazione", "installazione"]],
+    ["non-string category", ["installazione", 7] as unknown as string[]],
+  ])("rejects invalid service categories (%s)", (_description, serviceCategories) => {
+    expect(isCompanySetupComplete({ ...completeProfile, serviceCategories })).toBe(false);
+  });
+
   it("accepts UTC as the explicitly supported alternative time zone", () => {
     expect(isCompanySetupComplete({ ...completeProfile, timeZone: "UTC" })).toBe(true);
   });
