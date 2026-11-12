@@ -199,4 +199,25 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
       companyService.updateCompanySettings("comp-001", { logoDataUrl }, "admin"),
     ).rejects.toThrow("2048");
   });
+
+  describe("operational company profile validation rejects invalid input without writes", () => {
+    it.each([
+      ["malformed contact email", { contactEmail: "not-an-email" }],
+      ["empty contact email", { contactEmail: "   " }],
+      ["contact phone with letters", { contactPhone: "+39 ABC 1234567" }],
+      ["contact phone with too few digits", { contactPhone: "12345" }],
+      ["too-short service area", { serviceArea: " " }],
+      ["empty service categories", { serviceCategories: [] }],
+      ["duplicate service categories", { serviceCategories: ["installazione", "installazione"] }],
+      ["unsupported locale", { locale: "en-US" }],
+      ["unsupported time zone", { timeZone: "Mars/Olympus" }],
+    ])("rejects %s", async (_caseName, input) => {
+      await expect(
+        companyService.updateCompanySettings("comp-001", input, "owner"),
+      ).rejects.toThrow(ValidationError);
+
+      expect(mockDb.updateCompany).not.toHaveBeenCalled();
+    });
+  });
+
 });
