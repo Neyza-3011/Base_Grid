@@ -19,9 +19,14 @@ describe("loadCompanySettings", () => {
       name: "  Impianti Alpha Srl  ",
       vat_number: "",
       address: "Via Roma 10",
+      contact_email: "",
+      contact_phone: "",
+      service_area: "",
+      service_categories: ["installazione"],
+      locale: "it-IT",
+      time_zone: "Europe/Rome",
       default_hourly_rate: 42.5,
       report_footer_notes: "Note",
-      service_categories: ["installazione"],
     });
     expect(fetcher).toHaveBeenCalledWith(
       "/api/v1/company/settings?include_logo=false",
