@@ -4,6 +4,7 @@ import { db } from "../db";
 import { CompanyRecord, PlatformRole, UserRecord, UserRole } from "../types";
 import { asyncHandler } from "../async-handler";
 import { config, PLATFORM_CEO_EMAIL } from "../config";
+import { isCompanySetupComplete } from "../company-setup";
 
 // Extend Express Request interface to include authenticated user and company
 declare global {
@@ -85,7 +86,7 @@ export const authenticate = asyncHandler(async (req: Request, res: Response, nex
   // Keep session introspection available so the frontend can route the owner to onboarding.
   // The company identity and completion state are derived exclusively from persisted server data.
   const requestPath = `${req.baseUrl}${req.path}`;
-  const setupComplete = Boolean(company.name?.trim() && company.address?.trim());
+  const setupComplete = isCompanySetupComplete(company);
   if (!setupComplete && !isCanonicalPlatformCeo) {
     const isSessionEndpoint = requestPath === "/api/v1/auth/session";
     const isCompanySettingsEndpoint = requestPath === "/api/v1/company/settings";

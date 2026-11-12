@@ -29,9 +29,25 @@ type CompanySettings = {
   name: string;
   vat_number: string;
   address: string;
+  contact_email: string;
+  contact_phone: string;
+  service_area: string;
+  service_categories: string[];
+  locale: string;
+  time_zone: string;
   default_hourly_rate: number;
   report_footer_notes: string;
 };
+
+const SERVICE_CATEGORIES = [
+  { value: "installazione", label: "Installazione impianti elettrici" },
+  { value: "manutenzione", label: "Manutenzione" },
+  { value: "pronto-intervento", label: "Pronto intervento" },
+  { value: "verifiche-collaudi", label: "Verifiche e collaudi" },
+  { value: "domotica-automazione", label: "Domotica e automazione" },
+  { value: "fotovoltaico", label: "Fotovoltaico" },
+  { value: "ricarica-veicoli-elettrici", label: "Ricarica veicoli elettrici" },
+] as const;
 
 export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promise<CompanySettings> {
   const response = await fetcher("/api/v1/company/settings?include_logo=false", {
@@ -61,10 +77,23 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
     }
   }
 
+  if (
+    !Array.isArray(data.service_categories) ||
+    data.service_categories.some((item: unknown) => typeof item !== "string")
+  ) {
+    throw new Error("Le categorie di servizio ricevute non sono valide.");
+  }
+
   return {
     name: String(data.name || ""),
     vat_number: String(data.vat_number || ""),
     address: String(data.address || ""),
+    contact_email: String(data.contact_email || ""),
+    contact_phone: String(data.contact_phone || ""),
+    service_area: String(data.service_area || ""),
+    service_categories: data.service_categories as string[],
+    locale: String(data.locale || "it-IT"),
+    time_zone: String(data.time_zone || "Europe/Rome"),
     default_hourly_rate: defaultHourlyRate,
     report_footer_notes: String(data.report_footer_notes || ""),
   };
@@ -82,6 +111,12 @@ function CompanyOnboarding() {
     name: "",
     vat_number: "",
     address: "",
+    contact_email: "",
+    contact_phone: "",
+    service_area: "",
+    service_categories: [],
+    locale: "it-IT",
+    time_zone: "Europe/Rome",
     default_hourly_rate: 0,
     report_footer_notes: "",
   });
@@ -110,9 +145,22 @@ function CompanyOnboarding() {
 
           setLoadError(null);
           setForm(current);
-          if (current.name.trim() && current.address.trim()) {
+          const profileComplete = Boolean(
+            current.name.trim() &&
+            current.address.trim() &&
+            current.contact_email.trim() &&
+            current.contact_phone.trim() &&
+            current.service_area.trim() &&
+            current.service_categories.length > 0 &&
+            current.locale === "it-IT" &&
+            (current.time_zone === "Europe/Rome" || current.time_zone === "UTC"),
+          );
+          if (profileComplete) {
             navigate({ to: "/dashboard" });
             return;
+          }
+          if (current.name.trim() && current.address.trim()) {
+            setStep(1);
           }
         } catch (error) {
           if (!cancelled) {
@@ -136,7 +184,7 @@ function CompanyOnboarding() {
     };
   }, [navigate, loadAttempt]);
 
-  const updateField = (field: keyof CompanySettings, value: string | number) => {
+  const updateField = <K extends keyof CompanySettings>(field: K, value: CompanySettings[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -192,6 +240,37 @@ function CompanyOnboarding() {
       toast.error("Inserisci l'indirizzo della sede principale (massimo 255 caratteri).");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())) {
+      toast.error("Inserisci un indirizzo email aziendale valido.");
+      return;
+    }
+    const phoneDigits = form.contact_phone.replace(/\D/g, "").length;
+    if (
+      form.contact_phone.trim().length > 40 ||
+      phoneDigits < 7 ||
+      phoneDigits > 15 ||
+      !/^[+0-9().\s/-]+$/.test(form.contact_phone.trim())
+    ) {
+      toast.error("Inserisci un numero di telefono valido con 7–15 cifre.");
+      return;
+    }
+    if (form.service_area.trim().length < 2 || form.service_area.trim().length > 255) {
+      toast.error("Indica un'area di servizio di 2–255 caratteri.");
+      return;
+    }
+    if (
+      form.service_categories.length < 1 ||
+      form.service_categories.some(
+        (category) => !SERVICE_CATEGORIES.some((option) => option.value === category),
+      )
+    ) {
+      toast.error("Seleziona almeno una categoria di servizio.");
+      return;
+    }
+    if (form.locale !== "it-IT" || (form.time_zone !== "Europe/Rome" && form.time_zone !== "UTC")) {
+      toast.error("Lingua o fuso orario non supportati.");
+      return;
+    }
     if (
       !Number.isFinite(form.default_hourly_rate) ||
       form.default_hourly_rate < 0 ||
@@ -214,6 +293,12 @@ function CompanyOnboarding() {
           name,
           address,
           vat_number: form.vat_number.trim(),
+          contact_email: form.contact_email.trim(),
+          contact_phone: form.contact_phone.trim(),
+          service_area: form.service_area.trim(),
+          service_categories: form.service_categories,
+          locale: form.locale,
+          time_zone: form.time_zone,
           default_hourly_rate: form.default_hourly_rate,
           report_footer_notes: form.report_footer_notes.trim(),
         }),
@@ -317,7 +402,7 @@ function CompanyOnboarding() {
                   Passaggio {step + 1} di 2
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
-                  {step === 0 ? "Identità aziendale" : "Impostazioni dei rapportini"}
+                  {step === 0 ? "Identità aziendale" : "Profilo operativo e rapportini"}
                 </h2>
               </div>
               <span className="shrink-0 text-xs text-white/50">{step === 0 ? "1/2" : "2/2"}</span>
@@ -380,6 +465,107 @@ function CompanyOnboarding() {
 
           <div className={step === 1 ? "space-y-5" : "hidden"}>
             <div>
+              <label htmlFor="contact-email" className="mb-2 block text-sm font-medium">
+                Email aziendale *
+              </label>
+              <input
+                id="contact-email"
+                type="email"
+                required
+                maxLength={255}
+                autoComplete="email"
+                value={form.contact_email}
+                onChange={(e) => updateField("contact_email", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="contact-phone" className="mb-2 block text-sm font-medium">
+                Telefono aziendale *
+              </label>
+              <input
+                id="contact-phone"
+                type="tel"
+                required
+                minLength={7}
+                maxLength={40}
+                autoComplete="tel"
+                value={form.contact_phone}
+                onChange={(e) => updateField("contact_phone", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="service-area" className="mb-2 block text-sm font-medium">
+                Area geografica servita *
+              </label>
+              <input
+                id="service-area"
+                required
+                minLength={2}
+                maxLength={255}
+                placeholder="Es. Roma e provincia"
+                value={form.service_area}
+                onChange={(e) => updateField("service_area", e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+              />
+            </div>
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium">
+                Servizi offerti * (seleziona almeno uno)
+              </legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {SERVICE_CATEGORIES.map((category) => (
+                  <label
+                    key={category.value}
+                    className="flex items-start gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.service_categories.includes(category.value)}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                          ? [...form.service_categories, category.value]
+                          : form.service_categories.filter((item) => item !== category.value);
+                        updateField("service_categories", next);
+                      }}
+                      className="mt-0.5 accent-emerald-400"
+                    />
+                    <span>{category.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="company-locale" className="mb-2 block text-sm font-medium">
+                  Lingua dell'azienda
+                </label>
+                <select
+                  id="company-locale"
+                  value={form.locale}
+                  onChange={(e) => updateField("locale", e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                >
+                  <option value="it-IT">Italiano (it-IT)</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="company-time-zone" className="mb-2 block text-sm font-medium">
+                  Fuso orario
+                </label>
+                <select
+                  id="company-time-zone"
+                  value={form.time_zone}
+                  onChange={(e) => updateField("time_zone", e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-white outline-none focus:border-emerald-400"
+                >
+                  <option value="Europe/Rome">Italia — Europe/Rome</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </div>
+            </div>
+            <div>
               <label htmlFor="hourly-rate" className="mb-2 block text-sm font-medium">
                 Tariffa oraria predefinita (€)
               </label>
@@ -417,6 +603,12 @@ function CompanyOnboarding() {
                   <h3 className="text-sm font-semibold text-white">Riepilogo aziendale</h3>
                   <p className="mt-1 break-words text-sm text-white/70">{form.name.trim()}</p>
                   <p className="mt-1 break-words text-xs text-white/50">{form.address.trim()}</p>
+                  <p className="mt-1 break-words text-xs text-white/50">
+                    {form.contact_email.trim()}
+                  </p>
+                  <p className="mt-1 break-words text-xs text-white/50">
+                    {form.service_area.trim()}
+                  </p>
                   <p className="mt-3 text-xs leading-5 text-white/50">
                     Dopo il salvataggio si apre BaseGrid e parte la guida rapida, che puoi saltare o
                     riaprire in seguito.

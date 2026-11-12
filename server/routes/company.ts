@@ -35,6 +35,12 @@ companyRouter.get(
       name: company.name,
       vat_number: company.vatNumber,
       address: company.address,
+      contact_email: company.contactEmail || "",
+      contact_phone: company.contactPhone || "",
+      service_area: company.serviceArea || "",
+      service_categories: company.serviceCategories || [],
+      locale: company.locale || "it-IT",
+      time_zone: company.timeZone || "Europe/Rome",
       default_hourly_rate: company.defaultHourlyRate,
       report_footer_notes: company.reportFooterNotes,
       stripe_subscription_status: company.stripeSubscriptionStatus,
@@ -67,6 +73,12 @@ companyRouter.put(
       name,
       vat_number,
       address,
+      contact_email,
+      contact_phone,
+      service_area,
+      service_categories,
+      locale,
+      time_zone,
       default_hourly_rate,
       report_footer_notes,
       logo_data_url,
@@ -77,6 +89,12 @@ companyRouter.put(
     if (name !== undefined) input.name = name;
     if (vat_number !== undefined) input.vatNumber = vat_number;
     if (address !== undefined) input.address = address;
+    if (contact_email !== undefined) input.contactEmail = contact_email;
+    if (contact_phone !== undefined) input.contactPhone = contact_phone;
+    if (service_area !== undefined) input.serviceArea = service_area;
+    if (service_categories !== undefined) input.serviceCategories = service_categories;
+    if (locale !== undefined) input.locale = locale;
+    if (time_zone !== undefined) input.timeZone = time_zone;
     if (default_hourly_rate !== undefined) input.defaultHourlyRate = default_hourly_rate;
     if (report_footer_notes !== undefined) input.reportFooterNotes = report_footer_notes;
     if (logo_data_url !== undefined) input.logoDataUrl = logo_data_url;
@@ -95,6 +113,12 @@ companyRouter.put(
       name: updated.name,
       vat_number: updated.vatNumber,
       address: updated.address,
+      contact_email: updated.contactEmail || "",
+      contact_phone: updated.contactPhone || "",
+      service_area: updated.serviceArea || "",
+      service_categories: updated.serviceCategories || [],
+      locale: updated.locale || "it-IT",
+      time_zone: updated.timeZone || "Europe/Rome",
       default_hourly_rate: updated.defaultHourlyRate,
       report_footer_notes: updated.reportFooterNotes,
       logo_data_url: updated.logoDataUrl || null,

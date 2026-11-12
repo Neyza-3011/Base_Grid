@@ -62,6 +62,47 @@ describe("CompanyService Domain Logic & Role Enforcement", () => {
     expect(mockDb.findCompanyWithLogoById).not.toHaveBeenCalled();
   });
 
+  it("validates and persists the operational company setup profile", async () => {
+    const updated = await companyService.updateCompanySettings(
+      "comp-001",
+      {
+        contactEmail: "  UFFICIO@EXAMPLE.TEST ",
+        contactPhone: "+39 06 1234567",
+        serviceArea: " Roma e provincia ",
+        serviceCategories: ["installazione", "manutenzione"],
+        locale: "it-IT",
+        timeZone: "Europe/Rome",
+      },
+      "owner",
+    );
+
+    expect(updated).toMatchObject({
+      contactEmail: "ufficio@example.test",
+      contactPhone: "+39 06 1234567",
+      serviceArea: "Roma e provincia",
+      serviceCategories: ["installazione", "manutenzione"],
+      locale: "it-IT",
+      timeZone: "Europe/Rome",
+    });
+  });
+
+  it("rejects unsupported company service categories without writing any profile fields", async () => {
+    await expect(
+      companyService.updateCompanySettings(
+        "comp-001",
+        {
+          contactEmail: "ufficio@example.test",
+          contactPhone: "+39 06 1234567",
+          serviceArea: "Roma e provincia",
+          serviceCategories: ["invented-service"],
+        },
+        "owner",
+      ),
+    ).rejects.toThrow(ValidationError);
+
+    expect(mockDb.updateCompany).not.toHaveBeenCalled();
+  });
+
   it("updates standard settings for admin role", async () => {
     const updated = await companyService.updateCompanySettings(
       "comp-001",

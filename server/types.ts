@@ -57,6 +57,12 @@ export interface CompanyRecord {
   name: string;
   vatNumber: string;
   address: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  serviceArea?: string;
+  serviceCategories?: string[];
+  locale?: string;
+  timeZone?: string;
   defaultHourlyRate: number;
   reportFooterNotes: string;
   stripeSubscriptionStatus: string;
@@ -443,6 +449,12 @@ export interface UpdateCompanyInput {
   name?: string;
   vatNumber?: string;
   address?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  serviceArea?: string;
+  serviceCategories?: string[];
+  locale?: string;
+  timeZone?: string;
   defaultHourlyRate?: number;
   reportFooterNotes?: string;
   maxUsers?: number;

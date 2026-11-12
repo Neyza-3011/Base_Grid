@@ -45,6 +45,26 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     };
   });
 
+  it("serializes company service categories as JSON for PostgreSQL JSONB updates", async () => {
+    const adapter = new PostgresAdapter(mockPool);
+
+    await adapter.updateCompany("company-alpha", {
+      serviceCategories: ["installazione", "manutenzione"],
+      serviceArea: "Roma e provincia",
+    });
+
+    expect(mockPool.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockPool.query.mock.calls[0];
+    expect(sql).toContain('"serviceArea" = $1');
+    expect(sql).toContain('"serviceCategories" = $2');
+    expect(params).toEqual([
+      "Roma e provincia",
+      JSON.stringify(["installazione", "manutenzione"]),
+      expect.any(String),
+      "company-alpha",
+    ]);
+  });
+
   it("uses an expected-status predicate for atomic intervention transitions", async () => {
     const adapter = new PostgresAdapter(mockPool);
 
