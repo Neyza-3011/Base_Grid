@@ -11,6 +11,8 @@ describe("loadCompanySettings", () => {
         address: "Via Roma 10",
         default_hourly_rate: "42.5",
         report_footer_notes: "Note",
+      service_categories: ["installazione"],
+        service_categories: ["installazione"],
       }),
     } as unknown as Response);
 
@@ -33,7 +35,7 @@ describe("loadCompanySettings", () => {
   it.each([null, undefined, ""])("defaults an absent hourly rate to zero (%s)", async (rate) => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ default_hourly_rate: rate }),
+      json: async () => ({ default_hourly_rate: rate, service_categories: [] }),
     } as unknown as Response);
 
     await expect(loadCompanySettings(fetcher)).resolves.toMatchObject({
