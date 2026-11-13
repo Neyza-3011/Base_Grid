@@ -169,3 +169,36 @@ jobs:
           console.error("Backend runtime smoke test failed: " + lastError);
           process.exit(1);
           NODE
+
+  redis-integration:
+    name: Distributed Redis Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      REDIS_URL: redis://127.0.0.1:6379
+      REQUIRE_REAL_REDIS_TESTS: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.12.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: "npm"
+
+      - name: Install dependencies (clean install)
+        run: npm ci
+
+      - name: Run distributed Redis integration tests
+        run: npm test -- server/distributed-redis.test.ts server/rate-limiting-distributed.test.ts
