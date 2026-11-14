@@ -188,7 +188,7 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     
     // Check TTL manually in Redis
     const client = await limiterA.getRedisClient();
-    const ttl = await client!.ttl("ratelimit:ttl-test:10.0.0.101");
+    const ttl = await client!.ttl(`ratelimit:${runPrefix}:ttl-test:10.0.0.101`);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(10);
   });
