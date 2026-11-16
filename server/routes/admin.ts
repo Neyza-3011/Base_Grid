@@ -223,7 +223,14 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
     targetId: userId,
     metadata: { companyId, changedFields: changedFields.join(",") },
   } : undefined;
-  const member = await teamService.updateTeamMember(companyId, userId, req.user.id, input as any, audit, { isPlatformAdmin: true });
+  const member = await teamService.updateTeamMember(
+    companyId,
+    userId,
+    req.user.id,
+    input as any,
+    audit,
+    { isPlatformAdmin: true },
+  );
   res.status(200).json({
     user: {
       id: member.id,
@@ -255,7 +262,14 @@ for (const isActive of [true, false]) {
       throw new ForbiddenError("L'account CEO/piattaforma non può essere disattivato da questa operazione.");
     }
     if (!isActive && !target.isActive) {
-      const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, false, undefined, { isPlatformAdmin: true });
+      const member = await teamService.changeMemberStatus(
+        companyId,
+        userId,
+        req.user.id,
+        false,
+        undefined,
+        { isPlatformAdmin: true },
+      );
       res.status(200).json({ user: {
         id: member.id, email: member.email, full_name: member.fullName, role: member.role,
         phone_number: member.phoneNumber, is_active: member.isActive,
@@ -281,13 +295,20 @@ for (const isActive of [true, false]) {
         return;
       }
     }
-    const member = await teamService.changeMemberStatus(companyId, userId, req.user.id, isActive, {
-      actorUserId: req.user.id,
-      action: isActive ? "user.activated" : "user.deactivated",
-      targetType: "user",
-      targetId: userId,
-      metadata: { companyId, isActive },
-    }, { isPlatformAdmin: true });
+    const member = await teamService.changeMemberStatus(
+      companyId,
+      userId,
+      req.user.id,
+      isActive,
+      {
+        actorUserId: req.user.id,
+        action: isActive ? "user.activated" : "user.deactivated",
+        targetType: "user",
+        targetId: userId,
+        metadata: { companyId, isActive },
+      },
+      { isPlatformAdmin: true },
+    );
     res.status(200).json({ user: {
       id: member.id, email: member.email, full_name: member.fullName, role: member.role,
       phone_number: member.phoneNumber, is_active: member.isActive,
