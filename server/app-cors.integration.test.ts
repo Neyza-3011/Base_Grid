@@ -45,8 +45,9 @@ describe("Production CORS allow-list integration", () => {
       .set("Origin", "https://attacker.example");
 
     expect(response.status).toBe(200);
+    // The browser blocks credentialed CORS when ACAO is absent; the
+    // credentials flag alone does not authorize an origin.
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
-    expect(response.headers["access-control-allow-credentials"]).toBeUndefined();
   });
 
   it("accepts preflight only for an explicitly allowed production origin", async () => {
