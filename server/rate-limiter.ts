@@ -58,7 +58,7 @@ export class RateLimiter {
     return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
       // Bypass rate limiting in test environment by default to avoid breaking existing test suites,
       // unless specifically testing the rate limiter (signaled by a custom header).
-      const isTestEnv = config.NODE_ENV === "test" || process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+      const isTestEnv = getRuntimeMode() === "test";
       if (isTestEnv && req.headers["x-test-ratelimit"] !== "enable") {
         return next();
       }
