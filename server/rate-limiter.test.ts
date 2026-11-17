@@ -89,6 +89,40 @@ describe("Rate Limiter Middleware", () => {
     }
   });
 
+  it("does not bypass rate limiting when explicit production mode overrides NODE_ENV=test", async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    const limiter = rateLimiter.middleware({ points: 1, duration: 60, failClosed: true });
+    app.get("/", limiter, (_req, res) => { res.status(200).send("OK"); });
+
+    const originalMode = process.env.BASEGRID_RUNTIME_MODE;
+    const originalEnv = config.NODE_ENV;
+    const originalRedis = (rateLimiter as any).redisClient;
+    const mockRedis = {
+      status: "ready",
+      eval: vi.fn()
+        .mockResolvedValueOnce([1, 60])
+        .mockResolvedValueOnce([2, 60]),
+    };
+    process.env.BASEGRID_RUNTIME_MODE = "production";
+    config.NODE_ENV = "test";
+    (rateLimiter as any).redisClient = mockRedis;
+
+    try {
+      const first = await request(app).get("/");
+      const second = await request(app).get("/");
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(429);
+      expect(mockRedis.eval).toHaveBeenCalledTimes(2);
+    } finally {
+      if (originalMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+      else process.env.BASEGRID_RUNTIME_MODE = originalMode;
+      config.NODE_ENV = originalEnv;
+      (rateLimiter as any).redisClient = originalRedis;
+    }
+  });
+
   it("repairs a Redis rate-limit counter that has no expiry", async () => {
     const app = express();
     app.set("trust proxy", 1);
