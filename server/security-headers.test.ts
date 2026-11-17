@@ -16,9 +16,12 @@ vi.mock("./security", async (importOriginal) => {
 
 describe("P0.4.4-G — HTTP Security Hardening", () => {
   const originalEnv = process.env.NODE_ENV;
+  const originalRuntimeMode = process.env.BASEGRID_RUNTIME_MODE;
 
   afterEach(() => {
     process.env.NODE_ENV = originalEnv;
+    if (originalRuntimeMode === undefined) delete process.env.BASEGRID_RUNTIME_MODE;
+    else process.env.BASEGRID_RUNTIME_MODE = originalRuntimeMode;
   });
 
   describe("Unit: Security Headers Middleware", () => {
@@ -91,6 +94,9 @@ describe("P0.4.4-G — HTTP Security Hardening", () => {
     });
 
     it("ensures HSTS is present in production environment for API and health endpoints", async () => {
+      // Test production HSTS headers without switching the rate limiter into production mode,
+      // which correctly fails closed when the test process has no Redis service.
+      process.env.BASEGRID_RUNTIME_MODE = "test";
       process.env.NODE_ENV = "production";
       const app = createApp();
 
