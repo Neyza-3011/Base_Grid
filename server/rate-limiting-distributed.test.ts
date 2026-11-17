@@ -1,10 +1,47 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import crypto from "crypto";
+import type Redis from "ioredis";
 import { RateLimiterConfig, TestRateLimiter, rateLimiter } from "./rate-limiter";
 import { config } from "./config";
 import express, { Request, Response } from "express";
 import request from "supertest";
 
 const requireRealRedis = process.env.REQUIRE_REAL_REDIS_TESTS === "true";
+const uniqueRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+const runPrefix = `dist-rl-test:${uniqueRunId}`;
+const loginIpSubnet = Math.floor(Math.random() * 512);
+const loginIpStart = Math.floor(Math.random() * 244) + 1;
+const loginTestIps = Array.from({ length: 12 }, (_, index) =>
+  `198.${18 + Math.floor(loginIpSubnet / 256)}.${loginIpSubnet % 256}.${loginIpStart + index}`
+);
+const loginTestEmails = {
+  primary: `distributed-${uniqueRunId}@test.com`,
+  secondary: `other-${uniqueRunId}@test.com`,
+};
+const loginAccountKeys = Object.values(loginTestEmails).map((email) =>
+  `ratelimit:rl:login:acct:${crypto.createHash("sha256").update(email.toLowerCase().trim()).digest("hex")}`
+);
+
+async function waitForRedisReady(client: Redis | null, timeoutMs = 5000): Promise<boolean> {
+  if (!client) return false;
+  if (client.status === "ready") return true;
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      client.removeListener("ready", finish);
+      resolve(client.status === "ready");
+    };
+
+    timeout = setTimeout(finish, timeoutMs);
+    client.once("ready", finish);
+    if (client.status === "ready") finish();
+  });
+}
 
 describe("Distributed Rate Limiting (Redis Verification)", () => {
   let redisAvailable = false;
@@ -16,10 +53,13 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     limiterB = new TestRateLimiter();
 
     try {
-      const client = await limiterA.getRedisClient();
-      if (client && client.status === "ready") {
-         redisAvailable = true;
-      }
+      const clients = await Promise.all([
+        limiterA.getRedisClient(),
+        limiterB.getRedisClient(),
+        rateLimiter.getRedisClient(),
+      ]);
+      const readiness = await Promise.all(clients.map((client) => waitForRedisReady(client)));
+      redisAvailable = readiness.every(Boolean);
     } catch (e) {
       console.log("Redis not available for distributed testing");
     }
@@ -31,20 +71,18 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
 
   afterAll(async () => {
     if (redisAvailable) {
-       const client = await limiterA.getRedisClient();
-       if (client) {
-         await client.del("ratelimit:dist-test:10.0.0.99");
-         await client.del("ratelimit:concurrent-test:10.0.0.100");
-         await client.del("ratelimit:ttl-test:10.0.0.101");
-         
-         const keys = await client.keys("ratelimit:rl:login:acct:*");
-         if (keys.length > 0) {
-           await client.del(...keys);
-         }
-       }
+      const client = await limiterA.getRedisClient();
+      if (client && client.status === "ready") {
+        await client.del(
+          `ratelimit:${runPrefix}:dist-test:10.0.0.99`,
+          `ratelimit:${runPrefix}:concurrent-test:10.0.0.100`,
+          `ratelimit:${runPrefix}:ttl-test:10.0.0.101`,
+          ...loginTestIps.map((ip) => `ratelimit:rl:login:${ip}`),
+          ...loginAccountKeys
+        );
+      }
     }
-    limiterA?.close();
-    limiterB?.close();
+    await Promise.all([limiterA?.close(), limiterB?.close(), rateLimiter.close()]);
   });
 
   it.skipIf(!requireRealRedis && !redisAvailable)("should share rate limit counters between multiple instances", async () => {
@@ -64,7 +102,7 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     const rlConfig: RateLimiterConfig = {
       points: 2,
       duration: 60,
-      keyPrefix: "dist-test",
+      keyPrefix: `${runPrefix}:dist-test`,
     };
 
     appA.get("/", limiterA.middleware(rlConfig), (req, res) => { res.send("OK A"); });
@@ -95,7 +133,7 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     const rlConfig: RateLimiterConfig = {
       points: 5,
       duration: 60,
-      keyPrefix: "concurrent-test",
+      keyPrefix: `${runPrefix}:concurrent-test`,
     };
 
     app.get("/", limiterA.middleware(rlConfig), (req, res) => { res.send("OK"); });
@@ -130,7 +168,7 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     const rlConfig: RateLimiterConfig = {
       points: 1,
       duration: 10,
-      keyPrefix: "ttl-test",
+      keyPrefix: `${runPrefix}:ttl-test`,
     };
 
     app.get("/", limiterA.middleware(rlConfig), (req, res) => { res.send("OK"); });
@@ -150,7 +188,7 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     
     // Check TTL manually in Redis
     const client = await limiterA.getRedisClient();
-    const ttl = await client!.ttl("ratelimit:ttl-test:10.0.0.101");
+    const ttl = await client!.ttl(`ratelimit:${runPrefix}:ttl-test:10.0.0.101`);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(10);
   });
@@ -171,8 +209,8 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
        const res = await request(app)
         .post("/login")
         .set("X-Test-RateLimit", "enable")
-        .set("X-Forwarded-For", `192.168.100.${i}`)
-        .send({ email: "distributed@test.com", password: "wrong" });
+        .set("X-Forwarded-For", loginTestIps[i])
+        .send({ email: loginTestEmails.primary, password: "wrong" });
        expect(res.status).toBe(200);
     }
     
@@ -180,8 +218,8 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     const resBlocked = await request(app)
         .post("/login")
         .set("X-Test-RateLimit", "enable")
-        .set("X-Forwarded-For", `192.168.100.11`)
-        .send({ email: "distributed@test.com", password: "wrong" });
+        .set("X-Forwarded-For", loginTestIps[10])
+        .send({ email: loginTestEmails.primary, password: "wrong" });
         
     expect(resBlocked.status).toBe(429);
     expect(resBlocked.body.detail).toContain("account"); // errorMessage from loginAccountLimiter
@@ -190,22 +228,19 @@ describe("Distributed Rate Limiting (Redis Verification)", () => {
     const resOther = await request(app)
         .post("/login")
         .set("X-Test-RateLimit", "enable")
-        .set("X-Forwarded-For", `192.168.100.12`)
-        .send({ email: "other@test.com", password: "wrong" });
+        .set("X-Forwarded-For", loginTestIps[11])
+        .send({ email: loginTestEmails.secondary, password: "wrong" });
         
     expect(resOther.status).toBe(200);
 
     // Verify that the redis key for account limiter doesn't contain the raw email
-    const client = await limiterA.getRedisClient();
-    const keys = await client!.keys("ratelimit:rl:login:acct:*");
-    expect(keys.length).toBeGreaterThan(0);
-    
-    let foundRawEmail = false;
-    for (const key of keys) {
-      if (key.includes("distributed@test.com")) {
-        foundRawEmail = true;
-      }
+    const client = await rateLimiter.getRedisClient();
+    expect(client).not.toBeNull();
+    const existingAccountKeys = await Promise.all(loginAccountKeys.map((key) => client!.exists(key)));
+    expect(existingAccountKeys).toEqual([1, 1]);
+    for (const key of loginAccountKeys) {
+      expect(key).not.toContain(loginTestEmails.primary);
+      expect(key).not.toContain(loginTestEmails.secondary);
     }
-    expect(foundRawEmail).toBe(false);
   });
 });
