@@ -291,6 +291,45 @@ describe("Platform admin endpoint authorization", () => {
     expect(JSON.stringify(response.body)).not.toContain("authVersion");
   });
 
+  it("allows the CEO to change a tenant owner's role when another active admin remains", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    await db.updateUser(target!.id, { role: "owner" });
+
+    const response = await putWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}`,
+      "jack.cardinali15@gmail.com",
+      { role: "dispatcher" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target!.id, role: "dispatcher" });
+    expect((await db.findUserById(target!.id))?.role).toBe("dispatcher");
+    expect((await db.findUserByEmail("admin@rossi.it"))?.isActive).toBe(true);
+  });
+
+  it("allows the CEO to deactivate and reactivate a tenant owner when another active admin remains", async () => {
+    const target = await db.findUserByEmail("tech@rossi.it");
+    expect(target).toBeTruthy();
+    await db.updateUser(target!.id, { role: "owner" });
+
+    const deactivated = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/deactivate`,
+      "jack.cardinali15@gmail.com",
+    );
+    expect(deactivated.status).toBe(200);
+    expect(deactivated.body.user.is_active).toBe(false);
+    expect((await db.findUserById(target!.id))?.isActive).toBe(false);
+
+    const activated = await postWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}/activate`,
+      "jack.cardinali15@gmail.com",
+    );
+    expect(activated.status).toBe(200);
+    expect(activated.body.user.is_active).toBe(true);
+    expect((await db.findUserById(target!.id))?.isActive).toBe(true);
+  });
+
   it("denies tenant admins from using CEO user-management endpoints without changing data", async () => {
     const target = await db.findUserByEmail("tech@rossi.it");
     expect(target).toBeTruthy();

@@ -155,6 +155,7 @@ export class TeamService {
     executorId: string,
     input: UpdateTeamMemberInput,
     audit?: CreateAdminAuditEventInput,
+    actorContext?: { isPlatformAdmin?: boolean },
   ): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
 
@@ -187,7 +188,8 @@ export class TeamService {
     }
 
     if (input.role !== undefined && input.role !== user.role) {
-      if (user.role === "owner") {
+      // Platform CEO operations may manage tenant owners; tenant-scoped callers must still be owners.
+      if (user.role === "owner" && !actorContext?.isPlatformAdmin) {
         const executor = await this.db.getUserByIdAndCompany(executorId, companyId);
         if (!executor || executor.role !== "owner") {
           throw new ForbiddenError("Solo il titolare può modificare il ruolo di un altro titolare.");
@@ -237,6 +239,7 @@ export class TeamService {
     executorId: string,
     isActive: boolean,
     audit?: CreateAdminAuditEventInput,
+    actorContext?: { isPlatformAdmin?: boolean },
   ): Promise<TeamMemberResponse> {
     if (!companyId || !userId) throw new ValidationError("Company ID and User ID are required");
 
@@ -253,7 +256,8 @@ export class TeamService {
       throw new ForbiddenError("Account CEO/piattaforma non modificabile tramite la gestione team.");
     }
 
-    if (user.role === "owner") {
+    // Platform CEO operations may manage tenant owners; tenant-scoped callers must still be owners.
+    if (user.role === "owner" && !actorContext?.isPlatformAdmin) {
       const executor = await this.db.getUserByIdAndCompany(executorId, companyId);
       if (!executor || executor.role !== "owner") {
         throw new ForbiddenError("Solo il titolare può modificare lo stato di un altro titolare.");
