@@ -409,7 +409,7 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
       await expect(
         runMigrations(mockPool, { migrations: mockMigrations })
       ).rejects.toThrow(
-        /Migration checksum mismatch for version 001 \\(001_first.sql\\): recorded checksum "", current file checksum "valid_hash_001"/i
+        /Migration checksum mismatch for version 001 \(001_first.sql\): recorded checksum "", current file checksum "valid_hash_001"/i
       );
 
       expect(executedQueries.some((query) => query.sql === "BEGIN")).toBe(false);
