@@ -397,24 +397,24 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
     });
   });
 
-    it("fails closed when an already-applied migration has a missing checksum", async () => {
-      appliedRowsInDb = [
-        { version: "001", name: "001_first.sql", applied_at: "2026-01-01", checksum: "" },
-      ];
+  it("fails closed when an already-applied migration has a missing checksum", async () => {
+    appliedRowsInDb = [
+      { version: "001", name: "001_first.sql", applied_at: "2026-01-01", checksum: "" },
+    ];
 
-      const mockMigrations: MigrationFile[] = [
-        { version: "001", name: "001_first.sql", sql: "MODIFIED SQL WITH UNVERIFIED HISTORY;", checksum: "valid_hash_001" },
-      ];
+    const mockMigrations: MigrationFile[] = [
+      { version: "001", name: "001_first.sql", sql: "MODIFIED SQL WITH UNVERIFIED HISTORY;", checksum: "valid_hash_001" },
+    ];
 
-      await expect(
-        runMigrations(mockPool, { migrations: mockMigrations })
-      ).rejects.toThrow(
-        /Migration checksum mismatch for version 001 \(001_first.sql\): recorded checksum "", current file checksum "valid_hash_001"/i
-      );
+    await expect(
+      runMigrations(mockPool, { migrations: mockMigrations })
+    ).rejects.toThrow(
+      /Migration checksum mismatch for version 001 \(001_first.sql\): recorded checksum "", current file checksum "valid_hash_001"/i
+    );
 
-      expect(executedQueries.some((query) => query.sql === "BEGIN")).toBe(false);
-      expect(executedQueries.some((query) => query.sql.includes("MODIFIED SQL WITH UNVERIFIED HISTORY"))).toBe(false);
-    });
+    expect(executedQueries.some((query) => query.sql === "BEGIN")).toBe(false);
+    expect(executedQueries.some((query) => query.sql.includes("MODIFIED SQL WITH UNVERIFIED HISTORY"))).toBe(false);
+  });
 
   describe("Failure Handling & Rollback Safety", () => {
     it("rolls back transaction and does NOT record migration on failure", async () => {
