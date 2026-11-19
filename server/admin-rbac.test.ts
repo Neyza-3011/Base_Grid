@@ -308,6 +308,31 @@ describe("Platform admin endpoint authorization", () => {
     expect((await db.findUserByEmail("admin@rossi.it"))?.isActive).toBe(true);
   });
 
+  it("allows the CEO to demote an inactive last admin without changing its inactive status", async () => {
+    const target = await db.findUserByEmail("admin@rossi.it");
+    expect(target).toBeTruthy();
+    await db.updateUser(target!.id, { isActive: false });
+    expect(await db.countAdminOwnersByCompany("comp-rossi-001")).toBe(0);
+
+    const response = await putWithUser(
+      `/api/v1/admin/tenants/comp-rossi-001/users/${target!.id}`,
+      "jack.cardinali15@gmail.com",
+      { role: "dispatcher" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({
+      id: target!.id,
+      role: "dispatcher",
+      is_active: false,
+    });
+    expect(await db.findUserById(target!.id)).toMatchObject({
+      role: "dispatcher",
+      isActive: false,
+    });
+    expect(await db.countAdminOwnersByCompany("comp-rossi-001")).toBe(0);
+  });
+
   it("allows the CEO to deactivate and reactivate a tenant owner when another active admin remains", async () => {
     const target = await db.findUserByEmail("tech@rossi.it");
     expect(target).toBeTruthy();
