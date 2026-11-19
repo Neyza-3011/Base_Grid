@@ -189,7 +189,7 @@ adminRouter.put("/tenants/:companyId/users/:userId", asyncHandler(async (req: an
     if (userId === req.user.id) {
       throw new ForbiddenError("Non puoi modificare il tuo stesso ruolo.");
     }
-    if (ADMIN_OWNER_ROLES.includes(target.role) && !ADMIN_OWNER_ROLES.includes(input.role as any)) {
+    if (target.isActive && ADMIN_OWNER_ROLES.includes(target.role) && !ADMIN_OWNER_ROLES.includes(input.role as any)) {
       const adminCount = await db.countAdminOwnersByCompany(companyId, userId);
       if (adminCount === 0) {
         throw new ForbiddenError("Impossibile rimuovere l'ultimo amministratore attivo dell'azienda.");
