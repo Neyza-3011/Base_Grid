@@ -140,6 +140,7 @@ adminRouter.put("/tenants/:companyId/profile", asyncHandler(async (req: any, res
       address: updated.address,
       default_hourly_rate: updated.defaultHourlyRate,
       report_footer_notes: updated.reportFooterNotes,
+      setup_complete: isCompanySetupComplete(updated),
       created_at: updated.createdAt,
       updated_at: updated.updatedAt,
     },
