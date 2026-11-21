@@ -183,6 +183,7 @@ describe("Platform admin endpoint authorization", () => {
       address: "Via Roma 25, Milano",
       default_hourly_rate: 72.5,
       report_footer_notes: "Note aggiornate dal pannello CEO",
+      setup_complete: true,
     });
     const after = await db.findCompanyById("comp-rossi-001");
     expect(after?.name).toBe("Rossi Impianti Aggiornata");
@@ -197,6 +198,32 @@ describe("Platform admin endpoint authorization", () => {
     expect(audit?.targetId).toBe("comp-rossi-001");
     expect(audit?.metadata).toEqual({ changedFields: "name,address,defaultHourlyRate,reportFooterNotes" });
     expect(JSON.stringify(audit)).not.toContain("Via Roma 25");
+  });
+
+  it("returns server-authoritative setup completeness after a CEO profile update", async () => {
+    await db.updateCompany("comp-rossi-001", {
+      contactEmail: "",
+      contactPhone: "",
+      serviceArea: "",
+      serviceCategories: [],
+    });
+
+    const response = await putWithUser(
+      "/api/v1/admin/tenants/comp-rossi-001/profile",
+      "jack.cardinali15@gmail.com",
+      { name: "Rossi Impianti Incompleta" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.company.setup_complete).toBe(false);
+
+    const tenants = await getWithUser("/api/v1/admin/tenants", "jack.cardinali15@gmail.com");
+    expect(tenants.status).toBe(200);
+    expect(tenants.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "comp-rossi-001", setup_complete: false }),
+      ]),
+    );
   });
 
   it("does not emit an audit event for an unchanged company profile value", async () => {
