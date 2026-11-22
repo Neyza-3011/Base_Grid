@@ -254,7 +254,8 @@ export function SuperDashboard() {
         typeof payload.company.setup_complete !== "boolean"
       ) {
         throw new Error(
-          payload?.detail || "Impossibile salvare il profilo aziendale o verificare la configurazione.",
+          payload?.detail ||
+            "Impossibile salvare il profilo aziendale o verificare la configurazione.",
         );
       }
 
