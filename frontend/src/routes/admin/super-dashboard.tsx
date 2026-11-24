@@ -248,13 +248,20 @@ export function SuperDashboard() {
         },
       );
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.company) {
-        throw new Error(payload?.detail || "Impossibile salvare il profilo aziendale.");
+      if (
+        !response.ok ||
+        !payload?.company ||
+        typeof payload.company.setup_complete !== "boolean"
+      ) {
+        throw new Error(
+          payload?.detail ||
+            "Impossibile salvare il profilo aziendale o verificare la configurazione.",
+        );
       }
 
       const company = {
         ...payload.company,
-        setup_complete: Boolean(payload.company.name?.trim() && payload.company.address?.trim()),
+        setup_complete: payload.company.setup_complete,
       };
       setSelectedTenant((current) =>
         current ? { ...current, company: { ...current.company, ...company } } : current,
