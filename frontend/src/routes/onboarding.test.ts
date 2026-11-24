@@ -12,6 +12,7 @@ describe("loadCompanySettings", () => {
         default_hourly_rate: "42.5",
         report_footer_notes: "Note",
         service_categories: ["installazione"],
+        setup_complete: true,
       }),
     } as unknown as Response);
 
@@ -25,6 +26,7 @@ describe("loadCompanySettings", () => {
       service_categories: ["installazione"],
       locale: "it-IT",
       time_zone: "Europe/Rome",
+      setup_complete: true,
       default_hourly_rate: 42.5,
       report_footer_notes: "Note",
     });
@@ -40,7 +42,7 @@ describe("loadCompanySettings", () => {
   it.each([null, undefined, ""])("defaults an absent hourly rate to zero (%s)", async (rate) => {
     const fetcher = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ default_hourly_rate: rate, service_categories: [] }),
+      json: async () => ({ default_hourly_rate: rate, service_categories: [], setup_complete: false }),
     } as unknown as Response);
 
     await expect(loadCompanySettings(fetcher)).resolves.toMatchObject({
@@ -53,7 +55,7 @@ describe("loadCompanySettings", () => {
     async (rate) => {
       const fetcher = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ default_hourly_rate: rate }),
+        json: async () => ({ default_hourly_rate: rate, setup_complete: false }),
       } as unknown as Response);
 
       await expect(loadCompanySettings(fetcher)).rejects.toThrow(
@@ -61,6 +63,39 @@ describe("loadCompanySettings", () => {
       );
     },
   );
+
+  it("preserves the server's incomplete status for legacy unsupported categories", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        name: "Impianti Alpha Srl",
+        address: "Via Roma 10",
+        contact_email: "ufficio@example.test",
+        contact_phone: "+39 06 1234567",
+        service_area: "Roma e provincia",
+        service_categories: ["legacy-unsupported-category"],
+        locale: "it-IT",
+        time_zone: "Europe/Rome",
+        setup_complete: false,
+      }),
+    } as unknown as Response);
+
+    await expect(loadCompanySettings(fetcher)).resolves.toMatchObject({
+      setup_complete: false,
+      service_categories: ["legacy-unsupported-category"],
+    });
+  });
+
+  it("rejects a missing server-authoritative setup status", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ service_categories: [] }),
+    } as unknown as Response);
+
+    await expect(loadCompanySettings(fetcher)).rejects.toThrow(
+      "Lo stato della configurazione aziendale ricevuto non è valido.",
+    );
+  });
 
   it("rejects a non-success response so the onboarding screen can offer retry", async () => {
     const fetcher = vi.fn().mockResolvedValue({
