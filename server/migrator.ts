@@ -186,6 +186,27 @@ function assertNoAppliedMigrationVersionCollisions(
   }
 }
 
+/**
+ * Fail closed when the database records a migration whose immutable source file
+ * is absent from this release. Silently ignoring it can hide schema-history drift.
+ */
+function assertAppliedMigrationsExistInSource(
+  migrations: MigrationFile[],
+  appliedRecords: AppliedMigrationRecord[],
+): void {
+  const availableVersions = new Set(
+    migrations.map((migration) => canonicalizeMigrationVersion(migration.version)),
+  );
+  for (const record of appliedRecords) {
+    if (!availableVersions.has(canonicalizeMigrationVersion(record.version))) {
+      throw new Error(
+        '[Migrator] Applied migration version "' + record.version + '" ("' + record.name +
+        '") is missing from the available migration files. Restore the immutable migration file or reconcile history manually.',
+      );
+    }
+  }
+}
+
 const MIGRATION_ADVISORY_LOCK_KEY = [1111966788, 1296644679] as const;
 const DEFAULT_MIGRATION_LOCK_TIMEOUT_MS = 30_000;
 const DEFAULT_MIGRATION_LOCK_POLL_INTERVAL_MS = 100;
@@ -257,6 +278,7 @@ export async function runMigrations(
     await ensureMigrationsTable(client);
     const appliedRecords = await getAppliedMigrations(client);
     assertNoAppliedMigrationVersionCollisions(availableMigrations, appliedRecords);
+    assertAppliedMigrationsExistInSource(availableMigrations, appliedRecords);
     const appliedMap = new Map<string, AppliedMigrationRecord>();
     for (const record of appliedRecords) appliedMap.set(record.version, record);
 
