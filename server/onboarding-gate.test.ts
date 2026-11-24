@@ -71,6 +71,7 @@ describe("mandatory company setup gate", () => {
 
     const settings = await request("/api/v1/company/settings", "admin@rossi.it");
     expect(settings.response.status).toBe(200);
+    expect(settings.body.setup_complete).toBe(false);
   });
 
   it("does not let a non-owner use company settings to bypass owner-only onboarding", async () => {
@@ -89,8 +90,28 @@ describe("mandatory company setup gate", () => {
       locale: "it-IT",
       timeZone: "Europe/Rome",
     });
+    const settings = await request("/api/v1/company/settings", "admin@rossi.it");
+    expect(settings.response.status).toBe(200);
+    expect(settings.body.setup_complete).toBe(true);
+
     const allowed = await request("/api/v1/users/me", "admin@rossi.it");
     expect(allowed.response.status).toBe(200);
+  });
+
+  it("reports incomplete setup for persisted unsupported service categories", async () => {
+    await db.updateCompany("comp-rossi-001", {
+      address: "Via Demo 10, Roma",
+      contactEmail: "ufficio@example.test",
+      contactPhone: "+39 06 1234567",
+      serviceArea: "Roma e provincia",
+      serviceCategories: ["legacy-unsupported-category"],
+      locale: "it-IT",
+      timeZone: "Europe/Rome",
+    });
+
+    const settings = await request("/api/v1/company/settings", "admin@rossi.it");
+    expect(settings.response.status).toBe(200);
+    expect(settings.body.setup_complete).toBe(false);
   });
 
   it("persists the first onboarding step without overwriting settings from later steps", async () => {

@@ -3,6 +3,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { companyService } from "../services";
 import { asyncHandler } from "../async-handler";
 import { UnauthorizedError } from "../errors";
+import { isCompanySetupComplete } from "../company-setup";
 
 export const companyRouter = Router();
 
@@ -41,6 +42,7 @@ companyRouter.get(
       service_categories: company.serviceCategories || [],
       locale: company.locale || "it-IT",
       time_zone: company.timeZone || "Europe/Rome",
+      setup_complete: isCompanySetupComplete(company),
       default_hourly_rate: company.defaultHourlyRate,
       report_footer_notes: company.reportFooterNotes,
       stripe_subscription_status: company.stripeSubscriptionStatus,
