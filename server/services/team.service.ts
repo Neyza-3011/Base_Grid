@@ -206,7 +206,7 @@ export class TeamService {
       }
 
       // Self-protection: if removing admin/owner role, ensure it's not the last one
-      if (ADMIN_OWNER_ROLES.includes(user.role) && !ADMIN_OWNER_ROLES.includes(input.role)) {
+      if (user.isActive && ADMIN_OWNER_ROLES.includes(user.role) && !ADMIN_OWNER_ROLES.includes(input.role)) {
         const adminCount = await this.db.countAdminOwnersByCompany(companyId, userId);
         if (adminCount === 0) {
           throw new ForbiddenError("Impossibile rimuovere il ruolo di amministratore: sei l'ultimo amministratore attivo dell'azienda.");
