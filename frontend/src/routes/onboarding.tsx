@@ -35,6 +35,7 @@ type CompanySettings = {
   service_categories: string[];
   locale: string;
   time_zone: string;
+  setup_complete: boolean;
   default_hourly_rate: number;
   report_footer_notes: string;
 };
@@ -83,6 +84,9 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
   ) {
     throw new Error("Le categorie di servizio ricevute non sono valide.");
   }
+  if (typeof data.setup_complete !== "boolean") {
+    throw new Error("Lo stato della configurazione aziendale ricevuto non è valido.");
+  }
 
   return {
     name: String(data.name || ""),
@@ -94,6 +98,7 @@ export async function loadCompanySettings(fetcher: typeof fetch = fetch): Promis
     service_categories: data.service_categories as string[],
     locale: String(data.locale || "it-IT"),
     time_zone: String(data.time_zone || "Europe/Rome"),
+    setup_complete: data.setup_complete,
     default_hourly_rate: defaultHourlyRate,
     report_footer_notes: String(data.report_footer_notes || ""),
   };
@@ -117,6 +122,7 @@ function CompanyOnboarding() {
     service_categories: [],
     locale: "it-IT",
     time_zone: "Europe/Rome",
+    setup_complete: false,
     default_hourly_rate: 0,
     report_footer_notes: "",
   });
@@ -145,17 +151,7 @@ function CompanyOnboarding() {
 
           setLoadError(null);
           setForm(current);
-          const profileComplete = Boolean(
-            current.name.trim() &&
-            current.address.trim() &&
-            current.contact_email.trim() &&
-            current.contact_phone.trim() &&
-            current.service_area.trim() &&
-            current.service_categories.length > 0 &&
-            current.locale === "it-IT" &&
-            (current.time_zone === "Europe/Rome" || current.time_zone === "UTC"),
-          );
-          if (profileComplete) {
+          if (current.setup_complete) {
             navigate({ to: "/dashboard" });
             return;
           }
