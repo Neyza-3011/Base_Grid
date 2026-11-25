@@ -56,7 +56,7 @@ postgresDescribe("PostgreSQL active-flag integrity migration", () => {
       ["location-active-test", "company-active-test", "customer-active-test", "Test site", "Via Test 1", "Roma", now],
     );
 
-    await runMigrations(testPool, { migrations: [targetMigration] });
+    await runMigrations(testPool, { migrations: allMigrations });
 
     const flags = await testPool.query(
       'SELECT "isActive" FROM users WHERE id = $1 UNION ALL SELECT "isActive" FROM customers WHERE id = $2 UNION ALL SELECT "isActive" FROM locations WHERE id = $3',
