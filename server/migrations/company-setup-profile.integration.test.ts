@@ -50,7 +50,7 @@ postgresDescribe("PostgreSQL company setup profile migration", () => {
       "Legacy tenant",
     ]);
 
-    await runMigrations(testPool, { migrations: [target] });
+    await runMigrations(testPool, { migrations });
 
     const result = await testPool.query(
       'SELECT "contactEmail", "contactPhone", "serviceArea", "serviceCategories", locale, "timeZone" FROM companies WHERE id = $1',
