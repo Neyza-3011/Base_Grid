@@ -127,7 +127,7 @@ export function Pricing({ onSignup }: { onSignup: () => void }) {
     {
       name: "Piano Artigiano",
       price: "29",
-      desc: "Perfetto per singoli professionisti.",
+      desc: "Per professionisti che gestiscono i propri interventi.",
       features: [
         "1 tecnico",
         "Rapportini illimitati",
@@ -135,13 +135,13 @@ export function Pricing({ onSignup }: { onSignup: () => void }) {
         "PDF con logo",
         "Supporto email",
       ],
-      cta: "Inizia gratis",
+      cta: "Crea un account",
       highlight: false,
     },
     {
       name: "Piano Team Pro",
       price: "49",
-      desc: "Per squadre che scalano.",
+      desc: "Per squadre operative.",
       features: [
         "Fino a 10 tecnici",
         "Tutto del piano Artigiano",
@@ -149,7 +149,7 @@ export function Pricing({ onSignup }: { onSignup: () => void }) {
         "Catalogo materiali",
         "Supporto prioritario",
       ],
-      cta: "Prova 30 giorni",
+      cta: "Crea un account",
       highlight: true,
     },
   ];
@@ -161,7 +161,7 @@ export function Pricing({ onSignup }: { onSignup: () => void }) {
           <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight text-white">
             Un prezzo. Zero sorprese.
           </h2>
-          <p className="mt-4 text-white/60">Prova 30 giorni gratis. Cancelli quando vuoi.</p>
+          <p className="mt-4 text-white/60">Piani mensili per professionisti e squadre.</p>
         </div>
         <div className="mt-14 grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-4xl">
           {tiers.map((t) => (
