@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "BaseGrid SaaS: rapportini digitali sul campo, firma cliente e PDF istantaneo. Prova gratis 30 giorni.",
+          "BaseGrid SaaS: rapportini digitali sul campo, firma cliente e PDF istantaneo.",
       },
       { property: "og:title", content: "BaseGrid — Gestione Rapportini B2B" },
       {
@@ -50,15 +50,14 @@ function Index() {
                 </span>
               </h1>
               <p className="mt-6 text-base sm:text-lg text-white/70 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Il tuo tecnico compila sul campo, il cliente firma sul display, l'ufficio fattura in
-                tempo reale. Fine.
+                Il tuo tecnico compila sul campo, il cliente firma sul display e il rapportino PDF è pronto per l'ufficio.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:justify-center lg:justify-start">
                 <button
                   onClick={() => setModal("signup")}
                   className="h-12 px-6 rounded-full bg-primary text-white font-medium btn-glow hover:bg-primary/90 active:scale-95 transition inline-flex items-center justify-center gap-2"
                 >
-                  Inizia la Prova Gratuita <ArrowRight className="h-4 w-4" />
+                  Crea un account <ArrowRight className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setModal("login")}
@@ -68,9 +67,9 @@ function Index() {
                 </button>
               </div>
               <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2 text-xs text-white/50">
-                <span>✓ 30 giorni gratis</span>
-                <span>✓ Nessuna carta richiesta</span>
-                <span>✓ Setup in 2 minuti</span>
+                <span>✓ Rapportini digitali</span>
+                <span>✓ Firma su display</span>
+                <span>✓ PDF condivisibile</span>
               </div>
             </div>
 
