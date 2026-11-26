@@ -12,8 +12,7 @@ export const Route = createFileRoute("/")({
       { title: "BaseGrid — Gestione Rapportini, Cantieri e Interventi B2B" },
       {
         name: "description",
-        content:
-          "BaseGrid SaaS: rapportini digitali sul campo, firma cliente e PDF istantaneo.",
+        content: "BaseGrid SaaS: rapportini digitali sul campo, firma cliente e PDF istantaneo.",
       },
       { property: "og:title", content: "BaseGrid — Gestione Rapportini B2B" },
       {
@@ -50,7 +49,7 @@ function Index() {
                 </span>
               </h1>
               <p className="mt-6 text-base sm:text-lg text-white/70 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Il tuo tecnico compila sul campo, il cliente firma sul display e il rapportino PDF è pronto per l'ufficio.
+                Il tecnico compila il rapportino, il cliente firma e il PDF è pronto per l'ufficio.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:justify-center lg:justify-start">
                 <button
