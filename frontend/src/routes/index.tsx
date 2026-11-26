@@ -18,7 +18,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "BaseGrid — Gestione Rapportini B2B" },
       {
         property: "og:description",
-        content: "Compila sul campo, fai firmare, l'ufficio fattura subito.",
+        content: "Compila sul campo, raccogli la firma e condividi il rapportino PDF.",
       },
     ],
   }),
