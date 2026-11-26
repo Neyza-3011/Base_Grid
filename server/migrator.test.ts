@@ -110,6 +110,24 @@ describe("PostgreSQL Versioned Migration Runner (server/migrator.ts)", () => {
     expect(executedQueries.some(({ sql }) => sql.includes("SELECT 1;"))).toBe(false);
   });
 
+  it("fails closed when applied migration history references a missing source file", async () => {
+    appliedRowsInDb = [
+      { version: "001", name: "001_removed.sql", applied_at: "2026-01-01", checksum: "hash1" },
+    ];
+    const migrations: MigrationFile[] = [
+      { version: "002", name: "002_next.sql", sql: "CREATE TABLE t2 (id int);", checksum: "hash2" },
+    ];
+
+    await expect(runMigrations(mockPool, { migrations })).rejects.toThrow(
+      /Applied migration version "001" \("001_removed\.sql"\) is missing from the available migration files/i,
+    );
+
+    expect(executedQueries.some(({ sql }) => sql === "BEGIN")).toBe(false);
+    expect(executedQueries.some(({ sql }) => sql.includes("CREATE TABLE t2"))).toBe(false);
+    expect(executedQueries.some(({ sql }) => sql.includes("INSERT INTO schema_migrations"))).toBe(false);
+    expect(executedQueries.some(({ sql }) => sql.includes("pg_advisory_unlock"))).toBe(true);
+  });
+
   describe("Directory & Migration File Loader", () => {
 
     it("throws explicitly when the required migrations directory is missing", () => {
