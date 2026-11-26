@@ -86,7 +86,7 @@ export function Features() {
     {
       icon: Shield,
       t: "Autenticazione e permessi",
-      d: "Autenticazione e ruoli applicativi; le autorizzazioni devono essere applicate dal backend.",
+      d: "Autenticazione e ruoli applicativi per i diversi profili operativi.",
     },
   ];
   return (
