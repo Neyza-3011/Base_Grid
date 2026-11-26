@@ -25,8 +25,8 @@ export function HowItWorks() {
     },
     {
       icon: Send,
-      title: "L'ufficio fattura subito",
-      desc: "PDF generato in tempo reale. Zero doppie inserimenti.",
+      title: "Condividi subito il rapportino",
+      desc: "PDF generato in tempo reale, pronto da condividere con l'ufficio.",
     },
   ];
   return (
@@ -35,7 +35,7 @@ export function HowItWorks() {
         <div className="max-w-2xl">
           <span className="text-xs uppercase tracking-[0.2em] text-primary/80">Come Funziona</span>
           <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight text-white">
-            Dal cantiere alla fattura in tre passaggi.
+            Dal cantiere al rapportino in tre passaggi.
           </h2>
         </div>
         <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-px bg-white/5 rounded-2xl overflow-hidden hairline">
@@ -66,7 +66,7 @@ export function Features() {
     {
       icon: PenTool,
       t: "Firma su display",
-      d: "Canvas HTML5 fluido con undo, valida legalmente sul PDF finale.",
+      d: "Raccolta della firma sul dispositivo e inclusione nel PDF finale.",
     },
     {
       icon: FileText,
@@ -85,8 +85,8 @@ export function Features() {
     },
     {
       icon: Shield,
-      t: "Sicuro e conforme",
-      d: "JWT, OAuth Google, backup automatici. I tuoi dati sono al sicuro.",
+      t: "Autenticazione e permessi",
+      d: "Autenticazione e ruoli applicativi per i diversi profili operativi.",
     },
   ];
   return (
@@ -147,7 +147,6 @@ export function Pricing({ onSignup }: { onSignup: () => void }) {
         "Tutto del piano Artigiano",
         "Metriche e report avanzati",
         "Catalogo materiali",
-        "Export contabile",
         "Supporto prioritario",
       ],
       cta: "Prova 30 giorni",
