@@ -624,7 +624,12 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
   });
 
   it("createReport properly persists interventionId when linked to an intervention", async () => {
-    mockPool.query.mockResolvedValueOnce({ rows: [] });
+    mockClient.query.mockImplementation(async (sql: string) => {
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [] };
+      if (sql.includes("SELECT status FROM interventions")) return { rows: [{ status: "verificato" }] };
+      if (sql.includes("INSERT INTO reports")) return { rows: [] };
+      return { rows: [] };
+    });
 
     const adapter = new PostgresAdapter(mockPool);
     const report = await adapter.createReport("comp-123", {
@@ -641,10 +646,41 @@ describe("PostgreSQL Adapter Unit & Security Suite (server/db-postgres.ts)", () 
     expect(report.interventionId).toBe("int-456");
     expect(report.customerId).toBe("cust-1");
     expect(report.locationId).toBe("loc-1");
-    expect(mockPool.query).toHaveBeenCalledWith(
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT status FROM interventions"),
+      ["int-456", "comp-123"],
+    );
+    expect(mockClient.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO reports (id, "companyId", "customerId", "locationId", "interventionId"'),
       expect.arrayContaining(["comp-123", "cust-1", "loc-1", "int-456"]),
     );
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
+  it("rejects linked report creation when the locked intervention is already invoiced", async () => {
+    mockClient.query.mockImplementation(async (sql: string) => {
+      if (sql === "BEGIN" || sql === "ROLLBACK") return { rows: [] };
+      if (sql.includes("SELECT status FROM interventions")) return { rows: [{ status: "fatturato" }] };
+      return { rows: [] };
+    });
+
+    const adapter = new PostgresAdapter(mockPool);
+    await expect(
+      adapter.createReport("comp-123", {
+        customerId: "cust-1",
+        locationId: "loc-1",
+        interventionId: "int-456",
+        client: { name: "Cliente Alpha" },
+      }),
+    ).rejects.toThrow(/fatturato/i);
+
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringContaining("FOR UPDATE"),
+      ["int-456", "comp-123"],
+    );
+    expect(mockClient.query.mock.calls.some(([sql]) => typeof sql === "string" && sql.includes("INSERT INTO reports"))).toBe(false);
+    expect(mockClient.query).toHaveBeenCalledWith("ROLLBACK");
+    expect(mockPool.query).not.toHaveBeenCalled();
   });
 
   it("getReportsByCompany maps interventionId correctly from row", async () => {

@@ -139,6 +139,114 @@ describePostgres("P1.4 report draft persistence with PostgreSQL", () => {
     expect(stillOwnedByA?.notes).toBe("Bozza aggiornata");
   });
 
+  it("serializes linked report creation against a concurrent invoicing transition", async () => {
+    const actor = await adapter!.createTeamMember({
+      companyId: companyA,
+      companyName: "P1.4 Test Company A",
+      email: `p06-report-race-${runId}@example.test`,
+      fullName: "Report Race Admin",
+      role: "admin",
+      passwordHash: "test-hash",
+      salt: "test-salt",
+      isActive: true,
+      emailConfirmed: true,
+    });
+    const customer = await adapter!.createCustomer(companyA, { displayName: "Race Customer" });
+    const location = await adapter!.createLocation(companyA, customer.id, {
+      name: "Race Location",
+      address: "Via Test 1",
+      city: "Roma",
+    });
+    const intervention = await adapter!.createIntervention(companyA, {
+      customerId: customer.id,
+      locationId: location.id,
+      description: "Report creation and invoicing race",
+      status: "pronto_per_fatturazione",
+      createdBy: actor.id,
+      updatedBy: actor.id,
+    });
+
+    // Model the service's successful preflight read before the concurrent invoice commits.
+    expect((await adapter!.getInterventionByIdAndCompany(intervention.id, companyA))?.status)
+      .toBe("pronto_per_fatturazione");
+
+    const transitionClient = await testPool!.connect();
+    let transactionOpen = false;
+    let settledAttempt: Promise<
+      { status: "fulfilled" } | { status: "rejected"; error: unknown }
+    > | undefined;
+
+    try {
+      await transitionClient.query("BEGIN");
+      transactionOpen = true;
+      await transitionClient.query(
+        `SELECT id FROM interventions WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [intervention.id, companyA],
+      );
+      await transitionClient.query(
+        `UPDATE interventions
+         SET status = 'fatturato', "updatedAt" = NOW(), "updatedBy" = $3
+         WHERE id = $1 AND "companyId" = $2`,
+        [intervention.id, companyA, actor.id],
+      );
+
+      const createAttempt = adapter!.createReport(companyA, {
+        interventionId: intervention.id,
+        customerId: customer.id,
+        locationId: location.id,
+        date: "2026-11-27",
+        time: "07:00",
+        workHours: 1,
+        travelHours: 0,
+        status: "submitted",
+        client: { name: "Race Customer" },
+        technician: { fullName: actor.fullName },
+        materialsStatus: "none",
+        materialsUsed: [],
+      });
+      settledAttempt = createAttempt.then(
+        () => ({ status: "fulfilled" as const }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      );
+
+      const deadline = Date.now() + 5_000;
+      let blockedOnTransitionLock = false;
+      while (Date.now() < deadline) {
+        const waiting = await adminPool!.query(
+          `SELECT 1 FROM pg_stat_activity
+           WHERE datname = current_database()
+             AND pid <> pg_backend_pid()
+             AND wait_event_type = 'Lock'
+             AND query ILIKE '%SELECT status FROM interventions%'
+           LIMIT 1`,
+        );
+        if (waiting.rows.length > 0) {
+          blockedOnTransitionLock = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(blockedOnTransitionLock).toBe(true);
+
+      await transitionClient.query("COMMIT");
+      transactionOpen = false;
+      const outcome = await settledAttempt;
+      expect(outcome?.status).toBe("rejected");
+      if (outcome?.status === "rejected") {
+        expect(outcome.error).toMatchObject({ statusCode: 400 });
+        expect((outcome.error as Error).message).toMatch(/fatturato/i);
+      }
+
+      expect(await adapter!.getReportByInterventionId(companyA, intervention.id)).toBeNull();
+      expect((await adapter!.getInterventionByIdAndCompany(intervention.id, companyA))?.status)
+        .toBe("fatturato");
+    } finally {
+      if (transactionOpen) await transitionClient.query("ROLLBACK").catch(() => undefined);
+      transitionClient.release();
+      if (settledAttempt) await settledAttempt;
+    }
+  }, 30_000);
+
   it("does not allow another draft update after the report has been submitted", async () => {
     const reportId = `report-submitted-${runId}`;
     await adapter!.createReport(companyA, {

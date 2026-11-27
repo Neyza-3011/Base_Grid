@@ -24,7 +24,7 @@ import {
   CreateAdminAuditEventInput,
 } from "./types";
 import { tokenStore } from "./token-store";
-import { ForbiddenError } from "./errors";
+import { BadRequestError, ForbiddenError } from "./errors";
 import { hashPassword } from "./security";
 import { getRuntimeMode } from "./runtime-mode";
 import { getPostgresConnectionOptions } from "./postgres-connection-options";
@@ -1390,30 +1390,45 @@ export class PostgresAdapter implements IDatabaseAdapter {
       createdAt: now,
     };
 
-    await this.pool.query(
-      `INSERT INTO reports (id, "companyId", "customerId", "locationId", "interventionId", date, time, "workHours", "travelHours", status, client, technician, "materialsStatus", "materialsUsed", notes, "signatureBase64", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        newReport.id,
-        newReport.companyId,
-        newReport.customerId || null,
-        newReport.locationId || null,
-        newReport.interventionId || null,
-        newReport.date,
-        newReport.time,
-        newReport.workHours,
-        newReport.travelHours,
-        newReport.status,
-        JSON.stringify(newReport.client),
-        JSON.stringify(newReport.technician),
-        newReport.materialsStatus,
-        JSON.stringify(newReport.materialsUsed),
-        newReport.notes,
-        newReport.signatureBase64,
-        newReport.createdAt,
-      ],
-    );
+    const insertSql = `INSERT INTO reports (id, "companyId", "customerId", "locationId", "interventionId", date, time, "workHours", "travelHours", status, client, technician, "materialsStatus", "materialsUsed", notes, "signatureBase64", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`;
+    const insertParams = [
+      newReport.id,
+      newReport.companyId,
+      newReport.customerId || null,
+      newReport.locationId || null,
+      newReport.interventionId || null,
+      newReport.date,
+      newReport.time,
+      newReport.workHours,
+      newReport.travelHours,
+      newReport.status,
+      JSON.stringify(newReport.client),
+      JSON.stringify(newReport.technician),
+      newReport.materialsStatus,
+      JSON.stringify(newReport.materialsUsed),
+      newReport.notes,
+      newReport.signatureBase64,
+      newReport.createdAt,
+    ];
 
+    if (newReport.interventionId) {
+      // Serialize report creation with invoicing. The lock and INSERT must share
+      // one transaction so a stale service-level preflight cannot race the status change.
+      return this.withTransaction(async (client) => {
+        const interventionResult = await client.query(
+          `SELECT status FROM interventions WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+          [newReport.interventionId, companyId],
+        );
+        if (interventionResult.rows[0]?.status === "fatturato") {
+          throw new BadRequestError("Non è possibile creare un rapportino per un intervento già fatturato.");
+        }
+        await client.query(insertSql, insertParams);
+        return newReport;
+      });
+    }
+
+    await this.pool.query(insertSql, insertParams);
     return newReport;
   }
 

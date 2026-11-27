@@ -88,15 +88,10 @@ describe("P1.7 Database Contract & Atomic Report Deletion with Intervention Regr
       const int = await store.createIntervention(companyA, {
         customerId: "cust-1",
         locationId: "loc-1",
-        description: "Intervento già fatturato",
+        description: "Intervento fatturato dopo il rapportino",
         createdBy: "usr-1",
         updatedBy: "usr-1",
       });
-      await store.updateIntervention(companyA, int.id, {
-        status: "fatturato",
-        updatedBy: "usr-admin-1",
-      });
-
       const rep = await store.createReport(companyA, {
         interventionId: int.id,
         date: "2026-10-19",
@@ -104,6 +99,10 @@ describe("P1.7 Database Contract & Atomic Report Deletion with Intervention Regr
         workHours: 4,
         travelHours: 0,
         status: "submitted",
+      });
+      await store.updateIntervention(companyA, int.id, {
+        status: "fatturato",
+        updatedBy: "usr-admin-1",
       });
 
       const res = await store.deleteReportWithInterventionRegression(
@@ -120,6 +119,32 @@ describe("P1.7 Database Contract & Atomic Report Deletion with Intervention Regr
 
       const intStillFatturato = await store.getInterventionByIdAndCompany(int.id, companyA);
       expect(intStillFatturato?.status).toBe("fatturato");
+    });
+
+    it("3a. rejects creating a new report for an already invoiced intervention", async () => {
+      const int = await store.createIntervention(companyA, {
+        customerId: "cust-1",
+        locationId: "loc-1",
+        description: "Intervento già fatturato",
+        createdBy: "usr-1",
+        updatedBy: "usr-1",
+      });
+      await store.updateIntervention(companyA, int.id, {
+        status: "fatturato",
+        updatedBy: "usr-admin-1",
+      });
+
+      await expect(
+        store.createReport(companyA, {
+          interventionId: int.id,
+          date: "2026-10-19",
+          time: "10:00",
+          workHours: 1,
+          travelHours: 0,
+          status: "submitted",
+        }),
+      ).rejects.toThrow(/fatturato/i);
+      expect(await store.getReportByInterventionId(companyA, int.id)).toBeNull();
     });
 
     // 4. Regression to 'verificato' when linked intervention is 'pronto_per_fatturazione'
