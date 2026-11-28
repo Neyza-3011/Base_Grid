@@ -147,6 +147,32 @@ describe("P1.7 Database Contract & Atomic Report Deletion with Intervention Regr
       expect(await store.getReportByInterventionId(companyA, int.id)).toBeNull();
     });
 
+    it("3b. rejects linked reports for missing or cross-tenant interventions", async () => {
+      const interventionB = await store.createIntervention(companyB, {
+        customerId: "cust-b",
+        locationId: "loc-b",
+        description: "Intervento Azienda B",
+        createdBy: "usr-b",
+        updatedBy: "usr-b",
+      });
+      const reportData = {
+        date: "2026-11-28",
+        time: "07:00",
+        workHours: 1,
+        travelHours: 0,
+        status: "submitted" as const,
+      };
+
+      await expect(
+        store.createReport(companyA, { ...reportData, interventionId: interventionB.id }),
+      ).rejects.toThrow(/intervento non trovato o non accessibile/i);
+      await expect(
+        store.createReport(companyA, { ...reportData, interventionId: "missing-intervention" }),
+      ).rejects.toThrow(/intervento non trovato o non accessibile/i);
+
+      expect(await store.getReportsByCompany(companyA)).toHaveLength(0);
+    });
+
     // 4. Regression to 'verificato' when linked intervention is 'pronto_per_fatturazione'
     it("4. regresses linked intervention from 'pronto_per_fatturazione' to 'verificato' when report is deleted", async () => {
       const int = await store.createIntervention(companyA, {

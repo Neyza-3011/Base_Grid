@@ -518,7 +518,10 @@ export class DatabaseStore implements IDatabaseAdapter {
   public async createReport(companyId: string, data: Partial<ReportRecord>): Promise<ReportRecord> {
     if (data.interventionId) {
       const intervention = this.interventions.get(data.interventionId);
-      if (intervention?.companyId === companyId && intervention.status === "fatturato") {
+      if (!intervention || intervention.companyId !== companyId) {
+        throw new BadRequestError("Intervento non trovato o non accessibile.");
+      }
+      if (intervention.status === "fatturato") {
         throw new BadRequestError("Non è possibile creare un rapportino per un intervento già fatturato.");
       }
     }
